@@ -12,6 +12,7 @@ import {
 } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { assignColours, byPnl, chipFor, colourFor, formatPrice, formatUsd, shortName, stackChips, type Candle, type Friend } from "@/lib/chart";
+import { encodeRoom } from "@/lib/roomlink";
 
 type Market = { id: number; name: string; priceDecimals: number; lotDecimals: number };
 type Load<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: T };
@@ -46,15 +47,16 @@ const CHART = {
   grid: "rgba(28, 27, 25, 0.06)",
 };
 
-export function ChartRoom() {
+export function ChartRoom({ initialAccounts }: { initialAccounts?: string[] }) {
   const [markets, setMarkets] = useState<Load<Market[]>>({ state: "loading" });
   const [marketId, setMarketId] = useState(1);
   const [res, setRes] = useState(3600);
   const [candles, setCandles] = useState<Load<Candle[]>>({ state: "loading" });
   const [room, setRoom] = useState<Load<{ friends: Friend[]; block: string; checked: number }>>({ state: "loading" });
-  const [extra, setExtra] = useState<string[]>([]);
+  const [extra, setExtra] = useState<string[]>(initialAccounts ?? []);
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState("");
+  const [copied, setCopied] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
@@ -220,6 +222,18 @@ export function ChartRoom() {
     setDraftError("");
     setExtra((x) => (x.includes(a.toLowerCase()) ? x : [...x, a.toLowerCase()]));
     setDraft("");
+  }
+
+  async function copyRoomLink() {
+    try {
+      const code = encodeRoom(extra);
+      if (!code) return;
+      await navigator.clipboard.writeText(`${window.location.origin}/r/${code}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
   }
 
   const hovered = friends.find((f) => f.account === hover);
@@ -405,6 +419,15 @@ export function ChartRoom() {
                 className="num min-w-0 flex-1 rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
               />
               <button className="rounded-[6px] bg-ink px-3 text-[13px] font-medium text-surface active:scale-[0.97]">Add</button>
+              <button
+                type="button"
+                onClick={copyRoomLink}
+                disabled={extra.length === 0}
+                title={extra.length === 0 ? "Add a trader first, then share the room" : "Copy a link to this room"}
+                className="rounded-[6px] border border-ink px-3 text-[13px] font-medium hover:bg-rule active:scale-[0.97] disabled:opacity-40"
+              >
+                {copied ? "Copied" : "Copy room link"}
+              </button>
             </div>
             {draftError && <p className="text-[12px] text-[var(--loss)]">{draftError}</p>}
           </form>
