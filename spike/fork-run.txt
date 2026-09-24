@@ -1,0 +1,45 @@
+fork block 65206951
+market 16 BTC: mark 83768.1, trader 0xeF2E5ba8becc666b4B7BBfEB8f7d851af40Fd953, rpc http://127.0.0.1:8545
+  tx approve: 0xb085d02e450a82d8353e780b60cdf7ac39af2b9459e7f9fd45d5d1e48633dcd8
+  tx createAccount: 0xa468cbdf82336c4e49d11dfdfacb644336892b515708ec3300fe03dfc615eeb5
+account 694, balance 100 aUSD
+  tx open long: 0xf9df29747b85068e8181ea597e52aa2b875bccba51775c4d11b260f596e4d917
+  READ BACK open: long 0.0001 BTC @ 83798.4, mark 83768.1, uPnL -0.0030, block 65206955
+  tx take-profit: 0x5546407fcb53ed51831c9c94b7e83a1b4fd151ed61c14096e8d1d8af857a2e26
+  READ BACK take-profit: order 123 on book, CloseLong 10 lots @ 87988.3
+  tx close: 0x6fd5364ba2dc835e723a3f7f6974a1bec4dd75de50d3e9fdfd2d555df35bcc8e
+  READ BACK close: no BTC position for 0xeF2E5ba8becc666b4B7BBfEB8f7d851af40Fd953
+  take-profit 123 still resting after close; cancelling
+  tx cancel tp: 0x845f7cb0bfabd9a8d95faaa8085bf21dbb487f101b3f70238d6a1c5b71f7f84d
+  READ BACK cancel: order 123 gone
+{
+  "rpc": "http://127.0.0.1:8545",
+  "trader": "0xeF2E5ba8becc666b4B7BBfEB8f7d851af40Fd953",
+  "accountId": "694",
+  "txs": [
+    {
+      "step": "approve",
+      "hash": "0xb085d02e450a82d8353e780b60cdf7ac39af2b9459e7f9fd45d5d1e48633dcd8"
+    },
+    {
+      "step": "createAccount",
+      "hash": "0xa468cbdf82336c4e49d11dfdfacb644336892b515708ec3300fe03dfc615eeb5"
+    },
+    {
+      "step": "open long",
+      "hash": "0xf9df29747b85068e8181ea597e52aa2b875bccba51775c4d11b260f596e4d917"
+    },
+    {
+      "step": "take-profit",
+      "hash": "0x5546407fcb53ed51831c9c94b7e83a1b4fd151ed61c14096e8d1d8af857a2e26"
+    },
+    {
+      "step": "close",
+      "hash": "0x6fd5364ba2dc835e723a3f7f6974a1bec4dd75de50d3e9fdfd2d555df35bcc8e"
+    },
+    {
+      "step": "cancel tp",
+      "hash": "0x845f7cb0bfabd9a8d95faaa8085bf21dbb487f101b3f70238d6a1c5b71f7f84d"
+    }
+  ]
+}
