@@ -17,9 +17,9 @@
           "kind": "auto",
           "name": "mainnet position decoding tests pass",
           "cmd": "bun test 2>&1 | grep -qE '^ *7 pass'",
-          "last_run": "2026-09-24T05:07:29+00:00",
+          "last_run": "2026-09-24T16:20:49+00:00",
           "last_exit": 0,
-          "duration_ms": 2235,
+          "duration_ms": 5844,
           "output_tail": ""
         }
       ]
@@ -37,6 +37,48 @@
           "name": "live-testnet run with Perpl test aUSD"
         }
       ]
+    },
+    {
+      "id": "friends-on-chart",
+      "title": "Friends' live Perpl positions on one chart, with one-signature take-profit suggestions",
+      "priority": "high",
+      "tags": [],
+      "product": true,
+      "product_gate": {
+        "user": "Perpl traders who already share positions in Telegram (Perpl group: 10,158 members)",
+        "buyer": "Traders (free); Perpl pays builder fees on routed orders if it issues a builder code",
+        "job": "See what my friends are holding and act on it without screenshots",
+        "verb": "Open the chart, see each friend's real position at their entry price with live PnL, accept a friend's take-profit suggestion in one signature",
+        "wedge": "Positions are read trustlessly from Perpl's Exchange contract, not self-reported screenshots; a friend's TP suggestion becomes a resting close order on your position in one signature",
+        "direct_alternative": "Perpl's own app plus screenshots pasted into Telegram; fomo and Axiom show friends' trades next to a chart on Solana and Hyperliquid",
+        "new_capability": "On Monad and Perpl: verifiable friend positions on the chart for any address, and suggestions from a friend placed on your position as a real order with one signature, which neither Perpl's app nor Telegram can do",
+        "kill_shot": "It is a frontend over Perpl, the risk of 'better UI for an existing venue' is real; fomo already does social chart overlays elsewhere; stop-losses need Perpl's off-chain keeper; builder fees need Perpl's cooperation; US and UK are geo-blocked",
+        "evidence": [
+          "readPosition: 12 mainnet accounts decoded at block 107,515,148, uPnL matches the contract's own price PnL to the cent; 7/7 bun tests pass on re-run",
+          "Perpl on DefiLlama: 3.92M USD TVL on Monad, re-read 2026-09-24; Perpl candle API works without a key",
+          "Judge Zeel Patel RFP asks for 'perps + social, directly on the chart' with a different visual language",
+          "Fork run: open, resting take-profit, close and cancel from our own code, each read back from the Exchange; stop-loss forward reverts SenderIsNotAdministrator"
+        ],
+        "decision": "pass",
+        "updated": "2026-09-24T16:18:05+00:00"
+      },
+      "blocked": null,
+      "notes": [],
+      "criteria": [
+        {
+          "kind": "auto",
+          "name": "any account's live position decodes from chain",
+          "cmd": "bun test 2>&1 | grep -qE '^ *7 pass'",
+          "last_run": "2026-09-24T16:20:56+00:00",
+          "last_exit": 0,
+          "duration_ms": 7367,
+          "output_tail": ""
+        },
+        {
+          "kind": "manual",
+          "name": "a trader accepted a friend's take-profit in one signature on live testnet"
+        }
+      ]
     }
   ],
   "customers": [],
@@ -45,7 +87,17 @@
       "ts": "2026-09-24T05:07:29+00:00",
       "checked": 2,
       "failed_criteria": 0
+    },
+    {
+      "ts": "2026-09-24T16:19:00+00:00",
+      "checked": 3,
+      "failed_criteria": 0
+    },
+    {
+      "ts": "2026-09-24T16:20:56+00:00",
+      "checked": 3,
+      "failed_criteria": 0
     }
   ],
-  "updated": "2026-09-24T05:07:29+00:00"
+  "updated": "2026-09-24T16:20:56+00:00"
 }
