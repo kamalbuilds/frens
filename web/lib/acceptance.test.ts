@@ -73,7 +73,7 @@ describe("evaluateSuggestion", () => {
     expect(out.reason).toContain("80,000.0");
     expect(out.reason).toContain("83,840.1");
     expect(out.reason).toMatch(/below the current price/);
-    expect(out.reason).toMatch(/at a loss right away/);
+    expect(out.reason).toMatch(/right away at the current price/);
     expect(out.reason).not.toMatch(/must be above/);
     expect(out.reason).not.toMatch(/got 80000/);
     expect(suggestionKind(suggestion({ price: 80000 }), 83840.1)).toBe("SL");
@@ -89,7 +89,7 @@ describe("evaluateSuggestion", () => {
     expect(out.status).toBe("stale");
     if (out.status !== "stale") throw new Error("expected stale");
     expect(out.reason).toBe(
-      "This take-profit (70,000.0) is below the current price (84,008.9), so it would close F91B's long at a loss right away.",
+      "This take-profit (70,000.0) is below the current price (84,008.9), so it would close F91B's long right away at the current price instead of waiting for the target.",
     );
   });
 

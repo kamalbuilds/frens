@@ -41,13 +41,13 @@ function friendlyReason(raw: string, s: Suggestion, position: Position, priceDec
   if (/take-profit for a long must be above/i.test(raw)) {
     return (
       `This take-profit (${formatPrice(s.price, priceDecimals)}) is below the current price ` +
-      `(${formatPrice(position.markPrice, priceDecimals)}), so it would close ${who}'s long at a loss right away.`
+      `(${formatPrice(position.markPrice, priceDecimals)}), so it would close ${who}'s long right away at the current price instead of waiting for the target.`
     );
   }
   if (/take-profit for a short must be below/i.test(raw)) {
     return (
       `This take-profit (${formatPrice(s.price, priceDecimals)}) is above the current price ` +
-      `(${formatPrice(position.markPrice, priceDecimals)}), so it would close ${who}'s short at a loss right away.`
+      `(${formatPrice(position.markPrice, priceDecimals)}), so it would close ${who}'s short right away at the current price instead of waiting for the target.`
     );
   }
   if (/does not match the position account/i.test(raw)) {
