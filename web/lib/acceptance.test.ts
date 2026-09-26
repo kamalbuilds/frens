@@ -79,7 +79,7 @@ describe("evaluateSuggestion", () => {
     expect(suggestionKind(suggestion({ price: 80000 }), 83840.1)).toBe("SL");
   });
 
-  it("words the browser case exactly: TP below mark closes the long at a loss", () => {
+  it("words the browser case exactly: TP below mark closes the long right away", () => {
     const raw = encodeSuggestion(suggestion({ price: 70000 }));
     const out = evaluateSuggestion(raw, {
       positionFor: () => longPosition({ markPrice: 84008.9 }),
@@ -105,7 +105,7 @@ describe("evaluateSuggestion", () => {
     expect(out.reason).toContain("85,000.0");
     expect(out.reason).toContain("83,840.1");
     expect(out.reason).toMatch(/above the current price/);
-    expect(out.reason).toMatch(/short at a loss/);
+    expect(out.reason).toMatch(/short right away at the current price/);
   });
 
   it("rejects an owner mismatch with a plain sentence", () => {
