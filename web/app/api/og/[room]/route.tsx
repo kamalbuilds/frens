@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import type { Address } from "viem";
-import { assignColours, formatUsd, shortName } from "@/lib/chart";
+import { FRIEND_HUES, assignColours, formatUsd, shortName } from "@/lib/chart";
 import { NETWORKS } from "@/lib/perpl";
 import { readPosition, type Position } from "@/lib/readPosition";
 import { decodeRoom } from "@/lib/roomlink";
@@ -77,7 +77,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ room: s
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 24 }}>
           {rows.map((r) => {
-            const c = colours.get(r.account.toLowerCase()) ?? ACCENT;
+            const c = colours.get(r.account.toLowerCase()) ?? FRIEND_HUES[0];
             const profit = r.pnl >= 0;
             return (
               <div
