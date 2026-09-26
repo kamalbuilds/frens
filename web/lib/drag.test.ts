@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { initialTpSl, nudgePrice, pnlAtPrice, priceFromY, tickSize } from "./drag";
+import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, tickSize, validTpSl } from "./drag";
 
 describe("initialTpSl", () => {
-  it("places TP above and SL below entry for a long", () => {
+  it("starts from the mark: TP above and SL below mark for a long", () => {
     const { tp, sl } = initialTpSl(1000, "long");
     expect(tp).toBeCloseTo(1020, 10);
     expect(sl).toBeCloseTo(980, 10);
@@ -10,7 +10,7 @@ describe("initialTpSl", () => {
     expect(sl).toBeLessThan(1000);
   });
 
-  it("places TP below and SL above entry for a short", () => {
+  it("starts from the mark: TP below and SL above mark for a short", () => {
     const { tp, sl } = initialTpSl(1000, "short");
     expect(tp).toBeCloseTo(980, 10);
     expect(sl).toBeCloseTo(1020, 10);
@@ -18,9 +18,71 @@ describe("initialTpSl", () => {
     expect(sl).toBeGreaterThan(1000);
   });
 
-  it("rejects bad entries", () => {
+  it("keeps a long TP above the mark even when entry is far below", () => {
+    // Trader F91B: long, entry 69,742.2, BTC mark 83,955.9. From the mark,
+    // TP must clear the mark instead of filling immediately.
+    const { tp, sl } = initialTpSl(83955.9, "long");
+    expect(tp).toBeCloseTo(83955.9 * 1.02, 6);
+    expect(sl).toBeCloseTo(83955.9 * 0.98, 6);
+    expect(tp).toBeGreaterThan(83955.9);
+    expect(sl).toBeLessThan(83955.9);
+  });
+
+  it("rejects bad marks", () => {
     expect(() => initialTpSl(0, "long")).toThrow(/bad entry/);
     expect(() => initialTpSl(NaN, "short")).toThrow(/bad entry/);
+  });
+});
+
+describe("validTpSl", () => {
+  it("long TP must stay above mark, SL below", () => {
+    expect(validTpSl("tp", 1020, 1000, "long")).toBe(true);
+    expect(validTpSl("tp", 1000, 1000, "long")).toBe(false);
+    expect(validTpSl("tp", 980, 1000, "long")).toBe(false);
+    expect(validTpSl("sl", 980, 1000, "long")).toBe(true);
+    expect(validTpSl("sl", 1000, 1000, "long")).toBe(false);
+    expect(validTpSl("sl", 1020, 1000, "long")).toBe(false);
+  });
+
+  it("short TP must stay below mark, SL above", () => {
+    expect(validTpSl("tp", 980, 1000, "short")).toBe(true);
+    expect(validTpSl("tp", 1000, 1000, "short")).toBe(false);
+    expect(validTpSl("tp", 1020, 1000, "short")).toBe(false);
+    expect(validTpSl("sl", 1020, 1000, "short")).toBe(true);
+    expect(validTpSl("sl", 1000, 1000, "short")).toBe(false);
+    expect(validTpSl("sl", 980, 1000, "short")).toBe(false);
+  });
+
+  it("rejects non-finite inputs", () => {
+    expect(validTpSl("tp", NaN, 1000, "long")).toBe(false);
+    expect(validTpSl("tp", 1020, NaN, "long")).toBe(false);
+    expect(validTpSl("sl", -5, 1000, "long")).toBe(false);
+  });
+});
+
+describe("clampTpSl", () => {
+  it("passes valid prices through untouched", () => {
+    expect(clampTpSl("tp", 1020, 1000, "long", 2)).toBe(1020);
+    expect(clampTpSl("sl", 980, 1000, "long", 2)).toBe(980);
+    expect(clampTpSl("tp", 980, 1000, "short", 2)).toBe(980);
+    expect(clampTpSl("sl", 1020, 1000, "short", 2)).toBe(1020);
+  });
+
+  it("clamps a long TP dragged to or below the mark to one tick above", () => {
+    expect(clampTpSl("tp", 1000, 1000, "long", 2)).toBeCloseTo(1000.01, 10);
+    expect(clampTpSl("tp", 900, 1000, "long", 2)).toBeCloseTo(1000.01, 10);
+  });
+
+  it("clamps a long SL dragged to or above the mark to one tick below", () => {
+    expect(clampTpSl("sl", 1000, 1000, "long", 2)).toBeCloseTo(999.99, 10);
+    expect(clampTpSl("sl", 1100, 1000, "long", 2)).toBeCloseTo(999.99, 10);
+  });
+
+  it("clamps short lines to the mirrored ticks", () => {
+    expect(clampTpSl("tp", 1000, 1000, "short", 2)).toBeCloseTo(999.99, 10);
+    expect(clampTpSl("tp", 1100, 1000, "short", 2)).toBeCloseTo(999.99, 10);
+    expect(clampTpSl("sl", 1000, 1000, "short", 2)).toBeCloseTo(1000.01, 10);
+    expect(clampTpSl("sl", 900, 1000, "short", 2)).toBeCloseTo(1000.01, 10);
   });
 });
 

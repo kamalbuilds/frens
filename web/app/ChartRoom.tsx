@@ -7,6 +7,7 @@ import {
   LineSeries,
   LineStyle,
   createChart,
+  type AutoscaleInfo,
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
@@ -15,7 +16,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import { assignColours, byPnl, chipFor, colourFor, formatPrice, formatUsd, shortName, stackChips, type Candle, type Friend } from "@/lib/chart";
-import { initialTpSl, nudgePrice, pnlAtPrice, priceFromY, type SuggestKind } from "@/lib/drag";
+import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, type SuggestKind } from "@/lib/drag";
 import { encodeRoom } from "@/lib/roomlink";
 import { encodeSuggestion } from "@/lib/suggest";
 
@@ -212,7 +213,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       return;
     }
     try {
-      const init = initialTpSl(selected.entryPrice, selected.side);
+      const init = initialTpSl(selected.markPrice, selected.side);
       setTp(init.tp);
       setSl(init.sl);
     } catch {
@@ -221,7 +222,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     }
     setSuggestKind("tp");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.account, selected?.entryPrice, selected?.side]);
+  }, [selected?.account, selected?.markPrice, selected?.side]);
 
   // Draggable TP/SL visuals on the candle series, glued on pan, zoom and edit.
   useEffect(() => {
@@ -273,6 +274,33 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tp, sl, selected, decimals, overlays]);
 
+  // Price lines do not move the candle scale on their own, so a TP/SL
+  // outside the candles' range would render off screen. Fold both lines
+  // into the series autoscale while a trader is selected.
+  useEffect(() => {
+    const s = series.current;
+    if (!s) return;
+    if (!selected || tp === null || sl === null) {
+      s.applyOptions({ autoscaleInfoProvider: undefined });
+      return;
+    }
+    const lo = Math.min(tp, sl);
+    const hi = Math.max(tp, sl);
+    s.applyOptions({
+      autoscaleInfoProvider: (base: () => AutoscaleInfo | null) => {
+        const info = base();
+        if (!info || !info.priceRange) return { priceRange: { minValue: lo, maxValue: hi } };
+        return {
+          ...info,
+          priceRange: {
+            minValue: Math.min(info.priceRange.minValue, lo),
+            maxValue: Math.max(info.priceRange.maxValue, hi),
+          },
+        };
+      },
+    });
+  }, [tp, sl, selected]);
+
   function lineHit(y: number): SuggestKind | null {
     const s = series.current;
     if (!s || tp === null || sl === null) return null;
@@ -317,8 +345,12 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       return typeof p === "number" ? p : null;
     });
     if (price === null) return;
-    if (kind === "tp") setTp(price);
-    else setSl(price);
+    const clamped =
+      selected && !validTpSl(kind, price, selected.markPrice, selected.side)
+        ? clampTpSl(kind, price, selected.markPrice, selected.side, decimals)
+        : price;
+    if (kind === "tp") setTp(clamped);
+    else setSl(clamped);
     setSuggestKind(kind);
   }
 
@@ -332,7 +364,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
 
   function resetLines() {
     if (!selected) return;
-    const init = initialTpSl(selected.entryPrice, selected.side);
+    const init = initialTpSl(selected.markPrice, selected.side);
     setTp(init.tp);
     setSl(init.sl);
     setSuggestKind("tp");
@@ -340,8 +372,11 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
 
   function nudgeFocused(kind: SuggestKind, dir: 1 | -1) {
     const price = kind === "tp" ? tp : sl;
-    if (price === null) return;
-    const next = nudgePrice(price, decimals, dir);
+    if (price === null || !selected) return;
+    const raw = nudgePrice(price, decimals, dir);
+    const next = validTpSl(kind, raw, selected.markPrice, selected.side)
+      ? raw
+      : clampTpSl(kind, raw, selected.markPrice, selected.side, decimals);
     if (kind === "tp") setTp(next);
     else setSl(next);
     setSuggestKind(kind);
@@ -533,7 +568,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       </section>
 
       <main className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="relative min-h-[420px] border border-ink bg-[var(--surface)] lg:min-h-[560px]">
+        <div className="relative h-[60vh] max-h-[70vh] min-h-[420px] border border-ink bg-[var(--surface)] lg:min-h-[420px]">
           <div
             ref={box}
             className="absolute inset-0"
