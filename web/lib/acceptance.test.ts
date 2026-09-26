@@ -61,7 +61,7 @@ describe("evaluateSuggestion", () => {
     expect(out.text).toMatch(/\(\+\$/);
   });
 
-  it("rejects a TP below mark on a long with a reason", () => {
+  it("rejects a TP below mark on a long with a plain sentence", () => {
     const raw = encodeSuggestion(suggestion({ price: 80000 }));
     const out = evaluateSuggestion(raw, {
       positionFor: () => longPosition(),
@@ -70,11 +70,45 @@ describe("evaluateSuggestion", () => {
     });
     expect(out.status).toBe("stale");
     if (out.status !== "stale") throw new Error("expected stale");
-    expect(out.reason).toMatch(/above/i);
+    expect(out.reason).toContain("80,000.0");
+    expect(out.reason).toContain("83,840.1");
+    expect(out.reason).toMatch(/below the current price/);
+    expect(out.reason).toMatch(/at a loss right away/);
+    expect(out.reason).not.toMatch(/must be above/);
+    expect(out.reason).not.toMatch(/got 80000/);
     expect(suggestionKind(suggestion({ price: 80000 }), 83840.1)).toBe("SL");
   });
 
-  it("rejects an owner mismatch with a reason", () => {
+  it("words the browser case exactly: TP below mark closes the long at a loss", () => {
+    const raw = encodeSuggestion(suggestion({ price: 70000 }));
+    const out = evaluateSuggestion(raw, {
+      positionFor: () => longPosition({ markPrice: 84008.9 }),
+      priceDecimals: 1,
+      lotDecimals: 5,
+    });
+    expect(out.status).toBe("stale");
+    if (out.status !== "stale") throw new Error("expected stale");
+    expect(out.reason).toBe(
+      "This take-profit (70,000.0) is below the current price (84,008.9), so it would close F91B's long at a loss right away.",
+    );
+  });
+
+  it("rejects a short TP above mark with formatted prices", () => {
+    const raw = encodeSuggestion(suggestion({ side: "short", price: 85000 }));
+    const out = evaluateSuggestion(raw, {
+      positionFor: () => longPosition({ side: "short", markPrice: 83840.1 }),
+      priceDecimals: 1,
+      lotDecimals: 5,
+    });
+    expect(out.status).toBe("stale");
+    if (out.status !== "stale") throw new Error("expected stale");
+    expect(out.reason).toContain("85,000.0");
+    expect(out.reason).toContain("83,840.1");
+    expect(out.reason).toMatch(/above the current price/);
+    expect(out.reason).toMatch(/short at a loss/);
+  });
+
+  it("rejects an owner mismatch with a plain sentence", () => {
     const raw = encodeSuggestion(suggestion({ owner: STRANGER }));
     const out = evaluateSuggestion(raw, {
       positionFor: () => longPosition(),
@@ -83,7 +117,8 @@ describe("evaluateSuggestion", () => {
     });
     expect(out.status).toBe("stale");
     if (out.status !== "stale") throw new Error("expected stale");
-    expect(out.reason).toMatch(/does not match/);
+    expect(out.reason).toMatch(/cannot be applied here/);
+    expect(out.reason).not.toMatch(/does not match/);
   });
 
   it("rejects a malformed payload without throwing", () => {

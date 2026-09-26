@@ -40,6 +40,10 @@ const MONAD_VISION = "https://monadvision.com/tx";
 const CHIP_H = 30;
 const AVATAR = 22;
 const AVATAR_GAP = AVATAR + 4;
+// Bottom ~14% of the pane is the volume strip: bottom-anchored tags stack
+// upward from just above it, never on top of it.
+const VOL_STRIP_FRAC = 0.14;
+const MAX_BOTTOM_TAGS = 4;
 
 type Overlay = {
   account: string;
@@ -103,6 +107,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const [copySlip, setCopySlip] = useState("50");
   const [copyResult, setCopyResult] = useState<CopyResult>({ kind: "idle" });
   const [incoming, setIncoming] = useState<Suggestion | null>(null);
+  const [bottomExpanded, setBottomExpanded] = useState(false);
 
   const wrap = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -283,10 +288,13 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       });
     });
     bottomIdx.forEach((fi, k) => {
+      // Bottom tags stack upward from just above the volume strip, which
+      // owns the bottom ~14% of the pane, so they never cover the bars.
+      const base = height * (1 - VOL_STRIP_FRAC) - CHIP_H - 4;
       byIndex.set(friends[fi].account, {
-        chipY: height - CHIP_H - 4 - k * (CHIP_H + 4),
+        chipY: base - k * (CHIP_H + 4),
         avatarX: null,
-        avatarY: height - AVATAR / 2 - 4 - k * (CHIP_H + 4),
+        avatarY: base - AVATAR / 2 - 4 + CHIP_H / 2 - k * (CHIP_H + 4),
         mode: "bottom",
       });
     });
@@ -777,6 +785,39 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const totalSides = counts.long + counts.short;
   const lastVolume = candles.state === "ready" && candles.data.length ? candles.data[candles.data.length - 1].volume : null;
 
+  // Bottom-anchored tags (entries below the visible range) stack upward from
+  // just above the volume strip. Past four, the rest collapse into a +N tag.
+  const bottomOverlays = useMemo(() => overlays.filter((o) => o.mode === "bottom"), [overlays]);
+  const bottomCollapsed = !bottomExpanded && bottomOverlays.length > MAX_BOTTOM_TAGS;
+  const bottomVisible = useMemo(
+    () =>
+      new Set(
+        (bottomCollapsed ? bottomOverlays.slice(0, MAX_BOTTOM_TAGS) : bottomOverlays).map((o) => o.account),
+      ),
+    [bottomOverlays, bottomCollapsed],
+  );
+  const bottomHidden = bottomOverlays.length - Math.min(bottomOverlays.length, MAX_BOTTOM_TAGS);
+  const bottomPlusY =
+    bottomOverlays.length >= MAX_BOTTOM_TAGS
+      ? bottomOverlays[MAX_BOTTOM_TAGS - 1].chipY - (CHIP_H + 4)
+      : null;
+  const bottomPlotRight = bottomOverlays.length ? bottomOverlays[0].right : 0;
+  // Collapse again once the overflow clears so a fresh room starts tidy.
+  useEffect(() => {
+    if (bottomOverlays.length <= MAX_BOTTOM_TAGS) setBottomExpanded(false);
+  }, [bottomOverlays.length]);
+  // Per-mode order for the left edge markers so stacked pills never sit on
+  // top of each other or on the volume strip.
+  const edgeOrder = useMemo(() => {
+    const top = new Map<string, number>();
+    const bottom = new Map<string, number>();
+    overlays.forEach((o) => {
+      if (o.mode === "top") top.set(o.account, top.size);
+      else if (o.mode === "bottom") bottom.set(o.account, bottom.size);
+    });
+    return { top, bottom };
+  }, [overlays]);
+
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-[1480px] flex-col px-4 pb-6 md:px-8">
       {/* N9 edge-aligned nav: brand left, controls right, no centre links. */}
@@ -884,10 +925,10 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
           style={{ cursor: dragging.current ? "grabbing" : hoverLine ? "ns-resize" : undefined, touchAction: "pan-x pan-y" }}
         >
           <div ref={box} className="absolute inset-0" />
-          {/* Bands between each friend's entry and the current price. Decorative:
-              never takes pointer events. Only the selected trader gets a band,
-              clipped to the visible price range, with a 45deg hatch over the
-              PnL wash at half strength. */}
+          {/* PnL marker for the selected trader. On-chart entries keep the
+              clipped wash band; an entry off-screen would stretch that wash
+              from the mark to the chart edge, so it becomes a 6px bar at the
+              right edge of the plot area instead, solid in --gain/--loss. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
               const f = friends.find((x) => x.account === o.account);
@@ -896,14 +937,23 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               // it only for the trader being inspected.
               if (o.account !== selected?.account) return null;
               if (o.bandHeight <= 0) return null;
-              const colour = hue(f.account);
+              const gain = f.unrealizedPnl >= 0;
+              if (o.mode !== "candle") {
+                const barStyle =
+                  o.mode === "top"
+                    ? { left: o.right - 6, width: 6, top: 0, height: Math.max(0, o.markY) }
+                    : { left: o.right - 6, width: 6, top: Math.max(0, o.markY), bottom: 0 };
+                return (
+                  <div
+                    key={`band-${o.account}`}
+                    className="absolute"
+                    style={{ ...barStyle, background: gain ? "var(--gain)" : "var(--loss)" }}
+                  />
+                );
+              }
               return (
                 <div key={`band-${o.account}`} className="absolute" style={{ left: o.bandLeft, width: Math.max(0, o.right - o.bandLeft), top: o.bandTop, height: o.bandHeight }}>
-                  <div className="absolute inset-0" style={{ background: f.unrealizedPnl >= 0 ? "var(--gain)" : "var(--loss)", opacity: 0.12 }} />
-                  <div
-                    className="absolute inset-0"
-                    style={{ backgroundImage: `repeating-linear-gradient(45deg, ${colour}2B 0 6px, transparent 6px 12px)` }}
-                  />
+                  <div className="absolute inset-0" style={{ background: gain ? "var(--gain)" : "var(--loss)", opacity: 0.12 }} />
                 </div>
               );
             })}
@@ -954,19 +1004,26 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
             })}
           </div>
           {/* Edge markers for entries outside the visible range: pinned to the
-              top or bottom edge with an arrow and the entry price, so they
-              never stretch the scale. */}
+              top edge, or stacked upward from just above the volume strip at
+              the bottom, with an arrow and the entry price, so they never
+              stretch the scale or cover the bars. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
               const f = friends.find((x) => x.account === o.account);
               if (!f || o.mode === "candle") return null;
+              if (o.mode === "bottom" && !bottomVisible.has(o.account)) return null;
               const colour = hue(f.account);
               const arrow = o.mode === "top" ? "↑" : "↓";
+              const order = o.mode === "top" ? (edgeOrder.top.get(o.account) ?? 0) : (edgeOrder.bottom.get(o.account) ?? 0);
+              const style =
+                o.mode === "top"
+                  ? { top: 8 + order * (CHIP_H + 4) }
+                  : { bottom: `calc(${VOL_STRIP_FRAC * 100}% + ${8 + order * (CHIP_H + 4)}px)` };
               return (
                 <div
                   key={`edge-${o.account}`}
                   className="absolute left-3 z-[3]"
-                  style={{ top: o.mode === "top" ? 8 : undefined, bottom: o.mode === "bottom" ? 8 : undefined }}
+                  style={style}
                 >
                   <button
                     onMouseEnter={() => setHover(o.account)}
@@ -985,11 +1042,14 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               );
             })}
           </div>
-          {/* Chips pinned at each friend's entry price on the right edge. */}
+          {/* Chips pinned at each friend's entry price on the right edge.
+              Bottom tags stack upward from just above the volume strip; past
+              four they collapse into a +N tag that expands on click. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
               const f = friends.find((x) => x.account === o.account);
               if (!f) return null;
+              if (o.mode === "bottom" && !bottomVisible.has(o.account)) return null;
               const chip = { ...chipFor(f, decimals), colour: hue(f.account) };
               const dim = active && active !== o.account;
               const arrow = o.mode === "top" ? " ↑" : o.mode === "bottom" ? " ↓" : "";
@@ -1024,6 +1084,44 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                 </div>
               );
             })}
+            {bottomCollapsed && bottomPlusY !== null && (
+              <div
+                className="absolute flex items-center"
+                style={{ top: bottomPlusY, right: `calc(100% - ${bottomPlotRight - 8}px)`, height: CHIP_H }}
+              >
+                <button
+                  type="button"
+                  data-nodrag
+                  onClick={() => setBottomExpanded(true)}
+                  aria-label={`Show ${bottomHidden} more traders below the visible range`}
+                  className="num pointer-events-auto rounded-[6px] border border-dashed border-ink bg-[var(--surface)] px-2 text-[11px] font-medium leading-none hover:bg-rule"
+                  style={{ height: CHIP_H }}
+                >
+                  +{bottomHidden}
+                </button>
+              </div>
+            )}
+            {bottomExpanded && bottomOverlays.length > MAX_BOTTOM_TAGS && (
+              <div
+                className="absolute flex items-center"
+                style={{
+                  top: bottomOverlays[bottomOverlays.length - 1].chipY - (CHIP_H + 4),
+                  right: `calc(100% - ${bottomPlotRight - 8}px)`,
+                  height: CHIP_H,
+                }}
+              >
+                <button
+                  type="button"
+                  data-nodrag
+                  onClick={() => setBottomExpanded(false)}
+                  aria-label="Collapse the overflow traders"
+                  className="num pointer-events-auto rounded-[6px] border border-dashed border-ink bg-[var(--surface)] px-2 text-[11px] font-medium leading-none hover:bg-rule"
+                  style={{ height: CHIP_H }}
+                >
+                  Show less
+                </button>
+              </div>
+            )}
           </div>
           {/* TP/SL floating tags glide with the lines. Decorative. */}
           {selected && tp !== null && tpY !== null && (
