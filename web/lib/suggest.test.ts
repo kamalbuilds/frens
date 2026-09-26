@@ -78,6 +78,20 @@ describe("encode/decode round trip", () => {
     expect(enc).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(enc).not.toContain("=");
   });
+
+  it("round trips without Node Buffer (browser)", () => {
+    const g = globalThis as unknown as Record<string, unknown>;
+    const saved = g["Buffer"];
+    try {
+      delete g["Buffer"];
+      const s = suggestion();
+      const enc = encodeSuggestion(s);
+      expect(enc).toMatch(/^[A-Za-z0-9_-]+$/);
+      expect(decodeSuggestion(enc)).toEqual(s);
+    } finally {
+      g["Buffer"] = saved;
+    }
+  });
 });
 
 describe("decode rejects garbage with null, never throws", () => {
