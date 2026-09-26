@@ -22,8 +22,9 @@ import { assignColours, avatarLabel, byPnl, candleChange, chipFor, colourFor, fo
 import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, type SuggestKind } from "@/lib/drag";
 import { encodeCopyOrder, toCopyOrder } from "@/lib/copy";
 import { encodeRoom } from "@/lib/roomlink";
-import { encodeSuggestion } from "@/lib/suggest";
+import { encodeSuggestion, type Suggestion } from "@/lib/suggest";
 import { connect, sendExecOrder } from "@/lib/wallet";
+import { SuggestionBanner } from "./SuggestionBanner";
 
 type Market = { id: number; name: string; priceDecimals: number; lotDecimals: number };
 type Load<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: T };
@@ -101,6 +102,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const [copySize, setCopySize] = useState("");
   const [copySlip, setCopySlip] = useState("50");
   const [copyResult, setCopyResult] = useState<CopyResult>({ kind: "idle" });
+  const [incoming, setIncoming] = useState<Suggestion | null>(null);
 
   const wrap = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -110,6 +112,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const lines = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
   const tpLine = useRef<IPriceLine | null>(null);
   const slLine = useRef<IPriceLine | null>(null);
+  const sugLine = useRef<IPriceLine | null>(null);
   const dragging = useRef<SuggestKind | null>(null);
 
   const market = markets.state === "ready" ? markets.data.find((m) => m.id === marketId) : undefined;
@@ -197,6 +200,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     return () => {
       tpLine.current = null;
       slLine.current = null;
+      sugLine.current = null;
       dragging.current = null;
       c.remove();
       chart.current = null;
@@ -414,6 +418,30 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     setSlY(s.priceToCoordinate(sl));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tp, sl, selected, decimals, overlays]);
+
+  // A shared suggestion link draws its price on the chart in the suggester's
+  // hue, dashed, with an axis pill naming who suggested it. The banner owns
+  // the decode and validity check; this only draws what it approved.
+  useEffect(() => {
+    const s = series.current;
+    if (!s) return;
+    if (sugLine.current) {
+      s.removePriceLine(sugLine.current);
+      sugLine.current = null;
+    }
+    if (!incoming) return;
+    const colour = colourFor(incoming.from);
+    sugLine.current = s.createPriceLine({
+      price: incoming.price,
+      color: colour,
+      lineWidth: 2,
+      lineStyle: LineStyle.Dashed,
+      axisLabelVisible: true,
+      axisLabelColor: colour,
+      axisLabelTextColor: CHART.surface,
+      title: `suggested by ${shortName(incoming.from)}`,
+    });
+  }, [incoming]);
 
   // Price lines do not move the candle scale on their own, so a TP/SL
   // outside the candles' range would render off screen. The visible range
@@ -832,6 +860,17 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
             </div>
           </div>
         )}
+      </div>
+
+      <div className="pb-2">
+        <SuggestionBanner
+          friends={friends}
+          roomReady={room.state === "ready"}
+          marketId={marketId}
+          priceDecimals={decimals}
+          lotDecimals={market?.lotDecimals ?? 0}
+          onSuggestion={setIncoming}
+        />
       </div>
 
       <main className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
