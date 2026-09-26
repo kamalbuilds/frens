@@ -162,25 +162,25 @@ describe("candleChange", () => {
 });
 
 describe("visiblePriceRange", () => {
-  const candles = [
-    { high: 84500, low: 83000 },
-    { high: 84200, low: 82800 },
-  ];
+  const base = { min: 82800, max: 84500 };
   it("fits the candles when no TP or SL is selected", () => {
-    expect(visiblePriceRange(candles, null, null)).toEqual({ min: 82800, max: 84500 });
+    expect(visiblePriceRange(base, null, null)).toEqual({ min: 82800, max: 84500 });
   });
   it("stretches to include the selected TP and SL only", () => {
-    expect(visiblePriceRange(candles, 86000, 81000)).toEqual({ min: 81000, max: 86000 });
-    expect(visiblePriceRange(candles, 83500, null)).toEqual({ min: 82800, max: 84500 });
+    expect(visiblePriceRange(base, 86000, 81000)).toEqual({ min: 81000, max: 86000 });
+    expect(visiblePriceRange(base, 83500, null)).toEqual({ min: 82800, max: 84500 });
   });
   it("ignores friends entries far outside the candles", () => {
     // Entries at 64,022 to 69,742 must not move the range for candles near 84,014.
-    const range = visiblePriceRange(candles, null, null);
+    const range = visiblePriceRange(base, null, null);
     expect(range!.min).toBeGreaterThan(64022);
     expect(range!.min).toBeGreaterThan(69742);
   });
   it("returns null with no candles and no lines", () => {
-    expect(visiblePriceRange([], null, null)).toBeNull();
+    expect(visiblePriceRange(null, null, null)).toBeNull();
+  });
+  it("fits TP/SL alone when the library has no visible range", () => {
+    expect(visiblePriceRange(null, 86000, 81000)).toEqual({ min: 81000, max: 86000 });
   });
 });
 

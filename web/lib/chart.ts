@@ -166,21 +166,18 @@ export function byPnl(friends: Friend[]): Friend[] {
   return [...friends].sort((a, b) => b.unrealizedPnl - a.unrealizedPnl);
 }
 
-/// The visible price range fits the candles plus the selected trader's TP and
-/// SL lines only. Friends' entry prices never stretch the scale: an entry far
-/// below or above the candles would squash them into a thin band, so entries
-/// are deliberately ignored here and rendered as edge markers instead.
+/// The visible price range widens the library's own visible-candle range to
+/// fit the selected trader's TP and SL lines only. Friends' entry prices
+/// never stretch the scale: an entry far below or above the candles would
+/// squash them into a thin band, so entries are deliberately ignored here
+/// and rendered as edge markers instead.
 export function visiblePriceRange(
-  candles: Pick<Candle, "high" | "low">[],
+  base: { min: number; max: number } | null,
   tp: number | null | undefined,
   sl: number | null | undefined,
 ): { min: number; max: number } | null {
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (const c of candles) {
-    if (Number.isFinite(c.low)) lo = Math.min(lo, c.low);
-    if (Number.isFinite(c.high)) hi = Math.max(hi, c.high);
-  }
+  let lo = base && Number.isFinite(base.min) && Number.isFinite(base.max) ? base.min : Infinity;
+  let hi = base && Number.isFinite(base.min) && Number.isFinite(base.max) ? base.max : -Infinity;
   for (const p of [tp, sl]) {
     if (typeof p === "number" && Number.isFinite(p)) {
       lo = Math.min(lo, p);
