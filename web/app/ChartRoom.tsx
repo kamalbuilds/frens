@@ -5,14 +5,19 @@ import {
   ColorType,
   CrosshairMode,
   LineSeries,
+  LineStyle,
   createChart,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Address } from "viem";
 import { assignColours, byPnl, chipFor, colourFor, formatPrice, formatUsd, shortName, stackChips, type Candle, type Friend } from "@/lib/chart";
+import { initialTpSl, nudgePrice, pnlAtPrice, priceFromY, type SuggestKind } from "@/lib/drag";
 import { encodeRoom } from "@/lib/roomlink";
+import { encodeSuggestion } from "@/lib/suggest";
 
 type Market = { id: number; name: string; priceDecimals: number; lotDecimals: number };
 type Load<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: T };
@@ -47,7 +52,7 @@ const CHART = {
   grid: "rgba(28, 27, 25, 0.06)",
 };
 
-export function ChartRoom({ initialAccounts }: { initialAccounts?: string[] }) {
+export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?: string[]; viewerAddress?: string }) {
   const [markets, setMarkets] = useState<Load<Market[]>>({ state: "loading" });
   const [marketId, setMarketId] = useState(1);
   const [res, setRes] = useState(3600);
@@ -60,11 +65,25 @@ export function ChartRoom({ initialAccounts }: { initialAccounts?: string[] }) {
   const [active, setActive] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const [tp, setTp] = useState<number | null>(null);
+  const [sl, setSl] = useState<number | null>(null);
+  const [tpY, setTpY] = useState<number | null>(null);
+  const [slY, setSlY] = useState<number | null>(null);
+  const [focusKind, setFocusKind] = useState<SuggestKind | null>(null);
+  const [suggestKind, setSuggestKind] = useState<SuggestKind>("tp");
+  const [hoverLine, setHoverLine] = useState<SuggestKind | null>(null);
+  const [viewer, setViewer] = useState(viewerAddress ?? "");
+  const [viewerError, setViewerError] = useState("");
+  const [copiedSuggest, setCopiedSuggest] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const lines = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
+  const tpLine = useRef<IPriceLine | null>(null);
+  const slLine = useRef<IPriceLine | null>(null);
+  const dragging = useRef<SuggestKind | null>(null);
 
   const market = markets.state === "ready" ? markets.data.find((m) => m.id === marketId) : undefined;
   const decimals = market?.priceDecimals ?? 2;
@@ -132,6 +151,9 @@ export function ChartRoom({ initialAccounts }: { initialAccounts?: string[] }) {
     chart.current = c;
     series.current = s;
     return () => {
+      tpLine.current = null;
+      slLine.current = null;
+      dragging.current = null;
       c.remove();
       chart.current = null;
       series.current = null;
@@ -165,6 +187,229 @@ export function ChartRoom({ initialAccounts }: { initialAccounts?: string[] }) {
       }),
     );
   }, [candles, friends]);
+
+  const selectedAccount = hover ?? active;
+  const selected =
+    (selectedAccount ? friends.find((f) => f.account === selectedAccount) : undefined) ??
+    (active ? friends.find((f) => f.account === active) : undefined) ??
+    null;
+
+  // Motion stays instant when the viewer asked for less of it.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mq.matches);
+    const fn = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener?.("change", fn);
+    return () => mq.removeEventListener?.("change", fn);
+  }, []);
+
+  // Fresh TP/SL placement whenever the inspected trader changes.
+  useEffect(() => {
+    if (!selected) {
+      setTp(null);
+      setSl(null);
+      setFocusKind(null);
+      return;
+    }
+    try {
+      const init = initialTpSl(selected.entryPrice, selected.side);
+      setTp(init.tp);
+      setSl(init.sl);
+    } catch {
+      setTp(null);
+      setSl(null);
+    }
+    setSuggestKind("tp");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.account, selected?.entryPrice, selected?.side]);
+
+  // Draggable TP/SL visuals on the candle series, glued on pan, zoom and edit.
+  useEffect(() => {
+    const s = series.current;
+    if (!s || !selected || tp === null || sl === null) {
+      if (s) {
+        if (tpLine.current) {
+          s.removePriceLine(tpLine.current);
+          tpLine.current = null;
+        }
+        if (slLine.current) {
+          s.removePriceLine(slLine.current);
+          slLine.current = null;
+        }
+      }
+      setTpY(null);
+      setSlY(null);
+      return;
+    }
+    const colour = hue(selected.account);
+    const tpTitle = `TP ${formatPrice(tp, decimals)} (${formatUsd(pnlAtPrice(tp, selected.entryPrice, selected.size, selected.side))})`;
+    const slTitle = `SL ${formatPrice(sl, decimals)} (${formatUsd(pnlAtPrice(sl, selected.entryPrice, selected.size, selected.side))})`;
+    if (!tpLine.current) {
+      tpLine.current = s.createPriceLine({
+        price: tp,
+        color: colour,
+        lineWidth: 2,
+        lineStyle: LineStyle.Solid,
+        axisLabelVisible: true,
+        title: tpTitle,
+      });
+    } else {
+      tpLine.current.applyOptions({ price: tp, color: colour, title: tpTitle });
+    }
+    if (!slLine.current) {
+      slLine.current = s.createPriceLine({
+        price: sl,
+        color: colour,
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: slTitle,
+      });
+    } else {
+      slLine.current.applyOptions({ price: sl, color: colour, title: slTitle });
+    }
+    setTpY(s.priceToCoordinate(tp));
+    setSlY(s.priceToCoordinate(sl));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tp, sl, selected, decimals, overlays]);
+
+  function lineHit(y: number): SuggestKind | null {
+    const s = series.current;
+    if (!s || tp === null || sl === null) return null;
+    const yTp = s.priceToCoordinate(tp);
+    const ySl = s.priceToCoordinate(sl);
+    const dTp = yTp === null ? Infinity : Math.abs(y - yTp);
+    const dSl = ySl === null ? Infinity : Math.abs(y - ySl);
+    const best = Math.min(dTp, dSl);
+    if (best > 10) return null;
+    return dTp <= dSl ? "tp" : "sl";
+  }
+
+  function onChartPointerDown(e: React.PointerEvent) {
+    if ((e.target as HTMLElement).closest("button")) return;
+    const el = box.current;
+    const s = series.current;
+    const c = chart.current;
+    if (!el || !s || !c || !selected || tp === null || sl === null) return;
+    const kind = lineHit(e.clientY - el.getBoundingClientRect().top);
+    if (!kind) return;
+    dragging.current = kind;
+    setFocusKind(kind);
+    setSuggestKind(kind);
+    c.applyOptions({ handleScroll: false, handleScale: false });
+    (e.currentTarget as HTMLElement).style.touchAction = "none";
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  }
+
+  function onChartPointerMove(e: React.PointerEvent) {
+    const el = box.current;
+    const s = series.current;
+    if (!el || !s) return;
+    const y = e.clientY - el.getBoundingClientRect().top;
+    const kind = dragging.current;
+    if (!kind) {
+      setHoverLine(selected && tp !== null && sl !== null ? lineHit(y) : null);
+      return;
+    }
+    const price = priceFromY(y, (yy) => {
+      const p = s.coordinateToPrice(yy);
+      return typeof p === "number" ? p : null;
+    });
+    if (price === null) return;
+    if (kind === "tp") setTp(price);
+    else setSl(price);
+    setSuggestKind(kind);
+  }
+
+  function endChartDrag(e: React.PointerEvent) {
+    if (!dragging.current) return;
+    dragging.current = null;
+    setHoverLine(null);
+    chart.current?.applyOptions({ handleScroll: true, handleScale: true });
+    (e.currentTarget as HTMLElement).style.touchAction = "";
+  }
+
+  function resetLines() {
+    if (!selected) return;
+    const init = initialTpSl(selected.entryPrice, selected.side);
+    setTp(init.tp);
+    setSl(init.sl);
+    setSuggestKind("tp");
+  }
+
+  function nudgeFocused(kind: SuggestKind, dir: 1 | -1) {
+    const price = kind === "tp" ? tp : sl;
+    if (price === null) return;
+    const next = nudgePrice(price, decimals, dir);
+    if (kind === "tp") setTp(next);
+    else setSl(next);
+    setSuggestKind(kind);
+  }
+
+  function onLineKeyDown(kind: SuggestKind, e: React.KeyboardEvent) {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      nudgeFocused(kind, 1);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      nudgeFocused(kind, -1);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      resetLines();
+    }
+  }
+
+  function onViewerChange(v: string) {
+    setViewer(v);
+    const t = v.trim();
+    if (t === "") setViewerError("");
+    else if (!/^0x[0-9a-fA-F]{40}$/.test(t) || /^0x0+$/.test(t)) setViewerError("That is not a usable address.");
+    else setViewerError("");
+  }
+
+  const viewerOk = /^0x[0-9a-fA-F]{40}$/.test(viewer.trim()) && !/^0x0+$/.test(viewer.trim());
+  const suggestPrice = suggestKind === "tp" ? tp : sl;
+  const suggestPnl =
+    selected && suggestPrice !== null
+      ? pnlAtPrice(suggestPrice, selected.entryPrice, selected.size, selected.side)
+      : null;
+
+  const suggestPayload = useMemo(() => {
+    if (!selected || suggestPrice === null || !viewerOk) return null;
+    try {
+      return encodeSuggestion({
+        owner: selected.account as Address,
+        market: marketId,
+        side: selected.side,
+        price: suggestPrice,
+        from: viewer.trim() as Address,
+        createdAt: Date.now(),
+      });
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.account, selected?.side, suggestPrice, viewerOk, viewer, marketId]);
+
+  const roomCodeForSuggest = useMemo(() => {
+    try {
+      return encodeRoom(extra.length ? extra : selected ? [selected.account] : []);
+    } catch {
+      return "";
+    }
+  }, [extra, selected]);
+
+  async function copySuggestLink() {
+    if (!roomCodeForSuggest || !suggestPayload || typeof window === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/r/${roomCodeForSuggest}?s=${suggestPayload}`);
+      setCopiedSuggest(true);
+      setTimeout(() => setCopiedSuggest(false), 2000);
+    } catch {
+      setCopiedSuggest(false);
+    }
+  }
 
   // Feed candles and friend lines into the chart.
   useEffect(() => {
@@ -289,7 +534,15 @@ export function ChartRoom({ initialAccounts }: { initialAccounts?: string[] }) {
 
       <main className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="relative min-h-[420px] border border-ink bg-[var(--surface)] lg:min-h-[560px]">
-          <div ref={box} className="absolute inset-0" />
+          <div
+            ref={box}
+            className="absolute inset-0"
+            onPointerDown={onChartPointerDown}
+            onPointerMove={onChartPointerMove}
+            onPointerUp={endChartDrag}
+            onPointerCancel={endChartDrag}
+            style={{ cursor: dragging.current ? "grabbing" : hoverLine ? "ns-resize" : undefined, touchAction: "pan-x pan-y" }}
+          />
           {/* Bands between each friend's entry and the current price, tinted by PnL. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
@@ -348,6 +601,22 @@ export function ChartRoom({ initialAccounts }: { initialAccounts?: string[] }) {
               </button>
             );
           })}
+          {selected && tp !== null && tpY !== null && (
+            <div
+              className="num pointer-events-none absolute left-3 z-10 border bg-[var(--surface)] px-2 py-1 text-[11px]"
+              style={{ top: tpY - 13, borderColor: hue(selected.account), transition: reducedMotion ? "none" : undefined }}
+            >
+              TP {formatPrice(tp, decimals)} · {formatUsd(pnlAtPrice(tp, selected.entryPrice, selected.size, selected.side))}
+            </div>
+          )}
+          {selected && sl !== null && slY !== null && (
+            <div
+              className="num pointer-events-none absolute left-3 z-10 border border-dashed bg-[var(--surface)] px-2 py-1 text-[11px]"
+              style={{ top: slY - 13, borderColor: hue(selected.account), transition: reducedMotion ? "none" : undefined }}
+            >
+              SL {formatPrice(sl, decimals)} · {formatUsd(pnlAtPrice(sl, selected.entryPrice, selected.size, selected.side))}
+            </div>
+          )}
           {hovered && (
             <div className="num pointer-events-none absolute left-3 top-3 z-10 w-[240px] border border-ink bg-[var(--surface)] p-3 text-[12px]">
               <p className="mb-2 font-[family-name:var(--font-display)] text-[14px] font-bold" style={{ color: hue(hovered.account) }}>
@@ -407,6 +676,79 @@ export function ChartRoom({ initialAccounts }: { initialAccounts?: string[] }) {
               );
             })}
           </ol>
+          <section aria-label="Suggest TP or SL" className="flex flex-col gap-2 border-t border-rule pt-4">
+            <h3 className="font-[family-name:var(--font-display)] text-[16px] font-bold">Suggest TP or SL</h3>
+            {!selected && (
+              <p className="text-[13px] text-muted">Select a trader to drag TP and SL lines for them.</p>
+            )}
+            {selected && tp !== null && sl !== null && (
+              <>
+                <p className="text-[13px] text-muted">
+                  For {shortName(selected.account)}, {selected.side === "long" ? "Long" : "Short"} in at{" "}
+                  <span className="num">{formatPrice(selected.entryPrice, decimals)}</span>. Drag the lines on the
+                  chart, or focus one below and use arrow keys. Escape resets.
+                </p>
+                <div className="flex gap-2">
+                  {(["tp", "sl"] as SuggestKind[]).map((kind) => {
+                    const price = kind === "tp" ? tp : sl;
+                    const pnl = pnlAtPrice(price, selected.entryPrice, selected.size, selected.side);
+                    const on = suggestKind === kind;
+                    return (
+                      <button
+                        key={kind}
+                        onClick={() => {
+                          setFocusKind(kind);
+                          setSuggestKind(kind);
+                        }}
+                        onFocus={() => setFocusKind(kind)}
+                        onKeyDown={(e) => onLineKeyDown(kind, e)}
+                        aria-pressed={on}
+                        aria-label={`${kind === "tp" ? "Take profit" : "Stop loss"} line at ${formatPrice(price, decimals)}, ${formatUsd(pnl)}. Arrow keys nudge by one tick. Escape resets.`}
+                        className="num flex-1 rounded-[6px] border px-2.5 py-2 text-left text-[12px] hover:bg-rule"
+                        style={{
+                          borderColor: hue(selected.account),
+                          outline: focusKind === kind ? `2px solid ${hue(selected.account)}` : undefined,
+                          background: on ? "var(--surface)" : undefined,
+                        }}
+                      >
+                        <span className="block font-medium">{kind === "tp" ? "TP" : "SL"} {formatPrice(price, decimals)}</span>
+                        <span className="block" style={{ color: pnl >= 0 ? "var(--gain)" : "var(--loss)" }}>
+                          {formatUsd(pnl)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="num text-[12px] text-muted">
+                  Suggesting {suggestKind === "tp" ? "TP" : "SL"} at{" "}
+                  {suggestPrice !== null ? formatPrice(suggestPrice, decimals) : "…"}
+                  {suggestPnl !== null ? ` (${formatUsd(suggestPnl)})` : ""}. PnL from the room position.
+                </p>
+                <label htmlFor="viewer" className="text-[13px] font-medium">Your address</label>
+                <input
+                  id="viewer"
+                  value={viewer}
+                  onChange={(e) => onViewerChange(e.target.value)}
+                  placeholder="0x…"
+                  spellCheck={false}
+                  className="num min-w-0 flex-1 rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
+                />
+                {viewerError && <p className="text-[12px] text-[var(--loss)]">{viewerError}</p>}
+                {viewerOk && suggestPayload && roomCodeForSuggest ? (
+                  <button
+                    type="button"
+                    onClick={copySuggestLink}
+                    title="Copy a link with this suggestion"
+                    className="rounded-[6px] border border-ink px-3 py-2 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
+                  >
+                    {copiedSuggest ? "Copied" : "Copy suggestion link"}
+                  </button>
+                ) : (
+                  <p className="text-[13px] text-muted">Connect a wallet to suggest. Paste your address above.</p>
+                )}
+              </>
+            )}
+          </section>
           <form onSubmit={addTrader} className="mt-auto flex flex-col gap-2 border-t border-rule pt-4">
             <label htmlFor="add" className="text-[13px] font-medium">Add a trader by address</label>
             <div className="flex gap-2">
