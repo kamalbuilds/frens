@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { DOWN_WASH, FRIEND_HUES, UP_WASH, assignColours, avatarLabel, avatarTime, byPnl, candleChange, chipFor, colourFor, formatPrice, formatUsd, scaleCandle, sideCounts, stackChips, volumeColorFor, type Friend } from "./chart";
+import { DOWN_WASH, FRIEND_HUES, UP_WASH, assignColours, avatarLabel, avatarTime, byPnl, candleChange, chipFor, colourFor, formatPrice, formatUsd, placeAvatar, scaleCandle, sideCounts, stackChips, visiblePriceRange, volumeColorFor, type Friend } from "./chart";
 
 describe("scaleCandle", () => {
   it("divides by the market's price decimals and converts ms to seconds", () => {
@@ -158,5 +158,62 @@ describe("candleChange", () => {
   });
   it("falls back to the candle open on the first candle", () => {
     expect(candleChange({ open: 100, close: 102 }, null)).toEqual({ change: 2, pct: 2 });
+  });
+});
+
+describe("visiblePriceRange", () => {
+  const candles = [
+    { high: 84500, low: 83000 },
+    { high: 84200, low: 82800 },
+  ];
+  it("fits the candles when no TP or SL is selected", () => {
+    expect(visiblePriceRange(candles, null, null)).toEqual({ min: 82800, max: 84500 });
+  });
+  it("stretches to include the selected TP and SL only", () => {
+    expect(visiblePriceRange(candles, 86000, 81000)).toEqual({ min: 81000, max: 86000 });
+    expect(visiblePriceRange(candles, 83500, null)).toEqual({ min: 82800, max: 84500 });
+  });
+  it("ignores friends entries far outside the candles", () => {
+    // Entries at 64,022 to 69,742 must not move the range for candles near 84,014.
+    const range = visiblePriceRange(candles, null, null);
+    expect(range!.min).toBeGreaterThan(64022);
+    expect(range!.min).toBeGreaterThan(69742);
+  });
+  it("returns null with no candles and no lines", () => {
+    expect(visiblePriceRange([], null, null)).toBeNull();
+  });
+});
+
+describe("placeAvatar", () => {
+  const ctx = {
+    firstTime: 1000,
+    lastTime: 2000,
+    viewMin: 82000,
+    viewMax: 85000,
+    height: 400,
+    timeToX: (t: number) => (t >= 1000 && t <= 2000 ? t - 1000 : null),
+    priceToY: (p: number) => (p >= 82000 && p <= 85000 ? ((85000 - p) / 3000) * 400 : p > 85000 ? -20 : 420),
+  };
+  it("sits on the candle when time and price are both inside the visible range", () => {
+    const r = placeAvatar({ entryTime: 1500, entryPrice: 84014, ...ctx });
+    expect(r.mode).toBe("candle");
+    expect(r.x).toBe(500);
+    expect(r.y).toBeCloseTo(((85000 - 84014) / 3000) * 400, 10);
+  });
+  it("pins to the bottom edge when the entry price is below the visible range", () => {
+    const r = placeAvatar({ entryTime: 1500, entryPrice: 69742, ...ctx });
+    expect(r.mode).toBe("bottom");
+    expect(r.y).toBe(400 - 11);
+  });
+  it("pins to the top edge when the entry price is above the visible range", () => {
+    const r = placeAvatar({ entryTime: 1500, entryPrice: 90000, ...ctx });
+    expect(r.mode).toBe("top");
+    expect(r.y).toBe(11);
+  });
+  it("pins to an edge when entryTime is null or outside the range", () => {
+    const a = placeAvatar({ entryTime: null, entryPrice: 84014, ...ctx });
+    expect(a.mode === "top" || a.mode === "bottom").toBe(true);
+    const b = placeAvatar({ entryTime: 500, entryPrice: 84014, ...ctx });
+    expect(b.mode === "top" || b.mode === "bottom").toBe(true);
   });
 });
