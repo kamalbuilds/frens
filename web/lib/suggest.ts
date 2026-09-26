@@ -65,6 +65,27 @@ function isAddress(v: unknown): v is Address {
   return typeof v === "string" && ADDRESS_RE.test(v);
 }
 
+// Browser-safe base64url. Buffer does not exist in browsers, so the UTF-8
+// bytes go through TextEncoder/TextDecoder plus btoa/atob with the standard
+// base64url alphabet (+/ to -_, padding stripped). The wire format matches
+// Buffer's base64url exactly, so existing links still decode.
+function encodeBase64Url(json: string): string {
+  const bytes = new TextEncoder().encode(json);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeBase64Url(str: string): string {
+  let b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = b64.length % 4;
+  if (pad) b64 += "=".repeat(4 - pad);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
 // The share payload is a fixed 7 slot JSON array: owner, market, side, price,
 // size lots (decimal string) or null, from, createdAt. A fixed array keeps the
 // link short and the decode strict.
@@ -78,7 +99,7 @@ export function encodeSuggestion(s: Suggestion): string {
     s.from,
     s.createdAt,
   ];
-  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  return encodeBase64Url(JSON.stringify(payload));
 }
 
 // Decodes a share payload. Returns null for anything malformed and never
@@ -88,11 +109,11 @@ export function encodeSuggestion(s: Suggestion): string {
 export function decodeSuggestion(str: string): Suggestion | null {
   try {
     if (typeof str !== "string" || str.length === 0 || !BASE64URL_RE.test(str)) return null;
-    const bytes = Buffer.from(str, "base64url");
+    const json = decodeBase64Url(str);
     // Reject non-canonical input: anything that does not re-encode to itself
     // (wrong alphabet, padding, truncated bytes) is not one of our links.
-    if (bytes.toString("base64url") !== str) return null;
-    const v: unknown = JSON.parse(bytes.toString("utf8"));
+    if (encodeBase64Url(json) !== str) return null;
+    const v: unknown = JSON.parse(json);
     if (!Array.isArray(v) || v.length !== 7) return null;
     const [owner, market, side, price, sizeLots, from, createdAt] = v;
     if (!isAddress(owner)) return null;

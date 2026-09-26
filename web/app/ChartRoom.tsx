@@ -220,7 +220,14 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     const data = candles.data;
     const first = data[0].time;
     const last = data[data.length - 1].time;
-    const range = visiblePriceRange(data, tp, sl);
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const k of data) {
+      if (Number.isFinite(k.low)) lo = Math.min(lo, k.low);
+      if (Number.isFinite(k.high)) hi = Math.max(hi, k.high);
+    }
+    const baseRange = Number.isFinite(lo) && Number.isFinite(hi) ? { min: lo, max: hi } : null;
+    const range = visiblePriceRange(baseRange, tp, sl);
     const viewMin = range?.min ?? Math.min(...data.map((k) => k.low));
     const viewMax = range?.max ?? Math.max(...data.map((k) => k.high));
     const timeToX = (t: number) => c.timeScale().timeToCoordinate(t as UTCTimestamp);
@@ -422,8 +429,9 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     s.applyOptions({
       autoscaleInfoProvider: (base: () => AutoscaleInfo | null) => {
         const info = base();
-        const data = candles.state === "ready" ? candles.data : [];
-        const range = visiblePriceRange(data, tp, sl);
+        const baseRange =
+          info?.priceRange == null ? null : { min: info.priceRange.minValue, max: info.priceRange.maxValue };
+        const range = visiblePriceRange(baseRange, tp, sl);
         if (!range) return info;
         if (!info || !info.priceRange) return { priceRange: { minValue: range.min, maxValue: range.max } };
         return {
