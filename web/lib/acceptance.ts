@@ -33,6 +33,50 @@ export function bannerText(s: Suggestion, position: Position, priceDecimals: num
   return `${shortName(s.from)} suggests a ${kind} at ${formatPrice(s.price, priceDecimals)} on ${shortName(s.owner)}'s ${position.side} (${formatUsd(pnl)})`;
 }
 
+// validateSuggestion speaks in raw checks ("must be above the mark price
+// 84008.9, got 70000"). The banner shows whatever this module returns, so
+// rewrite each known problem as a plain sentence with formatted prices.
+function friendlyReason(raw: string, s: Suggestion, position: Position, priceDecimals: number): string {
+  const who = shortName(s.owner);
+  if (/take-profit for a long must be above/i.test(raw)) {
+    return (
+      `This take-profit (${formatPrice(s.price, priceDecimals)}) is below the current price ` +
+      `(${formatPrice(position.markPrice, priceDecimals)}), so it would close ${who}'s long at a loss right away.`
+    );
+  }
+  if (/take-profit for a short must be below/i.test(raw)) {
+    return (
+      `This take-profit (${formatPrice(s.price, priceDecimals)}) is above the current price ` +
+      `(${formatPrice(position.markPrice, priceDecimals)}), so it would close ${who}'s short at a loss right away.`
+    );
+  }
+  if (/does not match the position account/i.test(raw)) {
+    return (
+      `This suggestion is for ${who}, but the open position here belongs to ` +
+      `${shortName(position.account)}, so it cannot be applied here.`
+    );
+  }
+  if (/but the position is on market/i.test(raw)) {
+    return "This suggestion is for another market, so it cannot be applied to this position.";
+  }
+  if (/take-profit but the position is/i.test(raw)) {
+    return (
+      `This suggestion is for a ${s.side}, but the open position is ${position.side}, ` +
+      "so it cannot be applied here."
+    );
+  }
+  if (/must be a positive number/i.test(raw)) {
+    return "This suggestion has no usable price, so it cannot be placed.";
+  }
+  if (/must be positive/i.test(raw)) {
+    return "This suggestion has no usable size, so there is nothing to close.";
+  }
+  if (/exceeds the position size/i.test(raw)) {
+    return `This suggestion asks for more than ${who} holds, so it cannot be filled as written.`;
+  }
+  return raw;
+}
+
 export type Acceptance =
   | { status: "empty" }
   | { status: "malformed"; reason: string }
@@ -97,7 +141,7 @@ export function evaluateSuggestion(
     };
   }
   if (problems.length > 0) {
-    return { status: "stale", reason: problems[0] as string, suggestion };
+    return { status: "stale", reason: friendlyReason(problems[0] as string, suggestion, position, opts.priceDecimals), suggestion };
   }
   return {
     status: "valid",
