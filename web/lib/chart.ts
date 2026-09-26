@@ -165,3 +165,67 @@ export function stackChips(ys: number[], gap: number): number[] {
 export function byPnl(friends: Friend[]): Friend[] {
   return [...friends].sort((a, b) => b.unrealizedPnl - a.unrealizedPnl);
 }
+
+/// The visible price range fits the candles plus the selected trader's TP and
+/// SL lines only. Friends' entry prices never stretch the scale: an entry far
+/// below or above the candles would squash them into a thin band, so entries
+/// are deliberately ignored here and rendered as edge markers instead.
+export function visiblePriceRange(
+  candles: Pick<Candle, "high" | "low">[],
+  tp: number | null | undefined,
+  sl: number | null | undefined,
+): { min: number; max: number } | null {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const c of candles) {
+    if (Number.isFinite(c.low)) lo = Math.min(lo, c.low);
+    if (Number.isFinite(c.high)) hi = Math.max(hi, c.high);
+  }
+  for (const p of [tp, sl]) {
+    if (typeof p === "number" && Number.isFinite(p)) {
+      lo = Math.min(lo, p);
+      hi = Math.max(hi, p);
+    }
+  }
+  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+  return { min: lo, max: hi };
+}
+
+export type AvatarMode = "candle" | "top" | "bottom";
+
+/// Where a friend's 22px initials circle sits. On-candle when the entry time
+/// maps to an x coordinate and the entry price maps to a y inside the pane;
+/// otherwise pinned to the top or bottom edge. Callers pass the chart's own
+/// converters (time via chart.timeScale().timeToCoordinate, price via
+/// series.priceToCoordinate) so the decision matches what is on screen.
+export function placeAvatar(opts: {
+  entryTime: number | null;
+  entryPrice: number;
+  firstTime: number;
+  lastTime: number;
+  viewMin: number;
+  viewMax: number;
+  timeToX: (t: number) => number | null;
+  priceToY: (p: number) => number | null;
+  height: number;
+  avatar?: number;
+}): { mode: AvatarMode; x: number; y: number } {
+  const size = opts.avatar ?? 22;
+  const half = size / 2;
+  const inTime =
+    typeof opts.entryTime === "number" &&
+    Number.isFinite(opts.entryTime) &&
+    opts.entryTime >= opts.firstTime &&
+    opts.entryTime <= opts.lastTime;
+  const xRaw = inTime ? opts.timeToX(opts.entryTime as number) : null;
+  const yRaw = opts.priceToY(opts.entryPrice);
+  const xOk = typeof xRaw === "number" && Number.isFinite(xRaw);
+  const yOk = typeof yRaw === "number" && Number.isFinite(yRaw) && (yRaw as number) >= 0 && (yRaw as number) <= opts.height;
+  const priceIn = opts.entryPrice >= opts.viewMin && opts.entryPrice <= opts.viewMax;
+  if (xOk && yOk && priceIn) return { mode: "candle", x: xRaw as number, y: yRaw as number };
+  const fallbackX = opts.timeToX(opts.lastTime);
+  const x = xOk ? (xRaw as number) : typeof fallbackX === "number" && Number.isFinite(fallbackX) ? fallbackX : 0;
+  const above = opts.entryPrice >= opts.viewMax || (!priceIn && opts.entryPrice > (opts.viewMin + opts.viewMax) / 2);
+  if (above) return { mode: "top", x, y: half };
+  return { mode: "bottom", x, y: opts.height - half };
+}

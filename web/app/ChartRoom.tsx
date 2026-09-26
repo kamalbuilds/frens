@@ -18,7 +18,7 @@ import {
 } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
-import { assignColours, avatarLabel, avatarTime, byPnl, candleChange, chipFor, colourFor, formatPrice, formatUsd, shortName, sideCounts, stackChips, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
+import { assignColours, avatarLabel, byPnl, candleChange, chipFor, colourFor, formatPrice, formatUsd, placeAvatar, shortName, sideCounts, stackChips, visiblePriceRange, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
 import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, type SuggestKind } from "@/lib/drag";
 import { encodeCopyOrder, toCopyOrder } from "@/lib/copy";
 import { encodeRoom } from "@/lib/roomlink";
@@ -46,9 +46,12 @@ type Overlay = {
   entryY: number;
   markY: number;
   bandLeft: number;
+  bandTop: number;
+  bandHeight: number;
   right: number;
   avatarX: number | null;
   avatarY: number;
+  mode: "candle" | "top" | "bottom";
 };
 
 type Ohlc = { o: number; h: number; l: number; c: number; change: number; pct: number; time: number; volume: number };
@@ -204,38 +207,115 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   }, []);
 
   // Where every friend's chip, line and band sit, from the chart's own coordinates.
+  // The price scale fits the candles plus the selected TP/SL only: friend
+  // entries never stretch it. Entries outside the visible range pin to the
+  // top or bottom edge via placeAvatar.
   const layout = useCallback(() => {
     const c = chart.current;
     const s = series.current;
     const el = box.current;
     if (!c || !s || !el || candles.state !== "ready" || !candles.data.length) return setOverlays([]);
     const right = el.clientWidth - c.priceScale("right").width();
+    const height = el.clientHeight;
     const data = candles.data;
     const first = data[0].time;
     const last = data[data.length - 1].time;
-    const entries = friends.map((f) => s.priceToCoordinate(f.entryPrice));
-    const valid = friends.map((f, i) => ({ f, y: entries[i] })).filter((x) => x.y !== null) as { f: Friend; y: number }[];
-    const stacked = stackChips(valid.map((v) => v.y - CHIP_H / 2), CHIP_H + 4);
-    const avatarStacked = stackChips(valid.map((v) => v.y - AVATAR / 2), AVATAR_GAP);
+    const range = visiblePriceRange(data, tp, sl);
+    const viewMin = range?.min ?? Math.min(...data.map((k) => k.low));
+    const viewMax = range?.max ?? Math.max(...data.map((k) => k.high));
+    const timeToX = (t: number) => c.timeScale().timeToCoordinate(t as UTCTimestamp);
+    const priceToY = (p: number) => s.priceToCoordinate(p);
+    const placedAll = friends.map((f) =>
+      placeAvatar({
+        entryTime: f.entryTime,
+        entryPrice: f.entryPrice,
+        firstTime: first,
+        lastTime: last,
+        viewMin,
+        viewMax,
+        timeToX,
+        priceToY,
+        height,
+      }),
+    );
+    const candleIdx: number[] = [];
+    const topIdx: number[] = [];
+    const bottomIdx: number[] = [];
+    placedAll.forEach((p, i) => {
+      if (p.mode === "candle") candleIdx.push(i);
+      else if (p.mode === "top") topIdx.push(i);
+      else bottomIdx.push(i);
+    });
+    const candleStack = stackChips(
+      candleIdx.map((i) => placedAll[i].y - CHIP_H / 2),
+      CHIP_H + 4,
+    );
+    const candleAvatarStack = stackChips(
+      candleIdx.map((i) => placedAll[i].y - AVATAR / 2),
+      AVATAR_GAP,
+    );
+    const byIndex = new Map<string, { chipY: number; avatarX: number | null; avatarY: number; mode: "candle" | "top" | "bottom" }>();
+    candleIdx.forEach((fi, k) => {
+      byIndex.set(friends[fi].account, {
+        chipY: candleStack[k],
+        avatarX: placedAll[fi].x,
+        avatarY: candleAvatarStack[k],
+        mode: "candle",
+      });
+    });
+    topIdx.forEach((fi, k) => {
+      byIndex.set(friends[fi].account, {
+        chipY: 4 + k * (CHIP_H + 4),
+        avatarX: null,
+        avatarY: 4 + AVATAR / 2 + k * (CHIP_H + 4),
+        mode: "top",
+      });
+    });
+    bottomIdx.forEach((fi, k) => {
+      byIndex.set(friends[fi].account, {
+        chipY: height - CHIP_H - 4 - k * (CHIP_H + 4),
+        avatarX: null,
+        avatarY: height - AVATAR / 2 - 4 - k * (CHIP_H + 4),
+        mode: "bottom",
+      });
+    });
     setOverlays(
-      valid.map(({ f, y }, i) => {
-        const start = Math.max(avatarTime(f.entryTime, last), first) as UTCTimestamp;
-        const x = c.timeScale().timeToCoordinate(start);
+      friends.map((f) => {
+        const pos = byIndex.get(f.account) ?? { chipY: 0, avatarX: null, avatarY: 0, mode: "candle" as const };
+        const entryY = priceToY(f.entryPrice) ?? (pos.mode === "top" ? -10 : height + 10);
+        const markY = priceToY(f.markPrice) ?? entryY;
         const markStart = Math.max(f.entryTime ?? first, first) as UTCTimestamp;
-        const bandX = c.timeScale().timeToCoordinate(markStart);
+        const bandX = timeToX(markStart) ?? 0;
+        // Clip the PnL band to the visible price range so it never washes the
+        // whole chart when the entry sits far outside the candles.
+        const lo = Math.max(Math.min(f.entryPrice, f.markPrice), viewMin);
+        const hi = Math.min(Math.max(f.entryPrice, f.markPrice), viewMax);
+        let bandTop = Math.min(entryY, markY);
+        let bandHeight = Math.max(1, Math.abs(entryY - markY));
+        if (hi > lo) {
+          const yHi = priceToY(hi) ?? bandTop;
+          const yLo = priceToY(lo) ?? bandTop + bandHeight;
+          bandTop = Math.min(yHi, yLo);
+          bandHeight = Math.max(1, Math.abs(yHi - yLo));
+        } else {
+          bandHeight = 0;
+        }
         return {
           account: f.account,
-          entryY: y,
-          markY: s.priceToCoordinate(f.markPrice) ?? y,
-          chipY: stacked[i],
-          avatarX: x,
-          avatarY: avatarStacked[i],
-          bandLeft: bandX ?? 0,
+          entryY,
+          markY,
+          chipY: pos.chipY,
+          avatarX: pos.avatarX,
+          avatarY: pos.avatarY,
+          bandLeft: bandX,
+          bandTop,
+          bandHeight,
           right,
+          mode: pos.mode,
         };
       }),
     );
-  }, [candles, friends]);
+  }, [candles, friends, tp, sl]);
 
   const selectedAccount = hover ?? active;
   const selected =
@@ -329,8 +409,9 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   }, [tp, sl, selected, decimals, overlays]);
 
   // Price lines do not move the candle scale on their own, so a TP/SL
-  // outside the candles' range would render off screen. Fold both lines
-  // into the series autoscale while a trader is selected.
+  // outside the candles' range would render off screen. The visible range
+  // fits the candles plus the selected TP and SL only: friend entries never
+  // stretch the scale (their lines opt out below).
   useEffect(() => {
     const s = series.current;
     if (!s) return;
@@ -338,22 +419,24 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       s.applyOptions({ autoscaleInfoProvider: undefined });
       return;
     }
-    const lo = Math.min(tp, sl);
-    const hi = Math.max(tp, sl);
     s.applyOptions({
       autoscaleInfoProvider: (base: () => AutoscaleInfo | null) => {
         const info = base();
-        if (!info || !info.priceRange) return { priceRange: { minValue: lo, maxValue: hi } };
+        const data = candles.state === "ready" ? candles.data : [];
+        const range = visiblePriceRange(data, tp, sl);
+        if (!range) return info;
+        if (!info || !info.priceRange) return { priceRange: { minValue: range.min, maxValue: range.max } };
         return {
           ...info,
           priceRange: {
-            minValue: Math.min(info.priceRange.minValue, lo),
-            maxValue: Math.max(info.priceRange.maxValue, hi),
+            minValue: Math.min(info.priceRange.minValue, range.min),
+            maxValue: Math.max(info.priceRange.maxValue, range.max),
           },
         };
       },
     });
-  }, [tp, sl, selected]);
+    requestAnimationFrame(layout);
+  }, [tp, sl, selected, candles, layout]);
 
   function lineHit(y: number): SuggestKind | null {
     const s = series.current;
@@ -504,9 +587,12 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   }, [extra, friends]);
 
   async function copySuggestLink() {
-    if (!roomCodeForSuggest || !suggestPayload || typeof window === "undefined") return;
+    if (!suggestPayload || typeof window === "undefined") return;
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/r/${roomCodeForSuggest}?s=${suggestPayload}`);
+      const url = roomCodeForSuggest
+        ? `${window.location.origin}/r/${roomCodeForSuggest}?s=${suggestPayload}`
+        : `${window.location.origin}/?s=${suggestPayload}`;
+      await navigator.clipboard.writeText(url);
       setCopiedSuggest(true);
       setTimeout(() => setCopiedSuggest(false), 2000);
     } catch {
@@ -562,12 +648,15 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       for (const f of friends) {
         const startTime = data.find((k) => k.time >= (f.entryTime ?? 0))?.time ?? data[0].time;
         const dim = active && active.toLowerCase() !== f.account.toLowerCase();
+        // Friend entries never move the price scale: the candles plus the
+        // selected TP/SL own the range, entries outside it pin to the edge.
         const l = c.addSeries(LineSeries, {
           color: dim ? `${hue(f.account)}40` : hue(f.account),
           lineWidth: active && !dim ? 3 : 2,
           priceLineVisible: false,
           lastValueVisible: false,
           crosshairMarkerVisible: false,
+          autoscaleInfoProvider: () => null,
         });
         l.setData([
           { time: startTime as UTCTimestamp, value: f.entryPrice },
@@ -650,6 +739,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
 
   const hovered = friends.find((f) => f.account === hover);
   const totalSides = counts.long + counts.short;
+  const lastVolume = candles.state === "ready" && candles.data.length ? candles.data[candles.data.length - 1].volume : null;
 
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-[1480px] flex-col px-4 pb-6 md:px-8">
@@ -748,37 +838,36 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         >
           <div ref={box} className="absolute inset-0" />
           {/* Bands between each friend's entry and the current price. Decorative:
-              never takes pointer events. The active friend's band gets a 45deg
-              hatch over the PnL wash. */}
+              never takes pointer events. Only the selected trader gets a band,
+              clipped to the visible price range, with a 45deg hatch over the
+              PnL wash at half strength. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
               const f = friends.find((x) => x.account === o.account);
               if (!f) return null;
-              const top = Math.min(o.entryY, o.markY);
-              const h = Math.max(1, Math.abs(o.entryY - o.markY));
               // A band for every trader stacks into one wash over the candles; show
               // it only for the trader being inspected.
-              if (o.account !== (hover ?? active)) return null;
+              if (o.account !== selected?.account) return null;
+              if (o.bandHeight <= 0) return null;
               const colour = hue(f.account);
               return (
-                <div key={`band-${o.account}`} className="absolute" style={{ left: o.bandLeft, width: Math.max(0, o.right - o.bandLeft), top, height: h }}>
+                <div key={`band-${o.account}`} className="absolute" style={{ left: o.bandLeft, width: Math.max(0, o.right - o.bandLeft), top: o.bandTop, height: o.bandHeight }}>
                   <div className="absolute inset-0" style={{ background: f.unrealizedPnl >= 0 ? "var(--gain)" : "var(--loss)", opacity: 0.12 }} />
-                  {o.account === active && (
-                    <div
-                      className="absolute inset-0"
-                      style={{ backgroundImage: `repeating-linear-gradient(45deg, ${colour}55 0 6px, transparent 6px 12px)` }}
-                    />
-                  )}
+                  <div
+                    className="absolute inset-0"
+                    style={{ backgroundImage: `repeating-linear-gradient(45deg, ${colour}2B 0 6px, transparent 6px 12px)` }}
+                  />
                 </div>
               );
             })}
           </div>
           {/* Avatars sit ON the chart at each friend's entry time and price.
-              The layer is decorative; only the avatar and Copy buttons take events. */}
+              The layer is decorative; only the avatar and Copy buttons take events.
+              Friends outside the visible range pin to the edge layer below. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
               const f = friends.find((x) => x.account === o.account);
-              if (!f || o.avatarX === null) return null;
+              if (!f || o.avatarX === null || o.mode !== "candle") return null;
               const colour = hue(f.account);
               const dim = active && active !== o.account;
               return (
@@ -817,6 +906,38 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               );
             })}
           </div>
+          {/* Edge markers for entries outside the visible range: pinned to the
+              top or bottom edge with an arrow and the entry price, so they
+              never stretch the scale. */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            {overlays.map((o) => {
+              const f = friends.find((x) => x.account === o.account);
+              if (!f || o.mode === "candle") return null;
+              const colour = hue(f.account);
+              const arrow = o.mode === "top" ? "↑" : "↓";
+              return (
+                <div
+                  key={`edge-${o.account}`}
+                  className="absolute left-3 z-[3]"
+                  style={{ top: o.mode === "top" ? 8 : undefined, bottom: o.mode === "bottom" ? 8 : undefined }}
+                >
+                  <button
+                    onMouseEnter={() => setHover(o.account)}
+                    onMouseLeave={() => setHover(null)}
+                    onFocus={() => setHover(o.account)}
+                    onBlur={() => setHover(null)}
+                    onClick={() => setActive(active === o.account ? null : o.account)}
+                    aria-pressed={active === o.account}
+                    aria-label={`${shortName(f.account)} entry ${formatPrice(f.entryPrice, decimals)} ${o.mode === "top" ? "above" : "below"} the visible range`}
+                    className="num pointer-events-auto flex items-center gap-1.5 rounded-[6px] border bg-[var(--surface)] px-2 py-1 text-[11px]"
+                    style={{ borderColor: colour }}
+                  >
+                    <span className="font-medium">{shortName(f.account)} entry {formatPrice(f.entryPrice, decimals)} {arrow}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
           {/* Chips pinned at each friend's entry price on the right edge. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
@@ -824,6 +945,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               if (!f) return null;
               const chip = { ...chipFor(f, decimals), colour: hue(f.account) };
               const dim = active && active !== o.account;
+              const arrow = o.mode === "top" ? " ↑" : o.mode === "bottom" ? " ↓" : "";
               return (
                 <div
                   key={`chip-${o.account}`}
@@ -843,12 +965,13 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                       opacity: dim ? 0.35 : 1,
                       zIndex: hover === o.account || active === o.account ? 3 : 2,
                     }}
-                    aria-label={`${chip.label} ${chip.side} entry ${chip.entry}, ${chip.pnl}`}
+                    aria-label={`${chip.label} ${chip.side} entry ${chip.entry}${arrow}, ${chip.pnl}`}
                   >
                     <span className="h-2.5 w-2.5 rounded-full" style={{ background: chip.colour }} />
                     <span className="font-medium">{chip.label}</span>
                     <span className="text-muted">{chip.side}</span>
                     <span style={{ color: chip.inProfit ? "var(--gain)" : "var(--loss)" }}>{chip.pnl}</span>
+                    {arrow && <span className="text-muted">{arrow.trim()}</span>}
                   </button>
                   <CopyButton account={o.account} friend={f} decimals={decimals} onCopy={() => openCopy(o.account)} />
                 </div>
@@ -898,10 +1021,11 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               <span className="block h-[10px] w-[10px] rounded-full border-2 border-dashed bg-[var(--surface)]" style={{ borderColor: hue(selected.account) }} />
             </button>
           )}
-          {/* Volume label, top-left of the footer strip. Decorative. */}
-          {ohlc && (
+          {/* Volume label, top-left of the footer strip: the last candle's
+              volume from the candles API field v. Decorative. */}
+          {lastVolume !== null && (
             <p className="num pointer-events-none absolute left-3 z-10 text-[11px] text-muted" style={{ bottom: "calc(14% - 20px)" }}>
-              Volume {ohlc.volume.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+              Volume {lastVolume.toLocaleString("en-US", { maximumFractionDigits: 2 })}
             </p>
           )}
           {/* Copy confirm popover. The one interactive panel on the chart. */}
@@ -1078,7 +1202,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                   className="num min-w-0 flex-1 rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
                 />
                 {viewerError && <p className="text-[12px] text-[var(--loss)]">{viewerError}</p>}
-                {viewerOk && suggestPayload && roomCodeForSuggest ? (
+                {viewerOk && suggestPayload ? (
                   <button
                     type="button"
                     onClick={copySuggestLink}
