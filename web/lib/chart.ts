@@ -1,18 +1,41 @@
 /// Pure pieces of the chart, kept apart from the chart library so they can be tested.
 
 /// Friend hues from DESIGN.md. One per trader, used only for their chip and line.
-export const FRIEND_HUES = ["#E8553D", "#2F5BEA", "#D9A21B", "#149C8F", "#8B3F9E"] as const;
+/// The viewer accent #2F5BEA is never in this list: it is reserved for the
+/// viewer's own actions (last-price pill, focus rings).
+export const FRIEND_HUES = ["#E8553D", "#D9A21B", "#149C8F", "#8B3F9E", "#5B7F2A"] as const;
+
+/// Candle washes from DESIGN.md: up candles filled #DCEEDD, down #F6DCD3,
+/// borders and wicks ink. The volume strip reuses the same washes.
+export const UP_WASH = "#DCEEDD";
+export const DOWN_WASH = "#F6DCD3";
 
 export type RawCandle = { t: number; o: number; c: number; h: number; l: number; v: string; n: number };
-export type Candle = { time: number; open: number; high: number; low: number; close: number };
+export type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number };
 
 /// Perpl candles carry prices as integers scaled by the market's price decimals
 /// (BTC has 1: 866780 is 86,678.0) and times in milliseconds. The chart wants
-/// seconds and real prices.
+/// seconds and real prices. Volume arrives as a decimal string and is coerced
+/// to a number, defaulting to 0 when Perpl sends nothing parseable rather than
+/// dropping the candle.
 export function scaleCandle(c: RawCandle, priceDecimals: number): Candle {
   if (!Number.isInteger(priceDecimals) || priceDecimals < 0) throw new Error(`bad priceDecimals ${priceDecimals}`);
   const f = 10 ** priceDecimals;
-  return { time: Math.floor(c.t / 1000), open: c.o / f, high: c.h / f, low: c.l / f, close: c.c / f };
+  const volume = Number(c.v);
+  return {
+    time: Math.floor(c.t / 1000),
+    open: c.o / f,
+    high: c.h / f,
+    low: c.l / f,
+    close: c.c / f,
+    volume: Number.isFinite(volume) && volume >= 0 ? volume : 0,
+  };
+}
+
+/// Volume bar colour: the same wash as the candle that printed it, so the
+/// footer strip reads as an extension of the candles above it.
+export function volumeColorFor(candle: Pick<Candle, "open" | "close">): string {
+  return candle.close >= candle.open ? UP_WASH : DOWN_WASH;
 }
 
 /// A trader keeps the same colour on every market and every reload: the hue is a
@@ -44,6 +67,38 @@ export function assignColours(accounts: string[]): Map<string, string> {
 
 export function shortName(address: string): string {
   return `${address.slice(2, 6)}`.toUpperCase();
+}
+
+/// The two letters printed inside an on-chart avatar: the head of the
+/// shortName, in surface colour on the friend's hue.
+export function avatarLabel(address: string): string {
+  return shortName(address).slice(0, 2);
+}
+
+/// The chart time an avatar sits at: the friend's entry time, or the last
+/// candle when the position data has no entry time.
+export function avatarTime(entryTime: number | null, lastTime: number): number {
+  return entryTime ?? lastTime;
+}
+
+/// Room summary counts: how many visible friends are long vs short. Drives the
+/// single split bar above the chart, long in --gain and short in --loss.
+export function sideCounts(friends: Pick<Friend, "side">[]): { long: number; short: number } {
+  let long = 0;
+  let short = 0;
+  for (const f of friends) {
+    if (f.side === "long") long++;
+    else short++;
+  }
+  return { long, short };
+}
+
+/// Change of a candle against the previous close, for the OHLC readout line.
+/// Falls back to the candle's own open when there is no previous candle.
+export function candleChange(candle: Pick<Candle, "open" | "close">, prevClose: number | null): { change: number; pct: number } {
+  const base = prevClose ?? candle.open;
+  const change = candle.close - base;
+  return { change, pct: base === 0 ? 0 : (change / base) * 100 };
 }
 
 export function formatUsd(n: number): string {

@@ -1,10 +1,20 @@
 import { describe, expect, it } from "bun:test";
-import { FRIEND_HUES, assignColours, byPnl, chipFor, colourFor, formatPrice, formatUsd, scaleCandle, stackChips, type Friend } from "./chart";
+import { DOWN_WASH, FRIEND_HUES, UP_WASH, assignColours, avatarLabel, avatarTime, byPnl, candleChange, chipFor, colourFor, formatPrice, formatUsd, scaleCandle, sideCounts, stackChips, volumeColorFor, type Friend } from "./chart";
 
 describe("scaleCandle", () => {
   it("divides by the market's price decimals and converts ms to seconds", () => {
-    const c = scaleCandle({ t: 1790136000000, o: 866780, c: 871326, h: 872572, l: 866089, v: "1", n: 1 }, 1);
-    expect(c).toEqual({ time: 1790136000, open: 86678, high: 87257.2, low: 86608.9, close: 87132.6 });
+    const c = scaleCandle({ t: 1790136000000, o: 866780, c: 871326, h: 872572, l: 866089, v: "12.5", n: 1 }, 1);
+    expect(c).toEqual({ time: 1790136000, open: 86678, high: 87257.2, low: 86608.9, close: 87132.6, volume: 12.5 });
+  });
+
+  it("carries the candle volume through for the footer strip", () => {
+    expect(scaleCandle({ t: 0, o: 1, c: 2, h: 3, l: 0, v: "0", n: 1 }, 0).volume).toBe(0);
+    expect(scaleCandle({ t: 0, o: 1, c: 2, h: 3, l: 0, v: "1048576", n: 1 }, 0).volume).toBe(1048576);
+  });
+
+  it("coerces an unparseable volume to zero instead of dropping the candle", () => {
+    expect(scaleCandle({ t: 0, o: 1, c: 2, h: 3, l: 0, v: "", n: 1 }, 0).volume).toBe(0);
+    expect(scaleCandle({ t: 0, o: 1, c: 2, h: 3, l: 0, v: "nan-volume", n: 1 }, 0).volume).toBe(0);
   });
 
   it("handles a market quoted to many decimals", () => {
@@ -83,8 +93,7 @@ describe("byPnl", () => {
   });
 });
 
-describe("assignColours", () => {
-  const room = [
+describe("assignColours", () => {  const room = [
     "0xf91b2eCb1cD59A36F3AED20B46943a75dB08795b",
     "0x4981053aC0000000000000000000000000000001",
     "0x782a74e700000000000000000000000000000002",
@@ -99,10 +108,55 @@ describe("assignColours", () => {
     const b = assignColours([...room].reverse().map((x) => x.toUpperCase().replace("0X", "0x")));
     for (const r of room) expect(b.get(r.toLowerCase())).toBe(a.get(r.toLowerCase()));
   });
-  it("still returns a hue for everyone when the room is bigger than the palette", () => {
-    const big = Array.from({ length: 8 }, (_, i) => `0x${(i + 1).toString(16).padStart(40, "0")}`);
-    const c = assignColours(big);
-    expect(c.size).toBe(8);
-    for (const v of c.values()) expect(FRIEND_HUES as readonly string[]).toContain(v);
+  it("never hands out the viewer accent to a trader", () => {
+    expect(FRIEND_HUES as readonly string[]).not.toContain("#2F5BEA");
+    for (let i = 0; i < 50; i++) {
+      expect(colourFor(`0x${i.toString(16).padStart(40, "0")}`)).not.toBe("#2F5BEA");
+    }
+  });
+});
+
+describe("volumeColorFor", () => {
+  it("paints an up candle's bar in the up wash and a down candle's in the down wash", () => {
+    expect(volumeColorFor({ open: 100, close: 101 })).toBe(UP_WASH);
+    expect(volumeColorFor({ open: 101, close: 100 })).toBe(DOWN_WASH);
+    expect(volumeColorFor({ open: 100, close: 100 })).toBe(UP_WASH);
+  });
+  it("uses concrete washes the chart library can parse", () => {
+    expect(UP_WASH).toBe("#DCEEDD");
+    expect(DOWN_WASH).toBe("#F6DCD3");
+  });
+});
+
+describe("avatarLabel", () => {
+  it("prints two letters for the on-chart avatar", () => {
+    expect(avatarLabel("0xf91b2eCb1cD59A36F3AED20B46943a75dB08795b")).toBe("F9");
+    expect(avatarLabel("0x4981053aC0000000000000000000000000000001")).toBe("49");
+  });
+});
+
+describe("avatarTime", () => {
+  it("sits the avatar at the entry time when the position data has one", () => {
+    expect(avatarTime(1790136000, 1790139600)).toBe(1790136000);
+  });
+  it("falls back to the last candle when entry time is null", () => {
+    expect(avatarTime(null, 1790139600)).toBe(1790139600);
+  });
+});
+
+describe("sideCounts", () => {
+  it("splits the room into longs and shorts for the summary bar", () => {
+    expect(sideCounts([{ side: "long" }, { side: "long" }, { side: "short" }])).toEqual({ long: 2, short: 1 });
+    expect(sideCounts([])).toEqual({ long: 0, short: 0 });
+  });
+});
+
+describe("candleChange", () => {
+  it("measures against the previous close", () => {
+    expect(candleChange({ open: 100, close: 102 }, 100)).toEqual({ change: 2, pct: 2 });
+    expect(candleChange({ open: 100, close: 98 }, 100)).toEqual({ change: -2, pct: -2 });
+  });
+  it("falls back to the candle open on the first candle", () => {
+    expect(candleChange({ open: 100, close: 102 }, null)).toEqual({ change: 2, pct: 2 });
   });
 });

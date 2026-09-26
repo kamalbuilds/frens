@@ -4,6 +4,7 @@ import {
   CandlestickSeries,
   ColorType,
   CrosshairMode,
+  HistogramSeries,
   LineSeries,
   LineStyle,
   createChart,
@@ -11,14 +12,18 @@ import {
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
+  type MouseEventParams,
+  type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
-import { assignColours, byPnl, chipFor, colourFor, formatPrice, formatUsd, shortName, stackChips, type Candle, type Friend } from "@/lib/chart";
+import { assignColours, avatarLabel, avatarTime, byPnl, candleChange, chipFor, colourFor, formatPrice, formatUsd, shortName, sideCounts, stackChips, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
 import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, type SuggestKind } from "@/lib/drag";
+import { encodeCopyOrder, toCopyOrder } from "@/lib/copy";
 import { encodeRoom } from "@/lib/roomlink";
 import { encodeSuggestion } from "@/lib/suggest";
+import { connect, sendExecOrder } from "@/lib/wallet";
 
 type Market = { id: number; name: string; priceDecimals: number; lotDecimals: number };
 type Load<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: T };
@@ -30,7 +35,10 @@ const TIMEFRAMES = [
   { label: "1d", res: 86400 },
 ];
 const EXCHANGE = "0x34B6552d57a35a1D042CcAe1951BD1C370112a6F";
+const MONAD_VISION = "https://monadvision.com/tx";
 const CHIP_H = 30;
+const AVATAR = 22;
+const AVATAR_GAP = AVATAR + 4;
 
 type Overlay = {
   account: string;
@@ -39,7 +47,13 @@ type Overlay = {
   markY: number;
   bandLeft: number;
   right: number;
+  avatarX: number | null;
+  avatarY: number;
 };
+
+type Ohlc = { o: number; h: number; l: number; c: number; change: number; pct: number; time: number; volume: number };
+
+type CopyResult = { kind: "idle" } | { kind: "sending" } | { kind: "ok"; hash: string } | { kind: "error"; message: string };
 
 /// The chart library parses colours itself and rejects CSS color-mix(), which the
 /// page tokens use. So the chart gets concrete values computed from the same
@@ -50,7 +64,9 @@ const CHART = {
   accent: "#2F5BEA",
   muted: "rgba(28, 27, 25, 0.62)",
   rule: "rgba(28, 27, 25, 0.14)",
-  grid: "rgba(28, 27, 25, 0.06)",
+  grid: "rgba(28, 27, 25, 0.03)",
+  upWash: "#DCEEDD",
+  downWash: "#F6DCD3",
 };
 
 export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?: string[]; viewerAddress?: string }) {
@@ -66,6 +82,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const [active, setActive] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const [ohlc, setOhlc] = useState<Ohlc | null>(null);
   const [tp, setTp] = useState<number | null>(null);
   const [sl, setSl] = useState<number | null>(null);
   const [tpY, setTpY] = useState<number | null>(null);
@@ -77,10 +94,16 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const [viewerError, setViewerError] = useState("");
   const [copiedSuggest, setCopiedSuggest] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [copyFor, setCopyFor] = useState<string | null>(null);
+  const [copySize, setCopySize] = useState("");
+  const [copySlip, setCopySlip] = useState("50");
+  const [copyResult, setCopyResult] = useState<CopyResult>({ kind: "idle" });
 
+  const wrap = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const volSeries = useRef<ISeriesApi<"Histogram"> | null>(null);
   const lines = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
   const tpLine = useRef<IPriceLine | null>(null);
   const slLine = useRef<IPriceLine | null>(null);
@@ -92,6 +115,8 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const palette = useMemo(() => assignColours(friends.map((f) => f.account)), [friends]);
   const hue = (a: string) => palette.get(a.toLowerCase()) ?? colourFor(a);
   const lastClose = candles.state === "ready" && candles.data.length ? candles.data[candles.data.length - 1].close : null;
+  const counts = useMemo(() => sideCounts(friends), [friends]);
+  const copyFriend = copyFor ? friends.find((f) => f.account === copyFor) ?? null : null;
 
   // Markets once.
   useEffect(() => {
@@ -135,22 +160,37 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         attributionLogo: false,
       },
       grid: { vertLines: { color: CHART.grid }, horzLines: { color: CHART.grid } },
-      rightPriceScale: { borderColor: CHART.rule },
+      rightPriceScale: { borderColor: CHART.rule, scaleMargins: { top: 0.12, bottom: 0.18 } },
       timeScale: { borderColor: CHART.rule, timeVisible: true, rightOffset: 14 },
       crosshair: { mode: CrosshairMode.Normal },
     });
-    // Up candles hollow ink, down candles filled ink (DESIGN.md).
+    // Candles in the DESIGN.md washes with ink borders and wicks. The last
+    // price draws a dotted line with a solid accent pill: the one accent on
+    // the chart, reserved for the viewer's own price.
     const s = c.addSeries(CandlestickSeries, {
-      upColor: surface,
+      upColor: CHART.upWash,
       borderUpColor: ink,
       wickUpColor: ink,
-      downColor: ink,
+      downColor: CHART.downWash,
       borderDownColor: ink,
       wickDownColor: ink,
+      priceLineVisible: true,
       priceLineColor: CHART.accent,
+      priceLineStyle: LineStyle.Dotted,
+      priceLineWidth: 1,
     });
+    // Volume footer strip inside the same pane on its own scale: the top 0.86
+    // margin leaves the bottom ~14 percent for the bars. The scale hides its
+    // axis so only one price axis shows.
+    const v = c.addSeries(HistogramSeries, {
+      priceScaleId: "vol",
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    c.priceScale("vol").applyOptions({ scaleMargins: { top: 0.86, bottom: 0 }, visible: false });
     chart.current = c;
     series.current = s;
+    volSeries.current = v;
     return () => {
       tpLine.current = null;
       slLine.current = null;
@@ -158,6 +198,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       c.remove();
       chart.current = null;
       series.current = null;
+      volSeries.current = null;
       lines.current.clear();
     };
   }, []);
@@ -169,20 +210,27 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     const el = box.current;
     if (!c || !s || !el || candles.state !== "ready" || !candles.data.length) return setOverlays([]);
     const right = el.clientWidth - c.priceScale("right").width();
-    const first = candles.data[0].time;
+    const data = candles.data;
+    const first = data[0].time;
+    const last = data[data.length - 1].time;
     const entries = friends.map((f) => s.priceToCoordinate(f.entryPrice));
     const valid = friends.map((f, i) => ({ f, y: entries[i] })).filter((x) => x.y !== null) as { f: Friend; y: number }[];
     const stacked = stackChips(valid.map((v) => v.y - CHIP_H / 2), CHIP_H + 4);
+    const avatarStacked = stackChips(valid.map((v) => v.y - AVATAR / 2), AVATAR_GAP);
     setOverlays(
       valid.map(({ f, y }, i) => {
-        const start = Math.max(f.entryTime ?? first, first) as UTCTimestamp;
+        const start = Math.max(avatarTime(f.entryTime, last), first) as UTCTimestamp;
         const x = c.timeScale().timeToCoordinate(start);
+        const markStart = Math.max(f.entryTime ?? first, first) as UTCTimestamp;
+        const bandX = c.timeScale().timeToCoordinate(markStart);
         return {
           account: f.account,
           entryY: y,
           markY: s.priceToCoordinate(f.markPrice) ?? y,
           chipY: stacked[i],
-          bandLeft: x ?? 0,
+          avatarX: x,
+          avatarY: avatarStacked[i],
+          bandLeft: bandX ?? 0,
           right,
         };
       }),
@@ -225,6 +273,8 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   }, [selected?.account, selected?.markPrice, selected?.side]);
 
   // Draggable TP/SL visuals on the candle series, glued on pan, zoom and edit.
+  // Each line takes the selected friend's hue with a filled axis pill: TP
+  // solid, SL dashed.
   useEffect(() => {
     const s = series.current;
     if (!s || !selected || tp === null || sl === null) {
@@ -252,10 +302,12 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         lineWidth: 2,
         lineStyle: LineStyle.Solid,
         axisLabelVisible: true,
+        axisLabelColor: colour,
+        axisLabelTextColor: CHART.surface,
         title: tpTitle,
       });
     } else {
-      tpLine.current.applyOptions({ price: tp, color: colour, title: tpTitle });
+      tpLine.current.applyOptions({ price: tp, color: colour, axisLabelColor: colour, axisLabelTextColor: CHART.surface, title: tpTitle });
     }
     if (!slLine.current) {
       slLine.current = s.createPriceLine({
@@ -264,10 +316,12 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         lineWidth: 2,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
+        axisLabelColor: colour,
+        axisLabelTextColor: CHART.surface,
         title: slTitle,
       });
     } else {
-      slLine.current.applyOptions({ price: sl, color: colour, title: slTitle });
+      slLine.current.applyOptions({ price: sl, color: colour, axisLabelColor: colour, axisLabelTextColor: CHART.surface, title: slTitle });
     }
     setTpY(s.priceToCoordinate(tp));
     setSlY(s.priceToCoordinate(sl));
@@ -313,13 +367,23 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     return dTp <= dSl ? "tp" : "sl";
   }
 
+  // Drag listeners live on the wrapping container, not on the chart box: the
+  // box is the bottom layer and every overlay above it would otherwise steal
+  // the pointer. Decorative overlays are pointer-events-none; only chips,
+  // avatars, Copy buttons and grips take events, and grips restart the drag
+  // through their data-drag-kind. Clamping still starts from the mark, per
+  // lib/drag.ts.
   function onChartPointerDown(e: React.PointerEvent) {
-    if ((e.target as HTMLElement).closest("button")) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-nodrag]")) return;
+    const grip = target.closest("[data-drag-kind]");
+    if (target.closest("button") && !grip) return;
     const el = box.current;
     const s = series.current;
     const c = chart.current;
     if (!el || !s || !c || !selected || tp === null || sl === null) return;
-    const kind = lineHit(e.clientY - el.getBoundingClientRect().top);
+    const y = e.clientY - el.getBoundingClientRect().top;
+    const kind = ((grip?.getAttribute("data-drag-kind") as SuggestKind | null) ?? lineHit(y));
     if (!kind) return;
     dragging.current = kind;
     setFocusKind(kind);
@@ -427,13 +491,17 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.account, selected?.side, suggestPrice, viewerOk, viewer, marketId]);
 
+  // The default room has no hand-added traders, so extra is empty and the old
+  // code encoded nothing. Fall back to the room's current accounts so the
+  // suggestion link carries the room the viewer is actually looking at.
   const roomCodeForSuggest = useMemo(() => {
     try {
-      return encodeRoom(extra.length ? extra : selected ? [selected.account] : []);
+      const addrs = extra.length ? extra : friends.map((f) => f.account);
+      return encodeRoom(addrs);
     } catch {
       return "";
     }
-  }, [extra, selected]);
+  }, [extra, friends]);
 
   async function copySuggestLink() {
     if (!roomCodeForSuggest || !suggestPayload || typeof window === "undefined") return;
@@ -446,12 +514,47 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     }
   }
 
-  // Feed candles and friend lines into the chart.
+  function openCopy(account: string) {
+    const f = friends.find((x) => x.account === account);
+    setCopyFor(account);
+    setCopySize(f ? String(f.size) : "");
+    setCopySlip("50");
+    setCopyResult({ kind: "idle" });
+  }
+
+  // One-tap copy: build the taker order for the copier's own size, encode the
+  // execOrder calldata, and hand it to the copier's own wallet to sign. No key
+  // ever touches the app; the wallet shows the order and the copier can refuse.
+  async function doCopy() {
+    if (!copyFriend || !market) return;
+    setCopyResult({ kind: "sending" });
+    try {
+      const size = Number(copySize);
+      const slip = Number(copySlip);
+      const order = toCopyOrder(
+        { market: marketId, side: copyFriend.side },
+        { priceDecimals: BigInt(market.priceDecimals), lotDecimals: BigInt(market.lotDecimals) },
+        { size, markPrice: copyFriend.markPrice, maxSlippageBps: slip, orderDescId: BigInt(Date.now()) },
+      );
+      const data = encodeCopyOrder(order);
+      await connect();
+      const hash = await sendExecOrder(EXCHANGE as Address, data);
+      setCopyResult({ kind: "ok", hash });
+    } catch (e) {
+      setCopyResult({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  // Feed candles, volume bars and friend lines into the chart.
   useEffect(() => {
     const c = chart.current;
     const s = series.current;
-    if (!c || !s || candles.state !== "ready") return;
-    s.setData(candles.data.map((k) => ({ ...k, time: k.time as UTCTimestamp })));
+    const v = volSeries.current;
+    if (!c || !s || !v || candles.state !== "ready") return;
+    s.setData(candles.data.map((k) => ({ time: k.time as UTCTimestamp, open: k.open, high: k.high, low: k.low, close: k.close })));
+    v.setData(
+      candles.data.map((k) => ({ time: k.time as UTCTimestamp, value: k.volume, color: volumeColorFor(k) })),
+    );
     for (const l of lines.current.values()) c.removeSeries(l);
     lines.current.clear();
     const data = candles.data;
@@ -476,10 +579,39 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     requestAnimationFrame(layout);
   }, [candles, friends, active, layout]);
 
+  // OHLC readout follows the crosshair and rests on the last candle.
+  useEffect(() => {
+    const c = chart.current;
+    if (!c || candles.state !== "ready" || !candles.data.length) {
+      setOhlc(null);
+      return;
+    }
+    const data = candles.data;
+    const rest = () => {
+      const k = data[data.length - 1];
+      const prev = data.length > 1 ? data[data.length - 2].close : null;
+      const { change, pct } = candleChange(k, prev);
+      setOhlc({ o: k.open, h: k.high, l: k.low, c: k.close, change, pct, time: k.time, volume: k.volume });
+    };
+    rest();
+    const handler = (param: MouseEventParams<Time>) => {
+      const t = typeof param.time === "number" ? param.time : null;
+      if (t === null) return rest();
+      const idx = data.findIndex((k) => k.time === t);
+      if (idx < 0) return rest();
+      const k = data[idx];
+      const prev = idx > 0 ? data[idx - 1].close : null;
+      const { change, pct } = candleChange(k, prev);
+      setOhlc({ o: k.open, h: k.high, l: k.low, c: k.close, change, pct, time: k.time, volume: k.volume });
+    };
+    c.subscribeCrosshairMove(handler);
+    return () => c.unsubscribeCrosshairMove(handler);
+  }, [candles]);
+
   // Keep overlays glued to the chart on pan, zoom and resize.
   useEffect(() => {
     const c = chart.current;
-    if (!c || !box.current) return;
+    if (!c || !wrap.current) return;
     let frame = 0;
     const schedule = () => {
       cancelAnimationFrame(frame);
@@ -487,7 +619,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     };
     c.timeScale().subscribeVisibleLogicalRangeChange(schedule);
     const ro = new ResizeObserver(schedule);
-    ro.observe(box.current);
+    ro.observe(wrap.current);
     return () => {
       c.timeScale().unsubscribeVisibleLogicalRangeChange(schedule);
       ro.disconnect();
@@ -517,6 +649,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   }
 
   const hovered = friends.find((f) => f.account === hover);
+  const totalSides = counts.long + counts.short;
 
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-[1480px] flex-col px-4 pb-6 md:px-8">
@@ -559,7 +692,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
 
       <section className="flex items-baseline gap-4 pt-6 pb-3">
         <h1 className="font-[family-name:var(--font-display)] text-[40px] font-bold leading-none tracking-tight md:text-[64px]">
-          <span className="num">{lastClose !== null ? formatPrice(lastClose, decimals) : " "}</span>
+          <span className="num">{lastClose !== null ? formatPrice(lastClose, decimals) : " "}</span>
         </h1>
         <p className="text-[14px] text-muted">
           {market?.name ?? ""} perpetual on Perpl
@@ -567,18 +700,56 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         </p>
       </section>
 
+      {/* OHLC readout plus the room long/short split, above the chart. */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pb-2">
+        <p aria-live="off" className="num text-[12px] text-muted">
+          {ohlc ? (
+            <>
+              <span>O {formatPrice(ohlc.o, decimals)}</span>{" "}
+              <span>H {formatPrice(ohlc.h, decimals)}</span>{" "}
+              <span>L {formatPrice(ohlc.l, decimals)}</span>{" "}
+              <span>C {formatPrice(ohlc.c, decimals)}</span>{" "}
+              <span style={{ color: ohlc.change >= 0 ? "var(--gain)" : "var(--loss)" }}>
+                {ohlc.change >= 0 ? "+" : "-"}{formatPrice(Math.abs(ohlc.change), decimals)} ({ohlc.pct >= 0 ? "+" : "-"}{Math.abs(ohlc.pct).toFixed(2)}%)
+              </span>
+            </>
+          ) : candles.state === "loading" ? (
+            "Loading candles from Perpl"
+          ) : (
+            "No candles"
+          )}
+        </p>
+        {totalSides > 0 && (
+          <div className="flex min-w-[200px] flex-1 items-center gap-2">
+            <span className="num whitespace-nowrap text-[12px] text-muted">
+              {counts.long} long · {counts.short} short
+            </span>
+            <div
+              className="flex h-2 min-w-12 flex-1 overflow-hidden"
+              role="img"
+              aria-label={`${counts.long} traders long, ${counts.short} traders short`}
+            >
+              <div style={{ width: `${(counts.long / totalSides) * 100}%`, background: "var(--gain)" }} />
+              <div style={{ width: `${(counts.short / totalSides) * 100}%`, background: "var(--loss)" }} />
+            </div>
+          </div>
+        )}
+      </div>
+
       <main className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="relative h-[60vh] max-h-[70vh] min-h-[420px] border border-ink bg-[var(--surface)] lg:min-h-[420px]">
-          <div
-            ref={box}
-            className="absolute inset-0"
-            onPointerDown={onChartPointerDown}
-            onPointerMove={onChartPointerMove}
-            onPointerUp={endChartDrag}
-            onPointerCancel={endChartDrag}
-            style={{ cursor: dragging.current ? "grabbing" : hoverLine ? "ns-resize" : undefined, touchAction: "pan-x pan-y" }}
-          />
-          {/* Bands between each friend's entry and the current price, tinted by PnL. */}
+        <div
+          ref={wrap}
+          className="relative h-[60vh] max-h-[70vh] min-h-[420px] border border-ink bg-[var(--surface)] lg:min-h-[420px]"
+          onPointerDown={onChartPointerDown}
+          onPointerMove={onChartPointerMove}
+          onPointerUp={endChartDrag}
+          onPointerCancel={endChartDrag}
+          style={{ cursor: dragging.current ? "grabbing" : hoverLine ? "ns-resize" : undefined, touchAction: "pan-x pan-y" }}
+        >
+          <div ref={box} className="absolute inset-0" />
+          {/* Bands between each friend's entry and the current price. Decorative:
+              never takes pointer events. The active friend's band gets a 45deg
+              hatch over the PnL wash. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
               const f = friends.find((x) => x.account === o.account);
@@ -588,68 +759,206 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               // A band for every trader stacks into one wash over the candles; show
               // it only for the trader being inspected.
               if (o.account !== (hover ?? active)) return null;
+              const colour = hue(f.account);
+              return (
+                <div key={`band-${o.account}`} className="absolute" style={{ left: o.bandLeft, width: Math.max(0, o.right - o.bandLeft), top, height: h }}>
+                  <div className="absolute inset-0" style={{ background: f.unrealizedPnl >= 0 ? "var(--gain)" : "var(--loss)", opacity: 0.12 }} />
+                  {o.account === active && (
+                    <div
+                      className="absolute inset-0"
+                      style={{ backgroundImage: `repeating-linear-gradient(45deg, ${colour}55 0 6px, transparent 6px 12px)` }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {/* Avatars sit ON the chart at each friend's entry time and price.
+              The layer is decorative; only the avatar and Copy buttons take events. */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            {overlays.map((o) => {
+              const f = friends.find((x) => x.account === o.account);
+              if (!f || o.avatarX === null) return null;
+              const colour = hue(f.account);
+              const dim = active && active !== o.account;
               return (
                 <div
-                  key={`band-${o.account}`}
-                  className="absolute"
+                  key={`avatar-${o.account}`}
+                  className="marker-anim absolute left-0 top-0 flex items-center"
                   style={{
-                    left: o.bandLeft,
-                    width: Math.max(0, o.right - o.bandLeft),
-                    top,
-                    height: h,
-                    background: f.unrealizedPnl >= 0 ? "var(--gain)" : "var(--loss)",
-                    opacity: 0.12,
+                    transform: `translate(${o.avatarX - AVATAR / 2}px, ${o.avatarY - AVATAR / 2}px)`,
+                    opacity: dim ? 0.35 : 1,
+                    zIndex: hover === o.account || active === o.account ? 4 : 3,
                   }}
-                />
+                >
+                  <button
+                    onMouseEnter={() => setHover(o.account)}
+                    onMouseLeave={() => setHover(null)}
+                    onFocus={() => setHover(o.account)}
+                    onBlur={() => setHover(null)}
+                    onClick={() => setActive(active === o.account ? null : o.account)}
+                    aria-pressed={active === o.account}
+                    aria-label={`${shortName(f.account)} ${f.side} entry ${formatPrice(f.entryPrice, decimals)}`}
+                    className="pointer-events-auto block rounded-full text-center font-bold"
+                    style={{
+                      width: AVATAR,
+                      height: AVATAR,
+                      background: colour,
+                      color: CHART.surface,
+                      fontSize: 9,
+                      lineHeight: `${AVATAR}px`,
+                      boxShadow: `0 0 0 1px ${CHART.surface}`,
+                    }}
+                  >
+                    {avatarLabel(f.account)}
+                  </button>
+                  <CopyButton account={o.account} friend={f} decimals={decimals} onCopy={() => openCopy(o.account)} />
+                </div>
               );
             })}
           </div>
           {/* Chips pinned at each friend's entry price on the right edge. */}
-          {overlays.map((o) => {
-            const f = friends.find((x) => x.account === o.account);
-            if (!f) return null;
-            const chip = { ...chipFor(f, decimals), colour: hue(f.account) };
-            const dim = active && active !== o.account;
-            return (
-              <button
-                key={`chip-${o.account}`}
-                onMouseEnter={() => setHover(o.account)}
-                onMouseLeave={() => setHover(null)}
-                onFocus={() => setHover(o.account)}
-                onBlur={() => setHover(null)}
-                onClick={() => setActive(active === o.account ? null : o.account)}
-                className="chip num absolute flex items-center gap-2 rounded-[6px] border bg-[var(--surface)] px-2 text-[11px] leading-none"
-                style={{
-                  top: o.chipY,
-                  right: `calc(100% - ${o.right - 8}px)`,
-                  height: CHIP_H,
-                  borderColor: chip.colour,
-                  opacity: dim ? 0.35 : 1,
-                  zIndex: hover === o.account || active === o.account ? 3 : 2,
-                }}
-                aria-label={`${chip.label} ${chip.side} entry ${chip.entry}, ${chip.pnl}`}
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: chip.colour }} />
-                <span className="font-medium">{chip.label}</span>
-                <span className="text-muted">{chip.side}</span>
-                <span style={{ color: chip.inProfit ? "var(--gain)" : "var(--loss)" }}>{chip.pnl}</span>
-              </button>
-            );
-          })}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            {overlays.map((o) => {
+              const f = friends.find((x) => x.account === o.account);
+              if (!f) return null;
+              const chip = { ...chipFor(f, decimals), colour: hue(f.account) };
+              const dim = active && active !== o.account;
+              return (
+                <div
+                  key={`chip-${o.account}`}
+                  className="absolute flex items-center"
+                  style={{ top: o.chipY, right: `calc(100% - ${o.right - 8}px)`, height: CHIP_H }}
+                >
+                  <button
+                    onMouseEnter={() => setHover(o.account)}
+                    onMouseLeave={() => setHover(null)}
+                    onFocus={() => setHover(o.account)}
+                    onBlur={() => setHover(null)}
+                    onClick={() => setActive(active === o.account ? null : o.account)}
+                    className="chip num pointer-events-auto flex items-center gap-2 rounded-[6px] border bg-[var(--surface)] px-2 text-[11px] leading-none"
+                    style={{
+                      height: CHIP_H,
+                      borderColor: chip.colour,
+                      opacity: dim ? 0.35 : 1,
+                      zIndex: hover === o.account || active === o.account ? 3 : 2,
+                    }}
+                    aria-label={`${chip.label} ${chip.side} entry ${chip.entry}, ${chip.pnl}`}
+                  >
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: chip.colour }} />
+                    <span className="font-medium">{chip.label}</span>
+                    <span className="text-muted">{chip.side}</span>
+                    <span style={{ color: chip.inProfit ? "var(--gain)" : "var(--loss)" }}>{chip.pnl}</span>
+                  </button>
+                  <CopyButton account={o.account} friend={f} decimals={decimals} onCopy={() => openCopy(o.account)} />
+                </div>
+              );
+            })}
+          </div>
+          {/* TP/SL floating tags glide with the lines. Decorative. */}
           {selected && tp !== null && tpY !== null && (
             <div
-              className="num pointer-events-none absolute left-3 z-10 border bg-[var(--surface)] px-2 py-1 text-[11px]"
-              style={{ top: tpY - 13, borderColor: hue(selected.account), transition: reducedMotion ? "none" : undefined }}
+              className="marker-anim num pointer-events-none absolute left-8 z-10 border bg-[var(--surface)] px-2 py-1 text-[11px]"
+              style={{ transform: `translateY(${tpY - 13}px)`, top: 0, borderColor: hue(selected.account), transition: reducedMotion ? "none" : undefined }}
             >
               TP {formatPrice(tp, decimals)} · {formatUsd(pnlAtPrice(tp, selected.entryPrice, selected.size, selected.side))}
             </div>
           )}
           {selected && sl !== null && slY !== null && (
             <div
-              className="num pointer-events-none absolute left-3 z-10 border border-dashed bg-[var(--surface)] px-2 py-1 text-[11px]"
-              style={{ top: slY - 13, borderColor: hue(selected.account), transition: reducedMotion ? "none" : undefined }}
+              className="marker-anim num pointer-events-none absolute left-8 z-10 border border-dashed bg-[var(--surface)] px-2 py-1 text-[11px]"
+              style={{ transform: `translateY(${slY - 13}px)`, top: 0, borderColor: hue(selected.account), transition: reducedMotion ? "none" : undefined }}
             >
               SL {formatPrice(sl, decimals)} · {formatUsd(pnlAtPrice(sl, selected.entryPrice, selected.size, selected.side))}
+            </div>
+          )}
+          {/* Grip circles at the left end of each TP/SL line: the visible drag
+              handle. Each grip is a button so it keeps keyboard and touch. */}
+          {selected && tp !== null && tpY !== null && (
+            <button
+              data-drag-kind="tp"
+              onKeyDown={(e) => onLineKeyDown("tp", e)}
+              onFocus={() => setFocusKind("tp")}
+              aria-label={`Drag take-profit line at ${formatPrice(tp, decimals)}. Arrow keys nudge by one tick. Escape resets.`}
+              className="marker-anim absolute left-2 z-10 flex cursor-ns-resize items-center justify-center rounded-full"
+              style={{ transform: `translateY(${tpY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
+            >
+              <span className="block h-[10px] w-[10px] rounded-full border-2 bg-[var(--surface)]" style={{ borderColor: hue(selected.account) }} />
+            </button>
+          )}
+          {selected && sl !== null && slY !== null && (
+            <button
+              data-drag-kind="sl"
+              onKeyDown={(e) => onLineKeyDown("sl", e)}
+              onFocus={() => setFocusKind("sl")}
+              aria-label={`Drag stop-loss line at ${formatPrice(sl, decimals)}. Arrow keys nudge by one tick. Escape resets.`}
+              className="marker-anim absolute left-2 z-10 flex cursor-ns-resize items-center justify-center rounded-full"
+              style={{ transform: `translateY(${slY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
+            >
+              <span className="block h-[10px] w-[10px] rounded-full border-2 border-dashed bg-[var(--surface)]" style={{ borderColor: hue(selected.account) }} />
+            </button>
+          )}
+          {/* Volume label, top-left of the footer strip. Decorative. */}
+          {ohlc && (
+            <p className="num pointer-events-none absolute left-3 z-10 text-[11px] text-muted" style={{ bottom: "calc(14% - 20px)" }}>
+              Volume {ohlc.volume.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+            </p>
+          )}
+          {/* Copy confirm popover. The one interactive panel on the chart. */}
+          {copyFriend && market && (
+            <div
+              role="dialog"
+              aria-label={`Copy ${shortName(copyFriend.account)}`}
+              data-nodrag
+              className="absolute right-2 top-2 z-20 w-[min(280px,calc(100%-16px))] border border-ink bg-[var(--surface)] p-3 text-[13px]"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setCopyFor(null);
+              }}
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <p className="font-[family-name:var(--font-display)] text-[14px] font-bold">
+                  Copy <span style={{ color: hue(copyFriend.account) }}>{shortName(copyFriend.account)}</span>{" "}
+                  <span className="text-muted">{copyFriend.side === "long" ? "LONG" : "SHORT"} {market.name}</span>
+                </p>
+                <button onClick={() => setCopyFor(null)} aria-label="Close copy dialog" className="px-2 py-1 text-[12px] text-muted hover:text-ink">Close</button>
+              </div>
+              <p className="num mb-2 text-[12px] text-muted">
+                Mark <span className="text-ink">{formatPrice(copyFriend.markPrice, decimals)}</span>
+              </p>
+              <label htmlFor="copy-size" className="mb-1 block text-[12px] font-medium">Your size (base units)</label>
+              <input
+                id="copy-size"
+                autoFocus
+                inputMode="decimal"
+                value={copySize}
+                onChange={(e) => setCopySize(e.target.value)}
+                placeholder={String(copyFriend.size)}
+                className="num mb-2 w-full rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
+              />
+              <label htmlFor="copy-slip" className="mb-1 block text-[12px] font-medium">Max slippage (bps)</label>
+              <input
+                id="copy-slip"
+                inputMode="numeric"
+                value={copySlip}
+                onChange={(e) => setCopySlip(e.target.value)}
+                placeholder="50"
+                className="num mb-3 w-full rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
+              />
+              <button
+                onClick={doCopy}
+                disabled={copyResult.kind === "sending"}
+                className="w-full rounded-[6px] bg-ink px-3 py-2 text-[13px] font-medium text-surface active:scale-[0.97] disabled:opacity-40"
+              >
+                {copyResult.kind === "sending" ? "Waiting for wallet" : `Copy ${copyFriend.side === "long" ? "long" : "short"}`}
+              </button>
+              {copyResult.kind === "ok" && (
+                <p className="num mt-2 break-all text-[12px]" style={{ color: "var(--gain)" }}>
+                  Sent. <a className="underline" href={`${MONAD_VISION}/${copyResult.hash}`} target="_blank" rel="noreferrer">View on MonadVision</a>
+                </p>
+              )}
+              {copyResult.kind === "error" && (
+                <p className="mt-2 text-[12px] text-[var(--loss)]">{copyResult.message}</p>
+              )}
             </div>
           )}
           {hovered && (
@@ -668,10 +977,10 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
             </div>
           )}
           {candles.state === "loading" && (
-            <p className="absolute inset-0 grid place-items-center text-[14px] text-muted">Loading candles from Perpl</p>
+            <p className="pointer-events-none absolute inset-0 grid place-items-center text-[14px] text-muted">Loading candles from Perpl</p>
           )}
           {candles.state === "error" && (
-            <p className="absolute inset-0 grid place-items-center px-6 text-center text-[14px] text-[var(--loss)]">
+            <p className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-[14px] text-[var(--loss)]">
               Could not load candles: {candles.message}
             </p>
           )}
@@ -818,5 +1127,30 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         Candles from Perpl&apos;s public market data.
       </footer>
     </div>
+  );
+}
+
+/// Copy affordance for one on-chart avatar or chip: an icon at rest, the word
+/// Copy on hover or focus, and a 44px hit area on touch (padding with negative
+/// margin keeps the visual size while the tap target stays full size).
+function CopyButton({ account, friend, decimals, onCopy }: { account: string; friend: Friend; decimals: number; onCopy: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onCopy();
+      }}
+      aria-label={`Copy ${shortName(friend.account)} ${friend.side} at ${formatPrice(friend.entryPrice, decimals)}`}
+      title={`Copy ${shortName(friend.account)} ${friend.side}`}
+      className="copy-btn pointer-events-auto rounded-[6px] text-muted hover:text-ink"
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M9.5 4.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+      <span className="copy-label text-[11px] font-medium">Copy</span>
+      <span className="sr-only">{account}</span>
+    </button>
   );
 }
