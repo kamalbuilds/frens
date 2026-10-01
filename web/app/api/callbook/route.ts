@@ -22,7 +22,7 @@ export async function GET(req: Request) {
 
   const key = `${net}:${suggester.toLowerCase()}:${days}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < 60_000) return Response.json(hit.body);
+  if (hit && Date.now() - hit.at < 600_000) return Response.json(hit.body);
 
   // HyperSync first when a token is configured; a missing or rejected token
   // falls through to the RPC path so the callbook works without Envio.
