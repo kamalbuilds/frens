@@ -251,9 +251,12 @@ export async function fetchCallRecord(
 // other error throws immediately. Parsing reuses parseCallRecord: each
 // chunk's viem logs are reshaped into the HyperSync row shape (block_number,
 // transaction_hash, data) and the join/fill logic is identical.
-export const RPC_CHUNK_BLOCKS = 1000n;
-export const RPC_CONCURRENCY = 4;
-export const RPC_LOOKBACK_BLOCKS = 50_000n;
+// 200 blocks: Perpl testnet emits enough OrderRequestV2 that 1,000 blocks exceeded viem's 10 MB response cap (measured 2026-10-02).
+export const RPC_CHUNK_BLOCKS = 200n;
+export const RPC_CONCURRENCY = 10;
+// The RPC fallback only covers recent calls: Perpl logs are unindexed, so a wide window means downloading
+// every order on the venue (40,000 testnet blocks did not finish in 280 s). Full history is HyperSync's job.
+export const RPC_LOOKBACK_BLOCKS = 2_000n;
 
 type RpcLog = { blockNumber: bigint; transactionHash: Hex; data: Hex };
 

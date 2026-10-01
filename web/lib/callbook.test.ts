@@ -18,6 +18,7 @@ import {
   suggestionDescId,
   type HyperSyncLog,
   type HyperSyncResponse,
+  RPC_CHUNK_BLOCKS,
 } from "./callbook";
 import officialAbi from "./exchange-official.abi.json";
 
@@ -266,7 +267,7 @@ describe("fetchCallRecordRpc", () => {
     expect(record.calls[1]!.hit).toBe(false);
   });
 
-  it("pages in 1,000-block chunks: 0 to 2500 is 3 chunks across 3 topics", async () => {
+  it("pages in RPC_CHUNK_BLOCKS chunks across the 3 topics", async () => {
     let calls = 0;
     const record = await fetchCallRecordRpc(FRIEND, {
       network: "testnet",
@@ -276,7 +277,7 @@ describe("fetchCallRecordRpc", () => {
       fromBlock: 0n,
       toBlock: 2500n,
     });
-    expect(calls).toBe(9);
+    expect(calls).toBe(Math.ceil(2501 / Number(RPC_CHUNK_BLOCKS)) * 3);
     expect(record.accepted).toBe(2);
     expect(record.hit).toBe(1);
   });
