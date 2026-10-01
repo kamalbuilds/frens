@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatEther, formatUnits, type Address, type LocalAccount } from "viem";
-import { COLLATERAL_DECIMALS, NETWORKS, publicClient } from "@/lib/perpl";
+import { COLLATERAL_DECIMALS, NETWORKS, publicClient, type Network } from "@/lib/perpl";
 import { createPasskeyAccount, signInWithPasskey } from "@/lib/passkey";
 
 // Minimal ERC-20 read surface for the aUSD balance.
@@ -37,11 +37,13 @@ export function PasskeyWallet({
   onAccount,
   onFunded,
   idPrefix,
+  network,
 }: {
   account: LocalAccount | null;
   onAccount: (account: LocalAccount | null) => void;
   onFunded: (funded: boolean) => void;
   idPrefix: string;
+  network: Network;
 }) {
   const [busy, setBusy] = useState<"idle" | "signing" | "creating">("idle");
   const [showCreate, setShowCreate] = useState(false);
@@ -52,6 +54,7 @@ export function PasskeyWallet({
   const [copied, setCopied] = useState(false);
 
   const address = account?.address ?? null;
+  const chainName = network === "mainnet" ? "Monad mainnet" : "Monad testnet";
 
   // Balances follow the signed-in address. Funded flips true only on a loaded
   // nonzero MON balance, so the parent offers the passkey send only when gas
@@ -67,11 +70,11 @@ export function PasskeyWallet({
     setBalances(null);
     setBalancesError("");
     onFunded(false);
-    const client = publicClient("mainnet");
+    const client = publicClient(network);
     Promise.all([
       client.getBalance({ address }),
       client.readContract({
-        address: NETWORKS.mainnet.collateral,
+        address: NETWORKS[network].collateral,
         abi: erc20BalanceAbi,
         functionName: "balanceOf",
         args: [address],
@@ -91,7 +94,7 @@ export function PasskeyWallet({
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address]);
+  }, [address, network]);
 
   async function doSignIn() {
     setBusy("signing");
@@ -240,12 +243,12 @@ export function PasskeyWallet({
           <p className="num text-[12px] text-muted">
             MON {formatEther(balances.mon)} · aUSD {formatUnits(balances.ausd, COLLATERAL_DECIMALS)}
           </p>
-          <p className="text-[11px] text-muted">Balances from Monad mainnet.</p>
+          <p className="text-[11px] text-muted">Balances from {chainName}.</p>
         </div>
       ) : balancesError ? (
         <p className="text-[12px] text-loss">{balancesError}</p>
       ) : (
-        <p className="text-[12px] text-muted">Reading balances from Monad mainnet</p>
+        <p className="text-[12px] text-muted">Reading balances from {chainName}</p>
       )}
       {balances && balances.mon === 0n && (
         <p className="text-[12px] font-medium">Send a little MON to this address to pay gas.</p>

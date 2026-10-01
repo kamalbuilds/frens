@@ -8,12 +8,13 @@
 /// opening per account, resolves each accountId to its address, and reads the
 /// CURRENT open position, skipping accounts that already closed.
 ///
-/// Server only: it uses the server client (MONAD_RPC_URL, a QuickNode
-/// endpoint that allows 1,000-block eth_getLogs), so log reads page in
-/// 1,000-block chunks with concurrency 4 and retry on 429.
+/// Server only: it uses the per-network server client (mainnet goes through
+/// MONAD_RPC_URL, a QuickNode endpoint that allows 1,000-block eth_getLogs),
+/// so log reads page in 1,000-block chunks with concurrency 4 and retry on 429.
 import { type Abi, type AbiEvent, type Address } from "viem";
 import officialAbiJson from "./exchange-official.abi.json";
-import { blockTime, client, net } from "./server";
+import { blockTime, clientFor } from "./server";
+import { NETWORKS, type Network } from "./perpl";
 import { readPosition } from "./readPosition";
 
 const officialAbi = officialAbiJson as Abi;
@@ -195,17 +196,22 @@ export function clearLiveCache(): void {
   cache.clear();
 }
 
-/// Recent openers in one market, most recent entry first, up to 12. Results
-/// are cached per market and window for 60 s in memory.
+/// Recent openers in one market on one network, most recent entry first, up
+/// to 12. Results are cached per network, market and window for 60 s in
+/// memory.
 export async function getLiveTraders(
   market: number,
   hoursRaw: unknown,
+  network: Network = "testnet",
 ): Promise<{ block: string; hours: number; traders: LiveTrader[] }> {
   const hours = clampHours(hoursRaw);
-  const key = `${market}:${hours}`;
+  const key = `${network}:${market}:${hours}`;
   const now = Date.now();
   const hit = cache.get(key);
   if (hit && now - hit.at < LIVE_CACHE_MS) return hit.payload;
+
+  const client = clientFor(network);
+  const exchange = NETWORKS[network].exchange;
 
   const latest = await withRetry(() => client.getBlockNumber());
   const span = blocksForHours(hours);
@@ -213,7 +219,7 @@ export async function getLiveTraders(
   const ranges = chunkRanges(from, latest);
 
   const perChunk = await mapPool(ranges, LOG_CONCURRENCY, ({ fromBlock, toBlock }) =>
-    withRetry(() => client.getLogs({ address: net.exchange, events: OPENED_EVENTS, fromBlock, toBlock })),
+    withRetry(() => client.getLogs({ address: exchange, events: OPENED_EVENTS, fromBlock, toBlock })),
   );
   const want = BigInt(market);
   const openings: Opening[] = [];
@@ -230,12 +236,12 @@ export async function getLiveTraders(
   const cands = await mapPool(recent, LOG_CONCURRENCY, async (o): Promise<LiveCandidate | null> => {
     try {
       const info = (await withRetry(() =>
-        client.readContract({ address: net.exchange, abi: officialAbi, functionName: "getAccountById", args: [o.accountId] }),
+        client.readContract({ address: exchange, abi: officialAbi, functionName: "getAccountById", args: [o.accountId] }),
       )) as unknown as { accountAddr?: Address };
       const addr = info?.accountAddr;
       if (!addr || /^0x0{40}$/i.test(addr)) return null;
-      const p = await readPosition(addr, market, { client, blockNumber: latest });
-      const entryTime = await blockTime(o.blockNumber);
+      const p = await readPosition(addr, market, { network, client, blockNumber: latest });
+      const entryTime = await blockTime(network, o.blockNumber);
       if (!p) return { account: addr, entryBlock: o.blockNumber, entryTime, position: null };
       return {
         account: p.account,

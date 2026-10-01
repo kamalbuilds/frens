@@ -21,10 +21,8 @@ import {
   type Hex,
 } from "viem";
 import officialAbi from "./exchange-official.abi.json";
-import { NETWORKS } from "./perpl";
+import { NETWORKS, type Network } from "./perpl";
 import type { AbiEvent } from "viem";
-
-export const EXCHANGE_ADDRESS = NETWORKS.mainnet.exchange;
 
 const exchangeOfficialAbi = officialAbi as readonly AbiEvent[];
 
@@ -49,6 +47,15 @@ export const MAKER_ORDER_FILLED_TOPIC0 = toEventSelector(
 ) as Hex;
 
 export const HYPERSYNC_DEFAULT_URL = "https://monad.hypersync.xyz";
+
+/// HyperSync base per network. Mainnet has a known endpoint; testnet goes
+/// through HYPERSYNC_TESTNET_URL when set (server only), falling back to the
+/// same default host so a missing override still queries real logs.
+export function hypersyncUrlFor(network: Network): string {
+  if (network === "mainnet") return HYPERSYNC_DEFAULT_URL;
+  const override = process.env.HYPERSYNC_TESTNET_URL;
+  return override && override.length > 0 ? override : HYPERSYNC_DEFAULT_URL;
+}
 
 const LOW_MASK = (1n << 96n) - 1n;
 
@@ -193,6 +200,7 @@ async function queryLogs(
   fromBlock: bigint,
   toBlock: bigint,
   topic0: Hex,
+  exchange: Address,
 ): Promise<HyperSyncResponse[]> {
   const pages: HyperSyncResponse[] = [];
   let cursor = fromBlock;
@@ -203,7 +211,7 @@ async function queryLogs(
       body: JSON.stringify({
         from_block: Number(cursor),
         to_block: Number(toBlock),
-        logs: [{ address: [EXCHANGE_ADDRESS], topics: [[topic0]] }],
+        logs: [{ address: [exchange], topics: [[topic0]] }],
         field_selection: { log: ["block_number", "transaction_hash", "data"] },
       }),
     });
@@ -221,14 +229,16 @@ async function queryLogs(
 
 export async function fetchCallRecord(
   suggester: Address,
-  opts: { fromBlock: bigint; toBlock: bigint; hypersyncUrl?: string; token: string },
+  opts: { fromBlock: bigint; toBlock: bigint; hypersyncUrl?: string; token: string; network?: Network; exchange?: Address },
 ): Promise<CallRecord> {
   if (!opts.token) throw new Error("ENVIO_API_TOKEN missing");
-  const url = opts.hypersyncUrl ?? HYPERSYNC_DEFAULT_URL;
+  const network = opts.network ?? "testnet";
+  const exchange = opts.exchange ?? NETWORKS[network].exchange;
+  const url = opts.hypersyncUrl ?? hypersyncUrlFor(network);
   const [orderPages, placedPages, fillPages] = await Promise.all([
-    queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, ORDER_REQUEST_V2_TOPIC0),
-    queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, ORDER_PLACED_TOPIC0),
-    queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, MAKER_ORDER_FILLED_TOPIC0),
+    queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, ORDER_REQUEST_V2_TOPIC0, exchange),
+    queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, ORDER_PLACED_TOPIC0, exchange),
+    queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, MAKER_ORDER_FILLED_TOPIC0, exchange),
   ]);
   return parseCallRecord(suggester, orderPages, placedPages, fillPages);
 }
