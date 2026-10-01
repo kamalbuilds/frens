@@ -107,7 +107,7 @@ export async function readPosition(
   market: number,
   opts: { network?: Network; client?: PublicClient; blockNumber?: bigint } = {},
 ): Promise<Position | null> {
-  const network = opts.network ?? "mainnet";
+  const network = opts.network ?? "testnet";
   const client = opts.client ?? publicClient(network);
   const exchange = NETWORKS[network].exchange;
   const block = opts.blockNumber ?? (await client.getBlockNumber());
