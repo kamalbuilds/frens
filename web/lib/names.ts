@@ -32,16 +32,36 @@ export function sanitizeName(raw: string | null | undefined): string | null {
   return t;
 }
 
-/// Map room addresses to their nicknames by position: names[i] belongs to
-/// addresses[i]. Unnamed slots (empty or unusable) are skipped, so the map
-/// only holds frens with a real nickname. Keys are lowercased addresses.
+/// Map room addresses to their nicknames. A slot "b379:ana" names the address starting with b379 (4 or more
+/// hex chars, case-insensitive), so names survive the room code sorting its addresses; a plain slot "ana"
+/// falls back to position: names[i] belongs to addresses[i]. Unusable slots are skipped. Keys are lowercased.
 export function namesForAddresses(addresses: string[], names: (string | null | undefined)[]): Map<string, string> {
   const out = new Map<string, string>();
-  for (let i = 0; i < addresses.length; i++) {
-    const clean = sanitizeName(names[i]);
-    if (clean) out.set(addresses[i].toLowerCase(), clean);
+  const lower = addresses.map((a) => a.toLowerCase());
+  for (let i = 0; i < names.length; i++) {
+    const slot = (names[i] ?? "").trim();
+    const m = /^(?:0x)?([0-9a-fA-F]{4,40}):(.*)$/.exec(slot);
+    if (m) {
+      const clean = sanitizeName(m[2]);
+      const hits = lower.filter((a) => a.slice(2).startsWith(m[1].toLowerCase()));
+      if (clean && hits.length === 1) out.set(hits[0], clean);
+      continue;
+    }
+    const clean = sanitizeName(slot);
+    if (clean && i < lower.length) out.set(lower[i], clean);
   }
   return out;
+}
+
+/// Keyed ?n= slots for a room: "b379:ana" per named address, unnamed addresses left out.
+export function encodeKeyedNames(addresses: string[], nameOf: (addr: string) => string | undefined): string {
+  return addresses
+    .map((a) => {
+      const n = sanitizeName(nameOf(a.toLowerCase()));
+      return n ? `${a.toLowerCase().slice(2, 6)}:${n}` : "";
+    })
+    .filter(Boolean)
+    .join(",");
 }
 
 export type NamesByAddress = Map<string, string> | Record<string, string>;

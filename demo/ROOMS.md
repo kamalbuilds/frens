@@ -9,9 +9,9 @@ Seeded 2026-10-01T18:39:45.371Z. Perpl testnet, market 16 (BTC). Mark at seeding
 | cy | 0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD | copied ana's long in one tap |
 | dee | 0x073f475a00ec54172f38864b12b32e7f481607e9 | copied bo's short; has an open call from cy |
 
-Room: https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet
+Room: https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet&n=b379:ana,9142:bo,4eb6:cy,073f:dee
 
-Open call for the live demo (dee accepts it): https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet&s=WyIweDA3M2Y0NzVhMDBlYzU0MTcyZjM4ODY0YjEyYjMyZTdmNDgxNjA3ZTkiLDE2LCJzaG9ydCIsODE3NjUsbnVsbCwiMHg0ZWI2NjRGMUU5YjdjODEyZERGQkM0MTE4MzI2RkUzZTIzYjdEY2VEIiwxNzkwODc5OTg1MzY5XQ
+Open call for the live demo (dee accepts it): https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet&n=b379:ana,9142:bo,4eb6:cy,073f:dee&s=WyIweDA3M2Y0NzVhMDBlYzU0MTcyZjM4ODY0YjEyYjMyZTdmNDgxNjA3ZTkiLDE2LCJzaG9ydCIsODE3NjUsbnVsbCwiMHg0ZWI2NjRGMUU5YjdjODEyZERGQkM0MTE4MzI2RkUzZTIzYjdEY2VEIiwxNzkwODc5OTg1MzY5XQ
 
 Transactions:
 - tx open short bo: 0xf487928f0b3ed23b50a3ce254e3b60d8458362c33eb9a93a774d5e7a7a80a28d
