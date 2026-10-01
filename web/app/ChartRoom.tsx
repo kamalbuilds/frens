@@ -24,8 +24,10 @@ import { encodeCopyOrder, toCopyOrder } from "@/lib/copy";
 import { encodeRoom } from "@/lib/roomlink";
 import { encodeSuggestion, type Suggestion } from "@/lib/suggest";
 import { ghostColorFor, ghostLabelText } from "@/lib/ghost";
-import { connect, sendExecOrder } from "@/lib/wallet";
+import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { SuggestionBanner } from "./SuggestionBanner";
+import { PasskeyWallet } from "./PasskeyWallet";
+import type { LocalAccount } from "viem";
 
 type Market = { id: number; name: string; priceDecimals: number; lotDecimals: number };
 type Load<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: T };
@@ -107,6 +109,8 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const [copySize, setCopySize] = useState("");
   const [copySlip, setCopySlip] = useState("50");
   const [copyResult, setCopyResult] = useState<CopyResult>({ kind: "idle" });
+  const [passkey, setPasskey] = useState<LocalAccount | null>(null);
+  const [passkeyFunded, setPasskeyFunded] = useState(false);
   const [incoming, setIncoming] = useState<Suggestion | null>(null);
   const [ghostPrice, setGhostPrice] = useState<number | null>(null);
   const [ghostY, setGhostY] = useState<number | null>(null);
@@ -774,20 +778,39 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   // One-tap copy: build the taker order for the copier's own size, encode the
   // execOrder calldata, and hand it to the copier's own wallet to sign. No key
   // ever touches the app; the wallet shows the order and the copier can refuse.
+  function copyOrderData() {
+    if (!copyFriend || !market) throw new Error("pick a position and a market first");
+    const size = Number(copySize);
+    const slip = Number(copySlip);
+    const order = toCopyOrder(
+      { market: marketId, side: copyFriend.side },
+      { priceDecimals: BigInt(market.priceDecimals), lotDecimals: BigInt(market.lotDecimals) },
+      { size, markPrice: copyFriend.markPrice, maxSlippageBps: slip, orderDescId: BigInt(Date.now()) },
+    );
+    return encodeCopyOrder(order);
+  }
+
   async function doCopy() {
-    if (!copyFriend || !market) return;
     setCopyResult({ kind: "sending" });
     try {
-      const size = Number(copySize);
-      const slip = Number(copySlip);
-      const order = toCopyOrder(
-        { market: marketId, side: copyFriend.side },
-        { priceDecimals: BigInt(market.priceDecimals), lotDecimals: BigInt(market.lotDecimals) },
-        { size, markPrice: copyFriend.markPrice, maxSlippageBps: slip, orderDescId: BigInt(Date.now()) },
-      );
-      const data = encodeCopyOrder(order);
+      const data = copyOrderData();
       await connect();
       const hash = await sendExecOrder(EXCHANGE as Address, data);
+      setCopyResult({ kind: "ok", hash });
+    } catch (e) {
+      setCopyResult({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  // Passkey sibling of doCopy: the same calldata signed by the in-memory
+  // passkey account instead of the injected wallet. The panel only offers
+  // this once the passkey address holds MON for gas.
+  async function doCopyWithPasskey() {
+    if (!passkey) return;
+    setCopyResult({ kind: "sending" });
+    try {
+      const data = copyOrderData();
+      const hash = await sendExecOrderWith(passkey, EXCHANGE as Address, data);
       setCopyResult({ kind: "ok", hash });
     } catch (e) {
       setCopyResult({ kind: "error", message: e instanceof Error ? e.message : String(e) });
@@ -1406,8 +1429,22 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                 disabled={copyResult.kind === "sending"}
                 className="w-full rounded-[6px] bg-ink px-3 py-2 text-[13px] font-medium text-surface active:scale-[0.97] disabled:opacity-40"
               >
-                {copyResult.kind === "sending" ? "Waiting for wallet" : `Copy ${copyFriend.side === "long" ? "long" : "short"}`}
+                {copyResult.kind === "sending" ? "Waiting for wallet" : "Use browser wallet"}
               </button>
+              <div className="mt-2">
+                <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="copy" />
+              </div>
+              {passkey && passkeyFunded && (
+                <button
+                  onClick={doCopyWithPasskey}
+                  disabled={copyResult.kind === "sending"}
+                  className="mt-2 w-full rounded-[6px] border border-ink px-3 py-2 text-[13px] font-medium hover:bg-rule active:scale-[0.97] disabled:opacity-40"
+                >
+                  {copyResult.kind === "sending"
+                    ? "Waiting for passkey"
+                    : `Copy ${copyFriend.side === "long" ? "long" : "short"} with passkey`}
+                </button>
+              )}
               {copyResult.kind === "ok" && (
                 <p className="num mt-2 break-all text-[12px]" style={{ color: "var(--gain)" }}>
                   Sent. <a className="underline" href={`${MONAD_VISION}/${copyResult.hash}`} target="_blank" rel="noreferrer">View on MonadVision</a>
