@@ -24,3 +24,5 @@ Read back from chain:
 - READ BACK cy: long 0.001 BTC @ 85210
 - READ BACK dee: short 0.001 BTC @ 85184.4
 - READ BACK call: TP 82617 on bo's short, resting on Perpl, caller 0xb3790F7EBa6bd875714bBeD7e3f9F303871F0CCC in orderDescId, block 67331020
+
+Accepted live (2026-10-02, demo/accept-call.ts): dee accepted cy's TP at 81,765, tx 0x850e07e613a53298c1b65df48a477dd2e714b40d00a58e1c4fa68f43388bd2f0, block 67,338,316; caller cy read back from OrderRequestV2.orderDescId.
