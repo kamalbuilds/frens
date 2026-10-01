@@ -35,6 +35,7 @@ import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
 import { subscribeRoomFeed } from "@/lib/roomfeed";
 import { SuggestionBanner } from "./SuggestionBanner";
 import { PasskeyWallet } from "./PasskeyWallet";
+import { RoomBuilder } from "./RoomBuilder";
 import { Face } from "./Face";
 import type { LocalAccount } from "viem";
 
@@ -1214,6 +1215,41 @@ export function ChartRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extra, friends, net, nameByAddr, callHashes]);
 
+  // Rooms opened from a link carry their traders in initialAccounts; the bare
+  // page opens without a room. Without a room the "My frens" view grows one
+  // through the room builder panel instead of an empty rail.
+  const hasInitialRoom = (initialAccounts?.length ?? 0) > 0;
+  const showRoomBuilder = view === "frens" && !hasInitialRoom && extra.length === 0;
+  const roomCode = useMemo(() => {
+    if (!hasInitialRoom) return "";
+    try {
+      return encodeRoom(initialAccounts ?? []);
+    } catch {
+      return "";
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasInitialRoom]);
+  // One-time share hint on room pages: dismissed per room in localStorage so
+  // it shows once per browser. Starts dismissed so the bare page and the
+  // first paint never flash it.
+  const [hintDismissed, setHintDismissed] = useState(true);
+  useEffect(() => {
+    if (!roomCode) return;
+    try {
+      setHintDismissed(window.localStorage.getItem(`frens:room-hint:${roomCode}`) === "1");
+    } catch {
+      setHintDismissed(false);
+    }
+  }, [roomCode]);
+  function dismissHint() {
+    try {
+      window.localStorage.setItem(`frens:room-hint:${roomCode}`, "1");
+    } catch {
+      // The banner still hides for this visit even when storage is blocked.
+    }
+    setHintDismissed(true);
+  }
+
   // Switch deployments: the URL owns the network so a refresh, a room link or
   // a suggestion link stays on the same deployment.
   function switchNet(next: Network) {
@@ -1356,6 +1392,29 @@ export function ChartRoom({
       </div>
 
       <main className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="min-w-0">
+          {hasInitialRoom && roomCode && !hintDismissed && (
+            <div className="mb-3 flex flex-wrap items-center gap-3 rounded-[10px] border border-edge bg-panel px-4 py-3">
+              <p className="min-w-[200px] flex-1 text-[13px]">
+                Send this link to your frens. When one of them drags a TP onto your position, you&apos;ll see it here.
+              </p>
+              <button
+                type="button"
+                onClick={copyRoomLink}
+                className="rounded-[6px] bg-accent px-3 py-1.5 text-[13px] font-medium text-page active:scale-[0.97]"
+              >
+                {copied ? "Copied" : "Copy room link"}
+              </button>
+              <button
+                type="button"
+                onClick={dismissHint}
+                aria-label="Dismiss the share hint"
+                className="rounded-[6px] px-2 py-1.5 text-[13px] text-muted hover:text-ink"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
         <div
           ref={wrap}
           className="relative h-[60vh] max-h-[70vh] min-h-[420px] rounded-[10px] border border-edge bg-panel lg:min-h-[420px]"
@@ -1734,6 +1793,7 @@ export function ChartRoom({
             </p>
           )}
         </div>
+        </div>
 
         <aside aria-label={view === "live" ? "Live on Perpl" : "In the room"} className="flex flex-col gap-4">
           {/* Trader source: live Perpl openers sit on the candles at entry
@@ -1759,6 +1819,10 @@ export function ChartRoom({
             <h2 className="font-[family-name:var(--font-display)] text-[20px] font-bold">{view === "live" ? "Live on Perpl" : "In the room"}</h2>
             <span className="num text-[12px] text-muted">by unrealised PnL</span>
           </div>
+          {showRoomBuilder ? (
+            <RoomBuilder net={net} />
+          ) : (
+          <>
           {view === "frens" && room.state === "loading" && <p className="text-[14px] text-muted">Reading positions from the Exchange contract</p>}
           {view === "frens" && room.state === "error" && <p className="text-[14px] text-loss">Could not read positions: {room.message}</p>}
           {view === "frens" && room.state === "ready" && friends.length === 0 && (
@@ -1912,6 +1976,8 @@ export function ChartRoom({
             </div>
             {draftError && <p className="text-[12px] text-loss">{draftError}</p>}
           </form>
+          )}
+          </>
           )}
         </aside>
       </main>
