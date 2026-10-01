@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import { byPnl, candleChange, chipFor, formatPrice, formatUsd, placeAvatar, sideCounts, subtitleForMarket, visiblePriceRange, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
 import { FACE_SIZE, clusterFaces, ringColorFor } from "@/lib/faces";
+import { shortMarketLabel } from "@/lib/mobile";
 import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, type SuggestKind } from "@/lib/drag";
 import { encodeCopyOrder, toCopyOrder } from "@/lib/copy";
 import { encodeRoom } from "@/lib/roomlink";
@@ -89,6 +90,114 @@ const CHART = {
   up: "#2BD67B",
   down: "#FF6B57",
 };
+
+/// The three tab groups are rendered twice: once inside the desktop header
+/// and once as the compact rows below 640px. They live here so both copies
+/// read the same list, the same aria labels and the same pressed state.
+function NetworkToggle({
+  net,
+  onSwitch,
+  compact = false,
+}: {
+  net: Network;
+  onSwitch: (next: Network) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div role="group" aria-label="Network" className="flex shrink-0 rounded-[6px] border border-edge">
+      {(["testnet", "mainnet"] as const).map((n) => (
+        <button
+          key={n}
+          onClick={() => onSwitch(n)}
+          aria-pressed={n === net}
+          className={`${compact ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-[12px]"} ${
+            n === net ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"
+          }`}
+        >
+          {n === "testnet" ? "Testnet" : "Mainnet"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/// Market tabs. Below 640px the strip scrolls sideways on one line and the
+/// venue suffix is cut, so "BTC Perp" reads "BTC" and no tab wraps onto a
+/// second row above the chart.
+function MarketTabs({
+  markets,
+  marketId,
+  onPick,
+  compact = false,
+}: {
+  markets: Load<Market[]>;
+  marketId: number;
+  onPick: (id: number) => void;
+  compact?: boolean;
+}) {
+  const off = "text-muted hover:text-ink";
+  const on = "rounded-[6px] bg-raised text-ink";
+  return (
+    <div
+      role="group"
+      aria-label="Market"
+      className={
+        compact
+          ? "flex min-w-0 flex-1 gap-1 overflow-x-auto overscroll-x-contain"
+          : "flex rounded-[6px] border border-edge"
+      }
+    >
+      {markets.state === "ready" &&
+        markets.data.map((m) => (
+          <button
+            key={m.id}
+            onClick={() => onPick(m.id)}
+            aria-pressed={m.id === marketId}
+            className={`num ${compact ? "shrink-0 whitespace-nowrap px-2 py-1 text-[12px]" : "px-3 py-1.5 text-[12px]"} ${
+              m.id === marketId ? on : off
+            }`}
+          >
+            {compact ? shortMarketLabel(m.name) : m.name}
+          </button>
+        ))}
+      {markets.state === "loading" && (
+        <span className={`${compact ? "shrink-0" : ""} px-3 py-1.5 text-[12px] text-muted`}>loading markets</span>
+      )}
+      {markets.state === "error" && (
+        <span className={`${compact ? "shrink-0" : ""} px-3 py-1.5 text-[12px] text-loss`}>{markets.message}</span>
+      )}
+    </div>
+  );
+}
+
+function TimeframeTabs({
+  res,
+  onPick,
+  compact = false,
+}: {
+  res: number;
+  onPick: (res: number) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div role="group" aria-label="Timeframe" className="flex shrink-0 rounded-[6px] border border-edge">
+      {TIMEFRAMES.map((t) => (
+        <button
+          key={t.res}
+          onClick={() => onPick(t.res)}
+          aria-pressed={t.res === res}
+          className={`num shrink-0 ${
+            compact
+              ? `px-2 py-1 text-[11px] ${t.res === res ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"}`
+              : `px-2.5 py-1.5 text-[12px] ${t.res === res ? "text-accent underline underline-offset-4" : "text-muted hover:text-ink"}`
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function ChartRoom({
   initialAccounts,
@@ -814,6 +923,21 @@ export function ChartRoom({
     return dTp <= dSl ? "tp" : "sl";
   }
 
+  // The fren card is a hover card on a pointer and a tap target on a phone.
+  // A tap on the candles is handled by onChartPointerDown below; a tap on
+  // anything else on the page clears the selection here, so a phone can
+  // always get the card off the screen without pressing Escape.
+  useEffect(() => {
+    if (!active) return;
+    const clear = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (target && wrap.current?.contains(target)) return;
+      setActive(null);
+    };
+    document.addEventListener("pointerdown", clear);
+    return () => document.removeEventListener("pointerdown", clear);
+  }, [active]);
+
   // Drag listeners live on the wrapping container, not on the chart box: the
   // box is the bottom layer and every overlay above it would otherwise steal
   // the pointer. Decorative overlays are pointer-events-none; only faces,
@@ -833,6 +957,7 @@ export function ChartRoom({
     if (!el || !s || !c) return;
     const y = e.clientY - el.getBoundingClientRect().top;
     const gripKind = grip?.getAttribute("data-drag-kind");
+    if (!gripKind) setActive(null);
     if (gripKind === "ghost") {
       if (!incoming || ghostPrice === null || ghostAccepted) return;
       dragging.current = "ghost";
@@ -1269,66 +1394,54 @@ export function ChartRoom({
 
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-[1480px] flex-col px-4 pb-6 md:px-8">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-edge py-5">
-        <div>
-          <p className="font-[family-name:var(--font-display)] text-[22px] font-bold tracking-tight">
+      <header className="border-b border-edge">
+        {/* Below 640px one compact row: wordmark plus testnet pill left, the
+            deployment toggle right. The market strip and the timeframes move
+            out from under it so the chart still starts inside the first
+            screen of a phone. */}
+        <div data-compact-header className="flex items-center justify-between gap-2 py-2 sm:hidden">
+          <p className="font-[family-name:var(--font-display)] text-[18px] font-bold leading-none tracking-tight">
             frens
             {net === "testnet" && (
-              <span className="num ml-2 rounded-[6px] border border-edge bg-raised px-1.5 py-0.5 align-middle text-[11px] font-medium text-muted">
+              <span className="num ml-2 rounded-[6px] border border-edge bg-raised px-1.5 py-0.5 align-middle text-[10px] font-medium text-muted">
                 testnet
               </span>
             )}
           </p>
-          <p className="text-[14px] text-muted">Trade perps with your frens.</p>
+          <NetworkToggle net={net} onSwitch={switchNet} compact />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div role="group" aria-label="Network" className="flex rounded-[6px] border border-edge">
-            {(["testnet", "mainnet"] as const).map((n) => (
-              <button
-                key={n}
-                onClick={() => switchNet(n)}
-                aria-pressed={n === net}
-                className={`px-3 py-1.5 text-[12px] ${n === net ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"}`}
-              >
-                {n === "testnet" ? "Testnet" : "Mainnet"}
-              </button>
-            ))}
+        <div className="hidden flex-wrap items-end justify-between gap-4 py-5 sm:flex">
+          <div>
+            <p className="font-[family-name:var(--font-display)] text-[22px] font-bold tracking-tight">
+              frens
+              {net === "testnet" && (
+                <span className="num ml-2 rounded-[6px] border border-edge bg-raised px-1.5 py-0.5 align-middle text-[11px] font-medium text-muted">
+                  testnet
+                </span>
+              )}
+            </p>
+            <p className="text-[14px] text-muted">Trade perps with your frens.</p>
           </div>
-          <div role="group" aria-label="Market" className="flex rounded-[6px] border border-edge">
-            {markets.state === "ready" &&
-              markets.data.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setMarketId(m.id)}
-                  aria-pressed={m.id === marketId}
-                  className={`num px-3 py-1.5 text-[12px] ${m.id === marketId ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"}`}
-                >
-                  {m.name}
-                </button>
-              ))}
-            {markets.state === "loading" && <span className="px-3 py-1.5 text-[12px] text-muted">loading markets</span>}
-            {markets.state === "error" && <span className="px-3 py-1.5 text-[12px] text-loss">{markets.message}</span>}
-          </div>
-          <div role="group" aria-label="Timeframe" className="flex rounded-[6px] border border-edge">
-            {TIMEFRAMES.map((t) => (
-              <button
-                key={t.res}
-                onClick={() => setRes(t.res)}
-                aria-pressed={t.res === res}
-                className={`num px-2.5 py-1.5 text-[12px] ${t.res === res ? "text-accent underline underline-offset-4" : "text-muted hover:text-ink"}`}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <NetworkToggle net={net} onSwitch={switchNet} />
+            <MarketTabs markets={markets} marketId={marketId} onPick={setMarketId} />
+            <TimeframeTabs res={res} onPick={setRes} />
           </div>
         </div>
       </header>
 
-      <section className="flex items-baseline gap-4 pt-6 pb-3">
-        <h1 className="font-[family-name:var(--font-display)] text-[40px] font-bold leading-none tracking-tight md:text-[64px]">
+      {/* Below 640px the market strip scrolls on one line with the timeframe
+          control pinned to its right, so neither wraps into the chart. */}
+      <div className="flex items-center gap-2 pt-2 sm:hidden">
+        <MarketTabs markets={markets} marketId={marketId} onPick={setMarketId} compact />
+        <TimeframeTabs res={res} onPick={setRes} compact />
+      </div>
+
+      <section className="flex flex-col gap-1 pt-2 pb-1 sm:flex-row sm:items-baseline sm:gap-4 sm:pt-6 sm:pb-3">
+        <h1 className="font-[family-name:var(--font-display)] text-[36px] font-bold leading-none tracking-tight sm:text-[40px] md:text-[64px]">
           <span className="num">{lastClose !== null ? formatPrice(lastClose, decimals) : " "}</span>
         </h1>
-        <p className="text-[14px] text-muted">
+        <p className="min-w-0 truncate text-[14px] text-muted sm:whitespace-normal">
           {market ? subtitleForMarket(market.name) : ""}
           {view === "frens"
             ? room.state === "ready" && ` · ${friends.length} of ${room.data.checked} traders in the room hold it`
@@ -1336,9 +1449,11 @@ export function ChartRoom({
         </p>
       </section>
 
-      {/* OHLC readout plus the room long/short split, above the chart. */}
+      {/* OHLC readout plus the room long/short split, above the chart. The
+          OHLC numbers follow the mouse crosshair, which a phone does not
+          have, so below 640px only the long/short split is printed. */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pb-2">
-        <p aria-live="off" className="num text-[12px] text-muted">
+        <p aria-live="off" className="num hidden text-[12px] text-muted sm:block">
           {ohlc ? (
             <>
               <span>O {formatPrice(ohlc.o, decimals)}</span>{" "}
@@ -1372,36 +1487,38 @@ export function ChartRoom({
         )}
       </div>
 
-      <div className="pb-2">
-        <SuggestionBanner
-          friends={friends}
-          roomReady={room.state === "ready"}
-          marketId={marketId}
-          network={net}
-          priceDecimals={decimals}
-          lotDecimals={market?.lotDecimals ?? 0}
-          names={nameByAddr}
-          onSuggestion={handleSuggestion}
-          ghostPrice={ghostPrice}
-          onAcceptedChange={handleAcceptedChange}
-          roomShareLink={roomSharePath}
-          callHashes={callHashes}
-          acceptRequest={acceptReq}
-          passRequest={passReq}
-        />
-      </div>
-
       <main className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="min-w-0">
+        {/* The share hint and the suggestion banner are room chrome, not price:
+            above the chart they push it most of a phone screen down. Below
+            640px they print after it instead, each as a one-line strip. */}
+        <div className="flex min-w-0 flex-col">
+          <div className="order-2 pt-2 sm:order-none sm:pb-2 sm:pt-0">
+            <SuggestionBanner
+              friends={friends}
+              roomReady={room.state === "ready"}
+              marketId={marketId}
+              network={net}
+              priceDecimals={decimals}
+              lotDecimals={market?.lotDecimals ?? 0}
+              names={nameByAddr}
+              onSuggestion={handleSuggestion}
+              ghostPrice={ghostPrice}
+              onAcceptedChange={handleAcceptedChange}
+              roomShareLink={roomSharePath}
+              callHashes={callHashes}
+              acceptRequest={acceptReq}
+              passRequest={passReq}
+            />
+          </div>
           {hasInitialRoom && roomCode && !hintDismissed && (
-            <div className="mb-3 flex flex-wrap items-center gap-3 rounded-[10px] border border-edge bg-panel px-4 py-3">
-              <p className="min-w-[200px] flex-1 text-[13px]">
+            <div className="order-3 mt-2 flex items-center gap-2 rounded-[10px] border border-edge bg-panel px-3 py-2 sm:order-none sm:mb-3 sm:mt-0 sm:flex-wrap sm:gap-3 sm:px-4 sm:py-3">
+              <p className="min-w-0 flex-1 truncate text-[13px] sm:min-w-[200px]">
                 Send this link to your frens. When one of them drags a TP onto your position, you&apos;ll see it here.
               </p>
               <button
                 type="button"
                 onClick={copyRoomLink}
-                className="rounded-[6px] bg-accent px-3 py-1.5 text-[13px] font-medium text-page active:scale-[0.97]"
+                className="min-h-[44px] shrink-0 rounded-[6px] bg-accent px-3 py-1.5 text-[13px] font-medium text-page active:scale-[0.97] sm:min-h-0"
               >
                 {copied ? "Copied" : "Copy room link"}
               </button>
@@ -1409,15 +1526,16 @@ export function ChartRoom({
                 type="button"
                 onClick={dismissHint}
                 aria-label="Dismiss the share hint"
-                className="rounded-[6px] px-2 py-1.5 text-[13px] text-muted hover:text-ink"
+                className="min-h-[44px] shrink-0 rounded-[6px] px-2 py-1.5 text-[13px] text-muted hover:text-ink sm:min-h-0"
               >
-                Dismiss
+                <span aria-hidden className="text-[16px] leading-none sm:hidden">×</span>
+                <span className="hidden sm:inline">Dismiss</span>
               </button>
             </div>
           )}
         <div
           ref={wrap}
-          className="relative h-[60vh] max-h-[70vh] min-h-[420px] rounded-[10px] border border-edge bg-panel lg:min-h-[420px]"
+          className="relative order-1 h-[58vh] min-h-[320px] rounded-[10px] border border-edge bg-panel sm:order-none sm:h-[60vh] sm:max-h-[70vh] sm:min-h-[420px]"
           onPointerDown={onChartPointerDown}
           onPointerMove={onChartPointerMove}
           onPointerUp={endChartDrag}
@@ -1735,6 +1853,7 @@ export function ChartRoom({
               face selects it so the card stays put on touch. */}
           {selected && (
             <div
+              data-nodrag
               className="absolute left-3 top-3 z-10 w-[240px] rounded-[10px] border border-edge bg-raised p-3"
               onMouseEnter={() => setHover(selected.account)}
               onMouseLeave={() => setHover(null)}
@@ -1769,7 +1888,7 @@ export function ChartRoom({
                   type="button"
                   data-nodrag
                   onClick={() => setActive(selected.account)}
-                  className="flex-1 rounded-[6px] bg-accent px-3 py-1.5 text-[13px] font-medium text-page active:scale-[0.97]"
+                  className="min-h-[44px] flex-1 rounded-[6px] bg-accent px-3 py-1.5 text-[13px] font-medium text-page active:scale-[0.97] sm:min-h-0"
                 >
                   Call exit
                 </button>
@@ -1777,7 +1896,7 @@ export function ChartRoom({
                   type="button"
                   data-nodrag
                   onClick={() => openCopy(selected.account)}
-                  className="flex-1 rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-panel active:scale-[0.97]"
+                  className="min-h-[44px] flex-1 rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-panel active:scale-[0.97] sm:min-h-0"
                 >
                   Copy
                 </button>

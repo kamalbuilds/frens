@@ -31,6 +31,14 @@ Stamp: `/* Hallmark · macrostructure: 05 Workbench · theme: Fren dark */` at t
 - Copy: the hover card carries a Copy button opening a confirm popover (market, side, your size, max slippage default 50 bps) that signs through the viewer's own wallet. Never hold keys.
 - Motion: faces and the last-price pill ease over 120ms, transform and opacity only, disabled under prefers-reduced-motion.
 - The chart library cannot parse CSS color-mix: every chart option uses concrete hex or rgba values.
+## Phone rules (below 640px only, 390x844 as the reference)
+- Traders open room links on phones from Telegram. The chart and the frens' faces are on the first screen: the chart starts within 300px of the top of the page and is at least 55% of the viewport height. Everything below 640px exists to protect that.
+- One compact header row: the "frens" wordmark with the testnet pill left, the Testnet/Mainnet two-state toggle right. It carries data-compact-header. The tagline, the market tabs and the timeframes are not in it.
+- Market tabs are one horizontally scrollable row that never wraps, with the venue suffix cut, so "BTC Perp" reads "BTC" (shortMarketLabel in lib/mobile.ts). The timeframes are a small segmented control pinned to the right of that same row.
+- Price is 36px with the market subtitle on one truncated line under it. The OHLC readout is desktop only, it follows a mouse crosshair a phone does not have. The long/short bar stays.
+- The share hint and the suggestion banner print BELOW the chart as one-line strips, the banner's actions on a single row. Neither pushes the chart down.
+- Real buttons are at least 44px high below 640px: Call exit, Copy, the banner actions, the share hint.
+- The fren card opens on tap and closes on a tap on the candles or anywhere else on the page. The card's own controls carry data-nodrag and keep it open.
 ## Tokens (CSS custom properties in app/globals.css)
 `--page: #0A0A0F; --panel: #13131A; --raised: #1B1B24; --edge: #26263A; --ink: #ECECF1; --muted: #8B8B9E; --accent: #C8FF3D; --gain: #2BD67B; --loss: #FF6B57;` plus `--grid` rgba(255, 255, 255, 0.04).
 Type scale (px): 12 · 14 · 16 · 20 · 28 · 40 · 64 · 96. Line-height 1.5 body, 1.1 display.
