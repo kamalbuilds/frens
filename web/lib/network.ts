@@ -79,12 +79,15 @@ export function explorerTxUrl(network: Network, hash: string): string {
 /// the deployment its positions were read from. Optional nicknames ride along
 /// in ?n=, one slot per room address in the same order (empty slots for
 /// unnamed frens), so the room the link opens shows the same names.
-export function roomLink(code: string, network: Network, namesQuery?: string): string {
+/// Accepted-call receipts ride in ?c=, a comma list of transaction hashes the
+/// room verifies per receipt instead of scanning logs.
+export function roomLink(code: string, network: Network, namesQuery?: string, callsQuery?: string): string {
   const base = `/r/${code}?net=${network}`;
-  if (typeof namesQuery === "string" && namesQuery.length > 0) {
-    return `${base}&n=${encodeURIComponent(namesQuery)}`;
-  }
-  return base;
+  const tail =
+    typeof namesQuery === "string" && namesQuery.length > 0 ? `&n=${encodeURIComponent(namesQuery)}` : "";
+  const calls =
+    typeof callsQuery === "string" && callsQuery.length > 0 ? `&c=${encodeURIComponent(callsQuery)}` : "";
+  return `${base}${tail}${calls}`;
 }
 
 /// Set ?net= on a path or URL while preserving every other query param and
