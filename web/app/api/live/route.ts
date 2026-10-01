@@ -9,7 +9,8 @@ export async function GET(req: Request) {
   }
   try {
     const { block, hours, traders } = await getLiveTraders(market, u.searchParams.get("hours"), parseNetParam(u.searchParams));
-    return Response.json({ market, hours, block, traders });
+    // Cold reads page ~72 getLogs chunks (10-20 s); the CDN serves the last list while it refreshes.
+    return Response.json({ market, hours, block, traders }, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=900" } });
   } catch (e) {
     return Response.json({ error: String(e instanceof Error ? e.message : e) }, { status: 502 });
   }
