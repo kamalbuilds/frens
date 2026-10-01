@@ -1,33 +1,51 @@
-// Suggester callbook: puts the suggester on chain via OrderRequest.orderDescId.
+// Suggester callbook: puts the suggester on chain via OrderRequestV2.orderDescId.
 //
-// Perpl's Exchange emits OrderRequest(perpId, accountId, orderDescId, orderId,
-// orderType, pricePNS, lotLNS, ...) for every order, and orderDescId is a free
-// uint256 chosen by the caller (see src/exchange.abi.json). Suggestion orders
-// pack the suggester address into the top 160 bits and the suggestion
-// createdAt timestamp (ms) into the low 96 bits, so anyone can rebuild a
-// suggester's record of accepted calls and fills from logs alone. Ordinary
-// orders use small ids whose top 160 bits are zero and decode to null.
+// Verified on the live Perpl testnet on 2026-10-01 (spike/descid.test.ts,
+// tx 0xfc48d1f8e6805b4cc02f9b0975024af3e435194932bcb18e66bf19b1f982e45b):
+// the deployed Exchange emits OrderRequestV2, never OrderRequest (V1), and
+// the V2 log carries orderId 0. The real orderId is emitted in the same
+// transaction by OrderPlaced. So a call is rebuilt by joining V2 and Placed
+// logs on transaction_hash, then marked "hit" when a MakerOrderFilled with
+// that orderId exists in range.
+//
+// Suggestion orders pack the suggester address into the top 160 bits and the
+// suggestion createdAt timestamp (ms) into the low 96 bits of the
+// caller-chosen orderDescId, so anyone can rebuild a suggester's record of
+// accepted calls and fills from logs alone. Ordinary orders use small ids
+// whose top 160 bits are zero and decode to null.
 import {
   decodeEventLog,
   getAddress,
-  getEventSelector,
+  toEventSelector,
   type Address,
   type Hex,
 } from "viem";
-import { exchangeAbi, NETWORKS } from "./perpl";
+import officialAbi from "./exchange-official.abi.json";
+import { NETWORKS } from "./perpl";
+import type { AbiEvent } from "viem";
 
 export const EXCHANGE_ADDRESS = NETWORKS.mainnet.exchange;
 
-export const ORDER_REQUEST_TOPIC0 = getEventSelector(
-  (exchangeAbi as readonly unknown[]).find(
-    (e) => typeof e === "object" && e !== null && (e as { type?: string }).type === "event" && (e as { name?: string }).name === "OrderRequest",
-  ) as never,
+const exchangeOfficialAbi = officialAbi as readonly AbiEvent[];
+
+function eventAbi(name: string): AbiEvent {
+  const found = exchangeOfficialAbi.find(
+    (e) => e.type === "event" && e.name === name,
+  );
+  if (!found) throw new Error(`official Exchange ABI has no event ${name}`);
+  return found;
+}
+
+export const ORDER_REQUEST_V2_TOPIC0 = toEventSelector(
+  eventAbi("OrderRequestV2"),
 ) as Hex;
 
-export const MAKER_ORDER_FILLED_TOPIC0 = getEventSelector(
-  (exchangeAbi as readonly unknown[]).find(
-    (e) => typeof e === "object" && e !== null && (e as { type?: string }).type === "event" && (e as { name?: string }).name === "MakerOrderFilled",
-  ) as never,
+export const ORDER_PLACED_TOPIC0 = toEventSelector(
+  eventAbi("OrderPlaced"),
+) as Hex;
+
+export const MAKER_ORDER_FILLED_TOPIC0 = toEventSelector(
+  eventAbi("MakerOrderFilled"),
 ) as Hex;
 
 export const HYPERSYNC_DEFAULT_URL = "https://monad.hypersync.xyz";
@@ -65,7 +83,7 @@ export type CallRecord = {
 };
 
 // Raw HyperSync log row with the field_selection this module queries:
-// block_number, transaction_hash, data. Both events keep every argument
+// block_number, transaction_hash, data. All three events keep every argument
 // non-indexed, so topics are always exactly [topic0] and decodeEventLog only
 // needs the per-query topic0 plus the returned data.
 export type HyperSyncLog = {
@@ -82,24 +100,29 @@ export type HyperSyncResponse = {
   nextBlock?: number | string;
 };
 
-// Pure parser over recorded HyperSync responses: keep the OrderRequest logs
-// whose orderDescId decodes to this suggester, then mark each "hit" when a
-// MakerOrderFilled with the same orderId exists in range, else it stays
-// "open/cancelled" (hit: false).
+// Pure parser over recorded HyperSync responses: keep the OrderRequestV2 logs
+// whose orderDescId decodes to this suggester, join each to the OrderPlaced
+// log in the same transaction (the V2 log carries orderId 0; the Placed log
+// carries the real orderId), then mark each "hit" when a MakerOrderFilled
+// with the same orderId exists in range, else it stays "open/cancelled"
+// (hit: false). OrderRequest (V1) logs are ignored: the deployed Exchange
+// never emits them.
 export function parseCallRecord(
   suggester: Address,
   orderResponses: HyperSyncResponse[],
+  placedResponses: HyperSyncResponse[],
   fillResponses: HyperSyncResponse[],
 ): CallRecord {
   const want = suggester.toLowerCase();
   const orderLogs = orderResponses.flatMap((r) => r.data?.logs ?? r.logs ?? []);
+  const placedLogs = placedResponses.flatMap((r) => r.data?.logs ?? r.logs ?? []);
   const fillLogs = fillResponses.flatMap((r) => r.data?.logs ?? r.logs ?? []);
 
   const filled = new Set<string>();
   for (const log of fillLogs) {
     try {
       const ev = decodeEventLog({
-        abi: exchangeAbi,
+        abi: exchangeOfficialAbi,
         data: log.data,
         topics: [MAKER_ORDER_FILLED_TOPIC0],
       });
@@ -111,27 +134,48 @@ export function parseCallRecord(
     }
   }
 
+  const orderIdByTx = new Map<string, bigint>();
+  for (const log of placedLogs) {
+    try {
+      const ev = decodeEventLog({
+        abi: exchangeOfficialAbi,
+        data: log.data,
+        topics: [ORDER_PLACED_TOPIC0],
+      });
+      if (ev.eventName !== "OrderPlaced") continue;
+      const args = ev.args as unknown as { orderId: bigint };
+      orderIdByTx.set(String(log.transaction_hash).toLowerCase(), args.orderId);
+    } catch {
+      continue;
+    }
+  }
+
   const calls: CallEntry[] = [];
   for (const log of orderLogs) {
     try {
-      const ev = decodeEventLog({ abi: exchangeAbi, data: log.data, topics: [ORDER_REQUEST_TOPIC0] });
-      if (ev.eventName !== "OrderRequest") continue;
+      const ev = decodeEventLog({
+        abi: exchangeOfficialAbi,
+        data: log.data,
+        topics: [ORDER_REQUEST_V2_TOPIC0],
+      });
+      if (ev.eventName !== "OrderRequestV2") continue;
       const args = ev.args as unknown as {
         perpId: bigint;
         orderDescId: bigint;
-        orderId: bigint;
         pricePNS: bigint;
       };
       const decoded = decodeDescId(args.orderDescId);
       if (!decoded || decoded.suggester.toLowerCase() !== want) continue;
-      const orderId = args.orderId.toString();
+      const orderId = orderIdByTx.get(String(log.transaction_hash).toLowerCase());
+      if (orderId === undefined) continue;
+      const orderIdStr = orderId.toString();
       calls.push({
-        orderId,
+        orderId: orderIdStr,
         perpId: args.perpId.toString(),
         pricePNS: args.pricePNS.toString(),
         txHash: log.transaction_hash,
         block: log.block_number,
-        hit: filled.has(orderId),
+        hit: filled.has(orderIdStr),
       });
     } catch {
       continue;
@@ -181,9 +225,10 @@ export async function fetchCallRecord(
 ): Promise<CallRecord> {
   if (!opts.token) throw new Error("ENVIO_API_TOKEN missing");
   const url = opts.hypersyncUrl ?? HYPERSYNC_DEFAULT_URL;
-  const [orderPages, fillPages] = await Promise.all([
-    queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, ORDER_REQUEST_TOPIC0),
+  const [orderPages, placedPages, fillPages] = await Promise.all([
+    queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, ORDER_REQUEST_V2_TOPIC0),
+    queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, ORDER_PLACED_TOPIC0),
     queryLogs(url, opts.token, opts.fromBlock, opts.toBlock, MAKER_ORDER_FILLED_TOPIC0),
   ]);
-  return parseCallRecord(suggester, orderPages, fillPages);
+  return parseCallRecord(suggester, orderPages, placedPages, fillPages);
 }
