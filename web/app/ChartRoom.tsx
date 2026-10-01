@@ -303,12 +303,14 @@ export function ChartRoom({
   // Trustless call receipts from the room link (?c=): each hash verified
   // against its own transaction receipt, no log scanning.
   const [callHashes, setCallHashes] = useState<string[]>(() => initialCalls ?? []);
-  const [receiptCalls, setReceiptCalls] = useState<PricedCall[]>([]);
+  const [receiptCalls, setReceiptCalls] = useState<(PricedCall & { hit?: boolean })[]>([]);
   const recFor = (addr: string) => {
     const hyper = callRecords[`${net}:${addr.toLowerCase()}`] ?? null;
     if (hyper) return hyper;
-    const n = receiptCalls.filter((c) => c.caller.toLowerCase() === addr.toLowerCase()).length;
-    return n > 0 ? { accepted: n, hit: 0 } : null;
+    const mine = receiptCalls.filter((c) => c.caller.toLowerCase() === addr.toLowerCase());
+    const n = mine.length;
+    const h = mine.filter((c) => c.hit === true).length;
+    return n > 0 ? { accepted: n, hit: h } : null;
   };
   const accountsKey = useMemo(() => friends.map((f) => f.account.toLowerCase()).sort().join(","), [friends]);
 
@@ -513,7 +515,7 @@ export function ChartRoom({
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => {
         if (cancelled || !ok || !Array.isArray(body.calls)) return;
-        setReceiptCalls(body.calls as PricedCall[]);
+        setReceiptCalls(body.calls as (PricedCall & { hit?: boolean })[]);
       })
       .catch(() => {
         // A missing record hides the line; the card still shows the position.

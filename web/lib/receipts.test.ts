@@ -161,7 +161,7 @@ describe("verifyCallReceipts", () => {
   it("keeps the call and drops the self order, the failed tx and the empty receipt", async () => {
     const out = await verifyCallReceipts("testnet", [H1, H2, H3, H4], fakeClient(byHash));
     expect(out).toEqual([
-      { hash: H1, caller: getAddress(FRIEND), owner: OWNER, market: 16, pricePNS: "732293", block: 100 },
+      { hash: H1, caller: getAddress(FRIEND), owner: OWNER, market: 16, orderType: 2, pricePNS: "732293", block: 100 },
     ] satisfies VerifiedCall[]);
   });
 
@@ -245,7 +245,7 @@ describe("priceCalls", () => {
   }
 
   function call(market: number, pricePNS: string, hash: Hex): VerifiedCall {
-    return { hash, caller: FRIEND, owner: OWNER, market, pricePNS, block: 1 };
+    return { hash, caller: FRIEND, owner: OWNER, market, orderType: 2, pricePNS, block: 1 };
   }
 
   it("prices each call in its own market's units", async () => {
