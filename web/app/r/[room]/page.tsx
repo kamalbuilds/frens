@@ -7,12 +7,12 @@ type Params = { room: string };
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { room } = await params;
   const n = decodeRoom(room).length;
-  const title = n > 0 ? `Cosign: ${n} traders on one chart` : "Cosign. Your friends call the exit. You sign it.";
+  const title = n > 0 ? `frens: ${n} traders on one chart` : "frens. Trade perps with your frens.";
   return {
     title,
     description: "Every trader in the room, pinned at their entry price on one live Perpl chart.",
-    openGraph: { title, description: "A Cosign room. Every friend's position on one chart, and their calls on yours.", images: [`/api/og/${room}`] },
-    twitter: { card: "summary_large_image", title, description: "A Cosign room.", images: [`/api/og/${room}`] },
+    openGraph: { title, description: "Your frens' Perpl positions on one chart. Call their exits, copy their trades.", images: [`/api/og/${room}`] },
+    twitter: { card: "summary_large_image", title, description: "Trade perps with your frens.", images: [`/api/og/${room}`] },
   };
 }
 
