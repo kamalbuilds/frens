@@ -9,9 +9,9 @@ Seeded 2026-10-01T18:39:45.371Z. Perpl testnet, market 16 (BTC). Mark at seeding
 | cy | 0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD | copied ana's long in one tap |
 | dee | 0x073f475a00ec54172f38864b12b32e7f481607e9 | copied bo's short; has an open call from cy |
 
-Room: https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet&n=b379:ana,9142:bo,4eb6:cy,073f:dee
+Room: https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet&n=b379:ana,9142:bo,4eb6:cy,073f:dee&c=0xc1581071d22d3192a27911a53191b083f166d6b99f4ce2aae95b8d1d1dd751a8,0x850e07e613a53298c1b65df48a477dd2e714b40d00a58e1c4fa68f43388bd2f0,0x4503ba27421f4da209534fc63faf6d1452029e6ac4a031e4b135ea4717a71ad3,0x3627b758d3c5d09f0b444aec37e2aba76227c210f0893ca4834a4b397b651585
 
-Open call for the live demo (dee accepts it): https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet&n=b379:ana,9142:bo,4eb6:cy,073f:dee&s=WyIweDA3M2Y0NzVhMDBlYzU0MTcyZjM4ODY0YjEyYjMyZTdmNDgxNjA3ZTkiLDE2LCJzaG9ydCIsODE3NjUsbnVsbCwiMHg0ZWI2NjRGMUU5YjdjODEyZERGQkM0MTE4MzI2RkUzZTIzYjdEY2VEIiwxNzkwODc5OTg1MzY5XQ
+Open call for the live demo (dee accepts it): https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet&n=b379:ana,9142:bo,4eb6:cy,073f:dee&c=0xc1581071d22d3192a27911a53191b083f166d6b99f4ce2aae95b8d1d1dd751a8,0x850e07e613a53298c1b65df48a477dd2e714b40d00a58e1c4fa68f43388bd2f0,0x4503ba27421f4da209534fc63faf6d1452029e6ac4a031e4b135ea4717a71ad3,0x3627b758d3c5d09f0b444aec37e2aba76227c210f0893ca4834a4b397b651585&s=WyIweDA3M2Y0NzVhMDBlYzU0MTcyZjM4ODY0YjEyYjMyZTdmNDgxNjA3ZTkiLDE2LCJzaG9ydCIsODE3NjUsbnVsbCwiMHg0ZWI2NjRGMUU5YjdjODEyZERGQkM0MTE4MzI2RkUzZTIzYjdEY2VEIiwxNzkwODc5OTg1MzY5XQ
 
 Transactions:
 - tx open short bo: 0xf487928f0b3ed23b50a3ce254e3b60d8458362c33eb9a93a774d5e7a7a80a28d
