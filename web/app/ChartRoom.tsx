@@ -83,12 +83,24 @@ const CHART = {
   down: "#FF6B57",
 };
 
-export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?: string[]; viewerAddress?: string }) {
+export function ChartRoom({
+  initialAccounts,
+  viewerAddress,
+  initialView,
+}: {
+  initialAccounts?: string[];
+  viewerAddress?: string;
+  /// Room links (/r/<room>) open in the saved room; the bare URL defaults to
+  /// the live Perpl view so faces sit on recent candles.
+  initialView?: "live" | "frens";
+}) {
   const [markets, setMarkets] = useState<Load<Market[]>>({ state: "loading" });
   const [marketId, setMarketId] = useState(1);
   const [res, setRes] = useState(3600);
   const [candles, setCandles] = useState<Load<Candle[]>>({ state: "loading" });
   const [room, setRoom] = useState<Load<{ friends: Friend[]; block: string; checked: number }>>({ state: "loading" });
+  const [view, setView] = useState<"live" | "frens">(initialView ?? "live");
+  const [live, setLive] = useState<Load<{ traders: Friend[]; block: string; hours: number }>>({ state: "loading" });
   const [extra, setExtra] = useState<string[]>(initialAccounts ?? []);
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState("");
@@ -135,7 +147,10 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
 
   const market = markets.state === "ready" ? markets.data.find((m) => m.id === marketId) : undefined;
   const decimals = market?.priceDecimals ?? 2;
-  const friends = useMemo(() => (room.state === "ready" ? byPnl(room.data.friends) : []), [room]);
+  const friends = useMemo(() => {
+    if (view === "live") return byPnl(live.state === "ready" ? live.data.traders : []);
+    return byPnl(room.state === "ready" ? room.data.friends : []);
+  }, [room, live, view]);
   const ring = (f: Pick<Friend, "side">) => ringColorFor(f.side);
   const lastClose = candles.state === "ready" && candles.data.length ? candles.data[candles.data.length - 1].close : null;
   const counts = useMemo(() => sideCounts(friends), [friends]);
@@ -189,15 +204,27 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       .catch((e) => setCandles({ state: "error", message: String(e) }));
   }, [marketId, res]);
 
-  // Positions per market and room.
+  // Positions per market and room: the saved My frens view.
   useEffect(() => {
+    if (view !== "frens") return;
     setRoom({ state: "loading" });
     const q = extra.length ? `&accounts=${extra.join(",")}` : "";
     fetch(`/api/positions?market=${marketId}${q}`)
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => setRoom(ok ? { state: "ready", data: body } : { state: "error", message: body.error }))
       .catch((e) => setRoom({ state: "error", message: String(e) }));
-  }, [marketId, extra]);
+  }, [marketId, extra, view]);
+
+  // Recent Perpl openers per market: the default Live on Perpl view, so faces
+  // land on the candles at their entry time.
+  useEffect(() => {
+    if (view !== "live") return;
+    setLive({ state: "loading" });
+    fetch(`/api/live?market=${marketId}&hours=6`)
+      .then(async (r) => ({ ok: r.ok, body: await r.json() }))
+      .then(({ ok, body }) => setLive(ok ? { state: "ready", data: body } : { state: "error", message: body.error }))
+      .catch((e) => setLive({ state: "error", message: String(e) }));
+  }, [marketId, view]);
 
   // The chart itself, created once.
   useEffect(() => {
@@ -310,8 +337,10 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       }
     });
     topIdx.forEach((fi, k) => {
+      // Off-screen faces pin to the right edge, just left of the price scale,
+      // stacked: TP/SL line labels live on the left and stay clear.
       byIndex.set(friends[fi].account, {
-        avatarX: null,
+        avatarX: right - FACE_SIZE / 2 - 8,
         avatarY: FACE_SIZE / 2 + 4 + k * EDGE_STEP,
         mode: "top",
       });
@@ -321,7 +350,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       // owns the bottom ~14% of the pane, so they never cover the bars.
       const base = height * (1 - VOL_STRIP_FRAC) - FACE_SIZE / 2 - 4;
       byIndex.set(friends[fi].account, {
-        avatarX: null,
+        avatarX: right - FACE_SIZE / 2 - 8,
         avatarY: base - k * EDGE_STEP,
         mode: "bottom",
       });
@@ -986,7 +1015,9 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         </h1>
         <p className="text-[14px] text-muted">
           {market?.name ?? ""} perpetual on Perpl
-          {room.state === "ready" && ` · ${friends.length} of ${room.data.checked} traders in the room hold it`}
+          {view === "frens"
+            ? room.state === "ready" && ` · ${friends.length} of ${room.data.checked} traders in the room hold it`
+            : live.state === "ready" && ` · ${friends.length} live traders opened in the last ${live.data.hours}h`}
         </p>
       </section>
 
@@ -1141,21 +1172,25 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
             )}
           </div>
           {/* Edge markers for entries outside the visible range: the fren's
-              face pinned to the top or bottom edge with an arrow and the
-              entry price, so off-screen entries never stretch the scale. */}
+              face pinned to the right edge, just left of the price scale, with
+              an arrow and the entry price, so off-screen entries never stretch
+              the scale and never cover the TP/SL labels on the left. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
               const f = friends.find((x) => x.account === o.account);
-              if (!f || o.mode === "candle") return null;
+              if (!f || o.mode === "candle" || o.avatarX === null) return null;
               const arrow = o.mode === "top" ? "↑" : "↓";
               const dim = active !== null && active !== o.account;
               return (
                 <div
                   key={`edge-${o.account}`}
-                  className="absolute left-3 z-[3]"
-                  style={{ top: o.avatarY - FACE_SIZE / 2 }}
+                  className="absolute z-[3]"
+                  style={{ left: o.avatarX - FACE_SIZE / 2, top: o.avatarY - FACE_SIZE / 2 }}
                 >
                   <div className="flex items-center gap-1.5">
+                    <span className="num pointer-events-none rounded-[6px] bg-raised px-1.5 py-0.5 text-[11px] text-muted">
+                      {arrow} {formatPrice(f.entryPrice, decimals)}
+                    </span>
                     <button
                       onMouseEnter={() => setHover(o.account)}
                       onMouseLeave={() => setHover(null)}
@@ -1168,9 +1203,6 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                     >
                       <Face address={f.account} side={f.side} dim={dim} />
                     </button>
-                    <span className="num pointer-events-none rounded-[6px] bg-raised px-1.5 py-0.5 text-[11px] text-muted">
-                      {arrow} {formatPrice(f.entryPrice, decimals)}
-                    </span>
                   </div>
                 </div>
               );
@@ -1410,16 +1442,42 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
           )}
         </div>
 
-        <aside aria-label="In the room" className="flex flex-col gap-4">
+        <aside aria-label={view === "live" ? "Live on Perpl" : "In the room"} className="flex flex-col gap-4">
+          {/* Trader source: live Perpl openers sit on the candles at entry
+              time; My frens keeps the saved room behaviour. */}
+          <div role="group" aria-label="Trader source" className="flex rounded-[6px] border border-edge">
+            {(
+              [
+                { id: "live", label: "Live on Perpl" },
+                { id: "frens", label: "My frens" },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setView(t.id)}
+                aria-pressed={view === t.id}
+                className={`flex-1 px-3 py-1.5 text-[12px] ${view === t.id ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-baseline justify-between border-b border-edge pb-2">
-            <h2 className="font-[family-name:var(--font-display)] text-[20px] font-bold">In the room</h2>
+            <h2 className="font-[family-name:var(--font-display)] text-[20px] font-bold">{view === "live" ? "Live on Perpl" : "In the room"}</h2>
             <span className="num text-[12px] text-muted">by unrealised PnL</span>
           </div>
-          {room.state === "loading" && <p className="text-[14px] text-muted">Reading positions from the Exchange contract</p>}
-          {room.state === "error" && <p className="text-[14px] text-loss">Could not read positions: {room.message}</p>}
-          {room.state === "ready" && friends.length === 0 && (
+          {view === "frens" && room.state === "loading" && <p className="text-[14px] text-muted">Reading positions from the Exchange contract</p>}
+          {view === "frens" && room.state === "error" && <p className="text-[14px] text-loss">Could not read positions: {room.message}</p>}
+          {view === "frens" && room.state === "ready" && friends.length === 0 && (
             <p className="text-[14px] text-muted">
               Nobody in the room holds {market?.name ?? "this market"} right now. Try another market, or add a trader below.
+            </p>
+          )}
+          {view === "live" && live.state === "loading" && <p className="text-[14px] text-muted">Reading recent Perpl positions</p>}
+          {view === "live" && live.state === "error" && <p className="text-[14px] text-loss">Could not read live positions: {live.message}</p>}
+          {view === "live" && live.state === "ready" && friends.length === 0 && (
+            <p className="text-[14px] text-muted">
+              Nobody opened {market?.name ?? "this market"} on Perpl in the last {live.data.hours} hours. Try another market.
             </p>
           )}
           <ol className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
@@ -1523,6 +1581,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               </>
             )}
           </section>
+          {view === "frens" && (
           <form onSubmit={addTrader} className="mt-auto flex flex-col gap-2 border-t border-edge pt-4">
             <label htmlFor="add" className="text-[13px] font-medium">Add a fren by address</label>
             <div className="flex gap-2">
@@ -1547,13 +1606,16 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
             </div>
             {draftError && <p className="text-[12px] text-loss">{draftError}</p>}
           </form>
+          )}
         </aside>
       </main>
 
       <footer className="mt-6 border-t border-edge pt-3 text-[12px] text-muted">
-        Positions read from Perpl&apos;s Exchange contract{" "}
+        {view === "live" ? "Live traders opened" : "Positions read"} from Perpl&apos;s Exchange contract{" "}
         <span className="num">{EXCHANGE.slice(0, 6)}…{EXCHANGE.slice(-4)}</span> on Monad mainnet
-        {room.state === "ready" && <> at block <span className="num">{Number(room.data.block).toLocaleString("en-US")}</span></>}. Read-only.
+        {view === "live"
+          ? live.state === "ready" && <> at block <span className="num">{Number(live.data.block).toLocaleString("en-US")}</span>, last {live.data.hours} hours</>
+          : room.state === "ready" && <> at block <span className="num">{Number(room.data.block).toLocaleString("en-US")}</span></>}. Read-only.
         Candles from Perpl&apos;s public market data.
       </footer>
     </div>

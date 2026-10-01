@@ -19,5 +19,5 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 export default async function RoomPage({ params }: { params: Promise<Params> }) {
   const { room } = await params;
   const initialAccounts = decodeRoom(room);
-  return <ChartRoom initialAccounts={initialAccounts} />;
+  return <ChartRoom initialAccounts={initialAccounts} initialView="frens" />;
 }
