@@ -1,17 +1,29 @@
-import { NETWORKS, publicClient } from "./perpl";
+import { NETWORKS, publicClient, type Network } from "./perpl";
+import { API_BASES } from "./network";
 import { readPerpMeta } from "./readPosition";
+import type { PublicClient } from "viem";
 
-export const net = NETWORKS.mainnet;
-// MONAD_RPC_URL (server only, never NEXT_PUBLIC): a private endpoint such as QuickNode; the public RPC otherwise.
-export const client = publicClient("mainnet", process.env.MONAD_RPC_URL || undefined);
+/// One server client per network. Mainnet uses MONAD_RPC_URL when set
+/// (QuickNode, server only, never NEXT_PUBLIC); testnet uses the public
+/// testnet RPC. No module-level client: every caller names its network.
+export function clientFor(network: Network): PublicClient {
+  const rpc = network === "mainnet" ? process.env.MONAD_RPC_URL || undefined : undefined;
+  return publicClient(network, rpc);
+}
+
+export function apiBaseFor(network: Network): string {
+  return API_BASES[network];
+}
 
 export type Market = { id: number; name: string; priceDecimals: number; lotDecimals: number };
 
-/// Markets are the intersection of what Perpl's API lists and what our reader knows,
-/// with decimals read from the Exchange contract itself so candles and positions
-/// are scaled by the same number.
-export async function markets(): Promise<Market[]> {
-  const r = await fetch("https://app.perpl.xyz/api/v1/pub/context", { next: { revalidate: 3600 } });
+/// Markets are the intersection of what that network's Perpl API lists and
+/// what our reader knows, with decimals read from that network's Exchange
+/// contract itself so candles and positions are scaled by the same number.
+export async function markets(network: Network): Promise<Market[]> {
+  const net = NETWORKS[network];
+  const client = clientFor(network);
+  const r = await fetch(`${API_BASES[network]}/pub/context`, { next: { revalidate: 3600 } });
   if (!r.ok) throw new Error(`Perpl context returned ${r.status}`);
   const ctx = (await r.json()) as { markets: { id: number; name: string }[] };
   const known = new Set<number>(net.markets);
@@ -27,12 +39,14 @@ export async function markets(): Promise<Market[]> {
 const blockTimes = new Map<string, number>();
 
 /// Entry blocks are fixed history, so their timestamps are cached forever.
-export async function blockTime(block: bigint): Promise<number | null> {
-  const k = block.toString();
+/// The cache key includes the network: block N on testnet is not block N on
+/// mainnet.
+export async function blockTime(network: Network, block: bigint): Promise<number | null> {
+  const k = `${network}:${block.toString()}`;
   const hit = blockTimes.get(k);
   if (hit) return hit;
   try {
-    const b = await client.getBlock({ blockNumber: block });
+    const b = await clientFor(network).getBlock({ blockNumber: block });
     const t = Number(b.timestamp);
     blockTimes.set(k, t);
     return t;

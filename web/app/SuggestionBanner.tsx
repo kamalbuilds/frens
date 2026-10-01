@@ -7,7 +7,8 @@ import { shortName } from "@/lib/chart";
 import { decodeSuggestion, encodeCloseOrder, encodeSuggestion, sizeToLots, toCloseOrder, type Suggestion } from "@/lib/suggest";
 import { buildCounterSuggestion } from "@/lib/ghost";
 import type { Position } from "@/lib/readPosition";
-import { NETWORKS } from "@/lib/perpl";
+import { NETWORKS, type Network } from "@/lib/perpl";
+import { explorerTxUrl } from "@/lib/network";
 import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { acceptOwnerCheck, evaluateSuggestion } from "@/lib/acceptance";
 import { PasskeyWallet } from "./PasskeyWallet";
@@ -18,8 +19,6 @@ type AcceptState =
   | { kind: "sending" }
   | { kind: "ok"; hash: string; orderId: string }
   | { kind: "error"; message: string };
-
-const MONAD_VISION = "https://monadvision.com/tx";
 
 function readRawParam(): string | null {
   if (typeof window === "undefined") return null;
@@ -67,6 +66,7 @@ export function SuggestionBanner({
   friends,
   roomReady,
   marketId,
+  network,
   priceDecimals,
   lotDecimals,
   onSuggestion,
@@ -78,6 +78,7 @@ export function SuggestionBanner({
   friends: Friend[];
   roomReady: boolean;
   marketId: number;
+  network: Network;
   priceDecimals: number;
   lotDecimals: number;
   onSuggestion?: (s: Suggestion | null) => void;
@@ -174,14 +175,14 @@ export function SuggestionBanner({
     if (!suggestion || !ownerFriend) return;
     setAccept({ kind: "sending" });
     try {
-      const connected = await connect();
+      const connected = await connect(network);
       const gate = acceptOwnerCheck(connected, suggestion);
       if (!gate.ok) {
         setAccept({ kind: "error", message: gate.reason });
         return;
       }
       const data = buildCloseOrderData();
-      const hash = await sendExecOrder(NETWORKS.mainnet.exchange, data);
+      const hash = await sendExecOrder(NETWORKS[network].exchange, data, network);
       const orderId = lastCloseOrderId.current;
       setAccept({ kind: "ok", hash, orderId });
       onAcceptedRef.current?.({ orderId, hash });
@@ -203,7 +204,7 @@ export function SuggestionBanner({
         return;
       }
       const data = buildCloseOrderData();
-      const hash = await sendExecOrderWith(passkey, NETWORKS.mainnet.exchange, data);
+      const hash = await sendExecOrderWith(passkey, NETWORKS[network].exchange, data, network);
       const orderId = lastCloseOrderId.current;
       setAccept({ kind: "ok", hash, orderId });
       onAcceptedRef.current?.({ orderId, hash });
@@ -252,7 +253,7 @@ export function SuggestionBanner({
       const counter = buildCounterSuggestion(suggestion, ghostPrice, Date.now());
       const payload = encodeSuggestion(counter);
       const path = typeof window !== "undefined" ? window.location.pathname : "/";
-      const url = `${window.location.origin}${path}?s=${payload}`;
+      const url = `${window.location.origin}${path}?s=${payload}&net=${network}`;
       await navigator.clipboard.writeText(url);
       setCounterCopied(true);
       setTimeout(() => setCounterCopied(false), 2000);
@@ -336,7 +337,7 @@ export function SuggestionBanner({
         )}
         {!accepted && (
           <div className="max-w-[320px]">
-            <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="suggest" />
+            <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="suggest" network={network} />
           </div>
         )}
         {counterReady && !accepted && (
@@ -358,8 +359,8 @@ export function SuggestionBanner({
         {accept.kind === "ok" && (
           <p className="num break-all text-[12px] text-gain">
             Accepted · order {accept.orderId}{" "}
-            <a className="underline" href={`${MONAD_VISION}/${accept.hash}`} target="_blank" rel="noreferrer">
-              View on MonadVision
+            <a className="underline" href={explorerTxUrl(network, accept.hash)} target="_blank" rel="noreferrer">
+              View on the {network === "mainnet" ? "MonadVision" : "testnet"} explorer
             </a>
           </p>
         )}

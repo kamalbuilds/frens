@@ -10,18 +10,29 @@
 // hoisting from a seed and no signing helper: the only two things the copier can
 // do are grant access to an address and have their own wallet sign bytes we
 // built in copy.ts.
-import { createWalletClient, custom, http, toHex, type Address, type EIP1193Provider, type Hex, type LocalAccount } from "viem";
-import { monad } from "viem/chains";
-import { NETWORKS } from "./perpl";
+//
+// Every call takes the selected network and lands the wallet on that chain
+// before signing, sending to that network's Exchange.
+import { createWalletClient, custom, http, toHex, type Address, type Chain, type EIP1193Provider, type Hex, type LocalAccount } from "viem";
+import { monad, monadTestnet } from "viem/chains";
+import { NETWORKS, type Network } from "./perpl";
 
-// The Exchange address in perpl.ts exists only on Monad mainnet, so a wallet
-// pointed anywhere else would send a real order into a chain with no market.
-// viem's Monad definition must stay aligned with perpl.ts NETWORKS.mainnet or
-// this fails loudly at import instead of signing to the wrong chain.
-if (monad.id !== NETWORKS.mainnet.chainId) {
+// viem's chain definitions must stay aligned with perpl.ts or an order could
+// be signed for the wrong chain. This fails loudly at import instead.
+if (monad.id !== NETWORKS.mainnet.chainId || monadTestnet.id !== NETWORKS.testnet.chainId) {
   throw new Error(
-    `viem's Monad chain id ${monad.id} does not match perpl.ts ${NETWORKS.mainnet.chainId}`,
+    `viem chain ids ${monad.id}/${monadTestnet.id} do not match perpl.ts ${NETWORKS.mainnet.chainId}/${NETWORKS.testnet.chainId}`,
   );
+}
+
+export const CHAINS: Record<Network, Chain> = { mainnet: monad, testnet: monadTestnet };
+
+export function chainFor(network: Network): Chain {
+  return CHAINS[network];
+}
+
+function chainLabel(network: Network): string {
+  return network === "mainnet" ? "Monad mainnet" : "Monad testnet";
 }
 
 // EIP-1193 error 4902 is "chain is not known to this wallet", the one failure
@@ -43,13 +54,14 @@ function injectedProvider(): InjectedProvider {
   return eth;
 }
 
-function addChainParams() {
+function addChainParams(network: Network) {
+  const chain = chainFor(network);
   return {
-    chainId: toHex(monad.id),
-    chainName: monad.name,
-    nativeCurrency: monad.nativeCurrency,
-    rpcUrls: [NETWORKS.mainnet.rpc],
-    blockExplorerUrls: monad.blockExplorers?.default ? [monad.blockExplorers.default.url] : [],
+    chainId: toHex(chain.id),
+    chainName: chain.name,
+    nativeCurrency: chain.nativeCurrency,
+    rpcUrls: [NETWORKS[network].rpc],
+    blockExplorerUrls: chain.blockExplorers?.default ? [chain.blockExplorers.default.url] : [],
   };
 }
 
@@ -62,37 +74,40 @@ async function currentChainId(eth: InjectedProvider): Promise<number> {
   return Number(await eth.request({ method: "eth_chainId" }));
 }
 
-// Put the wallet on Monad mainnet, adding the chain first if the wallet has never
-// heard of it. The chain id is re-read afterwards instead of assumed, because
-// a wallet that accepted wallet_addEthereumChain but stayed on the old chain
-// would otherwise sign an order against an RPC that cannot see the Exchange.
-async function ensureMonad(eth: InjectedProvider): Promise<void> {
-  if ((await currentChainId(eth)) === monad.id) return;
+// Put the wallet on the selected chain, adding the chain first if the wallet
+// has never heard of it. The chain id is re-read afterwards instead of
+// assumed, because a wallet that accepted wallet_addEthereumChain but stayed
+// on the old chain would otherwise sign an order against an RPC that cannot
+// see the Exchange.
+async function ensureNetwork(eth: InjectedProvider, network: Network): Promise<void> {
+  const chain = chainFor(network);
+  if ((await currentChainId(eth)) === chain.id) return;
   try {
-    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: toHex(monad.id) }] });
+    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: toHex(chain.id) }] });
   } catch (e) {
     if (chainIdOf(e) !== CHAIN_NOT_ADDED) {
-      throw new Error(`the wallet refused to switch to Monad mainnet (chain ${monad.id}): ${String(e)}`);
+      throw new Error(`the wallet refused to switch to ${chainLabel(network)} (chain ${chain.id}): ${String(e)}`);
     }
-    await eth.request({ method: "wallet_addEthereumChain", params: [addChainParams()] });
+    await eth.request({ method: "wallet_addEthereumChain", params: [addChainParams(network)] });
   }
   const now = await currentChainId(eth);
-  if (now !== monad.id) {
-    throw new Error(`the wallet is on chain ${now} after adding Monad mainnet; switch to chain ${monad.id} and try again`);
+  if (now !== chain.id) {
+    throw new Error(`the wallet is on chain ${now} after adding ${chainLabel(network)}; switch to chain ${chain.id} and try again`);
   }
 }
 
-// Ask the wallet for an account and land on Monad mainnet. Returns the address
-// the copier will trade from. Every call prompts the wallet, so a caller that
-// already holds an address should not need this; sendExecOrder reuses it only
-// because it cannot be handed an account without widening its signature.
-export async function connect(): Promise<Address> {
+// Ask the wallet for an account and land on the selected chain. Returns the
+// address the copier will trade from. Every call prompts the wallet, so a
+// caller that already holds an address should not need this; sendExecOrder
+// reuses it only because it cannot be handed an account without widening its
+// signature.
+export async function connect(network: Network = "testnet"): Promise<Address> {
   const eth = injectedProvider();
   const accounts = await eth.request({ method: "eth_requestAccounts" });
   if (!Array.isArray(accounts) || accounts.length === 0) {
     throw new Error("the wallet returned no accounts; unlock it and approve the connection");
   }
-  await ensureMonad(eth);
+  await ensureNetwork(eth, network);
   return accounts[0];
 }
 
@@ -101,27 +116,32 @@ export async function connect(): Promise<Address> {
 //
 // The account and chain are resolved first, so the signature is requested only
 // once the order can actually land: viem's sendTransaction also re-reads
-// eth_chainId and refuses to send from a wallet that moved off Monad between
-// this call and the signature prompt. That check is a pre-flight read, not an
-// atomic one, because viem does not put chainId in the eth_sendTransaction
-// params, so the wallet cannot reject a chain switch made while its own prompt
-// is open. The order is a plain swap in that prompt and the copier can see and
-// refuse it. Returns a hash the caller must still wait on for a receipt before
-// claiming the position was opened.
-export async function sendExecOrder(exchange: Address, data: Hex): Promise<Hex> {
-  const account = await connect();
+// eth_chainId and refuses to send from a wallet that moved off the selected
+// chain between this call and the signature prompt. That check is a pre-flight
+// read, not an atomic one, because viem does not put chainId in the
+// eth_sendTransaction params, so the wallet cannot reject a chain switch made
+// while its own prompt is open. The order is a plain swap in that prompt and
+// the copier can see and refuse it. Returns a hash the caller must still wait
+// on for a receipt before claiming the position was opened.
+export async function sendExecOrder(exchange: Address, data: Hex, network: Network = "testnet"): Promise<Hex> {
+  const account = await connect(network);
   const eth = injectedProvider();
-  const client = createWalletClient({ account, chain: monad, transport: custom(eth) });
+  const client = createWalletClient({ account, chain: chainFor(network), transport: custom(eth) });
   return client.sendTransaction({ account, to: exchange, data });
 }
 
 // Passkey sibling of sendExecOrder: same execOrder calldata, but signed by a
 // Mera passkey LocalAccount (lib/passkey.ts) instead of an injected wallet.
-// The client points at the public Monad mainnet RPC literally, never at the
+// The client points at that network's public RPC literally, never at the
 // server-only MONAD_RPC_URL, so this stays callable from browser code. Returns
 // the broadcast hash; the caller must still wait on a receipt before claiming
 // the position opened.
-export async function sendExecOrderWith(account: LocalAccount, exchange: Address, data: Hex): Promise<Hex> {
-  const client = createWalletClient({ account, chain: monad, transport: http("https://rpc.monad.xyz") });
+export async function sendExecOrderWith(
+  account: LocalAccount,
+  exchange: Address,
+  data: Hex,
+  network: Network = "testnet",
+): Promise<Hex> {
+  const client = createWalletClient({ account, chain: chainFor(network), transport: http(NETWORKS[network].rpc) });
   return client.sendTransaction({ account, to: exchange, data });
 }
