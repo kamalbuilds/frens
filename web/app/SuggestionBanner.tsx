@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import type { Friend } from "@/lib/chart";
 import { shortName } from "@/lib/chart";
-import { decodeSuggestion, encodeCloseOrder, sizeToLots, toCloseOrder, type Suggestion } from "@/lib/suggest";
+import { decodeSuggestion, encodeCloseOrder, encodeSuggestion, sizeToLots, toCloseOrder, type Suggestion } from "@/lib/suggest";
+import { buildCounterSuggestion } from "@/lib/ghost";
 import type { Position } from "@/lib/readPosition";
 import { NETWORKS } from "@/lib/perpl";
 import { connect, sendExecOrder } from "@/lib/wallet";
@@ -13,7 +14,7 @@ import { acceptOwnerCheck, evaluateSuggestion } from "@/lib/acceptance";
 type AcceptState =
   | { kind: "idle" }
   | { kind: "sending" }
-  | { kind: "ok"; hash: string }
+  | { kind: "ok"; hash: string; orderId: string }
   | { kind: "error"; message: string };
 
 const MONAD_VISION = "https://monadvision.com/tx";
@@ -67,6 +68,10 @@ export function SuggestionBanner({
   priceDecimals,
   lotDecimals,
   onSuggestion,
+  ghostPrice,
+  onAcceptedChange,
+  acceptRequest,
+  passRequest,
 }: {
   friends: Friend[];
   roomReady: boolean;
@@ -74,11 +79,16 @@ export function SuggestionBanner({
   priceDecimals: number;
   lotDecimals: number;
   onSuggestion?: (s: Suggestion | null) => void;
+  ghostPrice?: number | null;
+  onAcceptedChange?: (info: { orderId: string; hash: string } | null) => void;
+  acceptRequest?: number;
+  passRequest?: number;
 }) {
   const [raw, setRaw] = useState<string | null>(null);
   const [seen, setSeen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [accept, setAccept] = useState<AcceptState>({ kind: "idle" });
+  const [counterCopied, setCounterCopied] = useState(false);
 
   useEffect(() => {
     setRaw(readRawParam());
@@ -102,20 +112,121 @@ export function SuggestionBanner({
   }, [seen, raw, friends, marketId, priceDecimals, lotDecimals]);
 
   const validSuggestion = evaluated && evaluated.status === "valid" ? evaluated.suggestion : null;
+  const suggestion = evaluated && evaluated.status === "valid" ? evaluated.suggestion : null;
+  const ownerFriend =
+    suggestion !== null
+      ? friends.find((x) => x.account.toLowerCase() === suggestion.owner.toLowerCase()) ?? null
+      : null;
+
+  // Latest-closure refs for the chart signal effects below. They are only
+  // written inside the sync effect after the function declarations, never
+  // during render.
+  const onSuggestionRef = useRef(onSuggestion);
+  const onAcceptedRef = useRef(onAcceptedChange);
+  const passRef = useRef(pass);
+  const acceptRef = useRef(doAccept);
 
   useEffect(() => {
-    onSuggestion?.(validSuggestion);
+    onSuggestionRef.current?.(validSuggestion);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [validSuggestion?.owner, validSuggestion?.price, validSuggestion?.market, validSuggestion?.from]);
 
-  if (!seen || raw === null || dismissed || evaluated === null) return null;
+  // A fresh suggestion link resets the accept and counter state.
+  useEffect(() => {
+    setAccept({ kind: "idle" });
+    setCounterCopied(false);
+    onAcceptedRef.current?.(null);
+  }, [validSuggestion?.owner, validSuggestion?.price, validSuggestion?.market, validSuggestion?.from]);
 
-  function dismiss() {
+  function pass() {
     setDismissed(true);
     setAccept({ kind: "idle" });
+    setCounterCopied(false);
+    onAcceptedRef.current?.(null);
     removeParam();
-    onSuggestion?.(null);
+    onSuggestionRef.current?.(null);
   }
+
+  async function doAccept() {
+    if (!suggestion || !ownerFriend) return;
+    setAccept({ kind: "sending" });
+    try {
+      const connected = await connect();
+      const gate = acceptOwnerCheck(connected, suggestion);
+      if (!gate.ok) {
+        setAccept({ kind: "error", message: gate.reason });
+        return;
+      }
+      const fullSizeLots = sizeToLots(ownerFriend.size, lotDecimals);
+      if (fullSizeLots <= 0n) {
+        setAccept({ kind: "error", message: "The owner position is under one whole lot, so there is nothing to close." });
+        return;
+      }
+      const order = toCloseOrder(
+        { ...suggestion, sizeLots: undefined },
+        { priceDecimals: BigInt(priceDecimals), lotDecimals: BigInt(lotDecimals) },
+        { fullSizeLots },
+      );
+      const data = encodeCloseOrder(order);
+      const hash = await sendExecOrder(NETWORKS.mainnet.exchange, data);
+      const orderId = order.orderDescId.toString();
+      setAccept({ kind: "ok", hash, orderId });
+      onAcceptedRef.current?.({ orderId, hash });
+    } catch (e) {
+      setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  // Sync the latest closures after every render so the signal effects below
+  // always call fresh code.
+  useEffect(() => {
+    onSuggestionRef.current = onSuggestion;
+    onAcceptedRef.current = onAcceptedChange;
+    passRef.current = pass;
+    acceptRef.current = doAccept;
+  });
+
+  // The chart's own ghost-line buttons resolve through the same flow: the
+  // chart only sends a signal, the banner still owns the wallet call and the
+  // URL param, so Accept stays one code path and Pass stays one code path.
+  const lastAcceptReq = useRef(acceptRequest ?? 0);
+  useEffect(() => {
+    const req = acceptRequest ?? 0;
+    if (req > lastAcceptReq.current) {
+      lastAcceptReq.current = req;
+      void acceptRef.current();
+    } else {
+      lastAcceptReq.current = req;
+    }
+  }, [acceptRequest]);
+
+  const lastPassReq = useRef(passRequest ?? 0);
+  useEffect(() => {
+    const req = passRequest ?? 0;
+    if (req > lastPassReq.current) {
+      lastPassReq.current = req;
+      passRef.current();
+    } else {
+      lastPassReq.current = req;
+    }
+  }, [passRequest]);
+
+  async function sendCounter() {
+    if (!suggestion || ghostPrice === null || ghostPrice === undefined) return;
+    try {
+      const counter = buildCounterSuggestion(suggestion, ghostPrice, Date.now());
+      const payload = encodeSuggestion(counter);
+      const path = typeof window !== "undefined" ? window.location.pathname : "/";
+      const url = `${window.location.origin}${path}?s=${payload}`;
+      await navigator.clipboard.writeText(url);
+      setCounterCopied(true);
+      setTimeout(() => setCounterCopied(false), 2000);
+    } catch {
+      setCounterCopied(false);
+    }
+  }
+
+  if (!seen || raw === null || dismissed || evaluated === null) return null;
 
   // The link decoded but the room is still reading positions: do not call it
   // stale yet, or every shared link flashes a stale notice on load.
@@ -141,47 +252,24 @@ export function SuggestionBanner({
         <p className="text-[12px] text-muted">{evaluated.reason}</p>
         <button
           type="button"
-          onClick={dismiss}
+          onClick={pass}
           className="rounded-[6px] border border-ink px-3 py-1.5 text-[12px] font-medium hover:bg-rule active:scale-[0.97]"
         >
-          Dismiss
+          Pass
         </button>
       </div>
     );
   }
 
-  if (evaluated.status === "empty") return null;
+  if (evaluated.status === "empty" || suggestion === null) return null;
 
-  const suggestion = evaluated.suggestion;
-  const ownerFriend = friends.find((x) => x.account.toLowerCase() === suggestion.owner.toLowerCase()) ?? null;
-
-  async function doAccept() {
-    if (!ownerFriend) return;
-    setAccept({ kind: "sending" });
-    try {
-      const connected = await connect();
-      const gate = acceptOwnerCheck(connected, suggestion);
-      if (!gate.ok) {
-        setAccept({ kind: "error", message: gate.reason });
-        return;
-      }
-      const fullSizeLots = sizeToLots(ownerFriend.size, lotDecimals);
-      if (fullSizeLots <= 0n) {
-        setAccept({ kind: "error", message: "The owner position is under one whole lot, so there is nothing to close." });
-        return;
-      }
-      const order = toCloseOrder(
-        { ...suggestion, sizeLots: undefined },
-        { priceDecimals: BigInt(priceDecimals), lotDecimals: BigInt(lotDecimals) },
-        { fullSizeLots },
-      );
-      const data = encodeCloseOrder(order);
-      const hash = await sendExecOrder(NETWORKS.mainnet.exchange, data);
-      setAccept({ kind: "ok", hash });
-    } catch (e) {
-      setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
-    }
-  }
+  const counterReady =
+    ghostPrice !== null &&
+    ghostPrice !== undefined &&
+    Number.isFinite(ghostPrice) &&
+    ghostPrice > 0 &&
+    ghostPrice !== suggestion.price;
+  const accepted = accept.kind === "ok";
 
   return (
     <div className="border border-ink bg-[var(--surface)] px-3 py-2.5" role="status" aria-label={`Suggestion from ${shortName(suggestion.from)}`}>
@@ -189,24 +277,35 @@ export function SuggestionBanner({
         {evaluated.text} <span className="text-muted">PnL from the room position.</span>
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
+        {!accepted && (
+          <button
+            type="button"
+            onClick={doAccept}
+            disabled={accept.kind === "sending"}
+            className="rounded-[6px] bg-ink px-3 py-1.5 text-[13px] font-medium text-surface active:scale-[0.97] disabled:opacity-40"
+          >
+            {accept.kind === "sending" ? "Waiting for wallet" : "Accept"}
+          </button>
+        )}
+        {counterReady && !accepted && (
+          <button
+            type="button"
+            onClick={sendCounter}
+            className="rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
+          >
+            {counterCopied ? "Copied" : "Send counter link"}
+          </button>
+        )}
         <button
           type="button"
-          onClick={doAccept}
-          disabled={accept.kind === "sending"}
-          className="rounded-[6px] bg-ink px-3 py-1.5 text-[13px] font-medium text-surface active:scale-[0.97] disabled:opacity-40"
-        >
-          {accept.kind === "sending" ? "Waiting for wallet" : "Accept"}
-        </button>
-        <button
-          type="button"
-          onClick={dismiss}
+          onClick={pass}
           className="rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
         >
-          Dismiss
+          Pass
         </button>
         {accept.kind === "ok" && (
           <p className="num break-all text-[12px]" style={{ color: "var(--gain)" }}>
-            Sent.{" "}
+            Accepted · order {accept.orderId}{" "}
             <a className="underline" href={`${MONAD_VISION}/${accept.hash}`} target="_blank" rel="noreferrer">
               View on MonadVision
             </a>
