@@ -13,7 +13,8 @@ export async function GET(req: Request) {
   const extra = (u.searchParams.get("accounts") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const bad = extra.filter((a) => !isAddress(a));
   if (bad.length) return Response.json({ error: `not an address: ${bad.join(", ")}` }, { status: 400 });
-  const accounts = Array.from(new Set([...DEFAULT_ROOM, ...extra].map((a) => a.toLowerCase())));
+  // A room shows only its members; the default list is for the page with no room.
+  const accounts = Array.from(new Set((extra.length ? extra : DEFAULT_ROOM).map((a) => a.toLowerCase())));
   const client = clientFor(net);
   try {
     const block = await client.getBlockNumber();
