@@ -6,6 +6,7 @@
 // src/trade.ts proved on a testnet fork (CloseLong/CloseShort, post-only GTC,
 // maxNegPnlCollatBPS non-zero).
 import { decodeFunctionData, encodeFunctionData, type Address, type Hex } from "viem";
+import { suggestionDescId } from "./callbook";
 import { exchangeAbi } from "./perpl";
 import type { PerpMeta, Position } from "./readPosition";
 
@@ -241,9 +242,11 @@ export function validateSuggestion(
 // arguments trade.ts uses: CloseLong/CloseShort by side, post-only GTC
 // (expiry 0, no IOC/FOK flags), full or partial lots, and the proven 3x
 // leverage field plus the non-zero 1000 BPS collateral buffer without which
-// the order reverts. orderDescId defaults to the suggestion timestamp so
-// retries of the same suggestion reuse the id instead of stacking duplicates;
-// pass an explicit id to place a fresh order.
+// the order reverts. orderDescId defaults to suggestionDescId(s.from,
+// s.createdAt), which packs the suggester into the top 160 bits so the
+// callbook can rebuild the suggester's on-chain record from OrderRequest
+// logs; retries of the same suggestion reuse the id instead of stacking
+// duplicates; pass an explicit id to place a fresh order.
 export function toCloseOrder(
   s: Suggestion,
   meta: Pick<PerpMeta, "priceDecimals" | "lotDecimals">,
@@ -257,7 +260,7 @@ export function toCloseOrder(
     throw new Error("suggestion carries no size; pass fullSizeLots to close the whole position");
   }
   return {
-    orderDescId: opts.orderDescId ?? BigInt(s.createdAt),
+    orderDescId: opts.orderDescId ?? suggestionDescId(s.from, s.createdAt),
     perpId: BigInt(s.market),
     orderType: s.side === "long" ? CLOSE_LONG : CLOSE_SHORT,
     orderId: 0n,
