@@ -123,7 +123,10 @@ export function decideRoomKind(opts: {
 }): "call-accepted" | "order" | null {
   const set = memberSet(opts.members);
   const ownerIn = set.has(opts.owner.toLowerCase());
-  const callerIn = opts.caller !== null && set.has(opts.caller.toLowerCase());
+  // A caller equal to the owner is the trader's own order (copy orders carry the copied fren, own opens
+  // carry the trader), not a call someone else made.
+  const selfCall = opts.caller !== null && opts.caller.toLowerCase() === opts.owner.toLowerCase();
+  const callerIn = !selfCall && opts.caller !== null && set.has(opts.caller.toLowerCase());
   if (ownerIn && callerIn) return "call-accepted";
   if (ownerIn) return "order";
   if (callerIn) return "call-accepted";
@@ -215,6 +218,29 @@ export type RoomFeedOpts = {
   createSocket?: (url: string) => WebSocket;
 };
 
+/// accountId -> address for the room members, one getAccountByAddr per member. Members without a Perpl
+/// account are left out; a failed read is retried on the next members change instead of being cached.
+async function resolveMemberIds(net: Network, members: Address[]): Promise<Map<string, Address>> {
+  const client = publicClient(net);
+  const out = new Map<string, Address>();
+  await Promise.all(
+    members.map(async (addr) => {
+      try {
+        const acc = (await client.readContract({
+          address: NETWORKS[net].exchange,
+          abi: officialAbi,
+          functionName: "getAccountByAddr",
+          args: [addr],
+        })) as unknown as { accountId?: bigint };
+        if (acc?.accountId && acc.accountId > 0n) out.set(acc.accountId.toString(), addr);
+      } catch {
+        // no Perpl account yet
+      }
+    }),
+  );
+  return out;
+}
+
 const accountCache = new Map<string, Address | null>();
 
 export function clearRoomAccountCache(): void {
@@ -256,14 +282,36 @@ export function subscribeRoomFeed(opts: RoomFeedOpts): () => void {
   const membersOf = (): readonly string[] =>
     typeof opts.members === "function" ? opts.members() : opts.members;
 
+  let idsKey = "";
+  let ids: Promise<Map<string, Address>> = Promise.resolve(new Map());
+  const memberIds = (): Promise<Map<string, Address>> => {
+    const members = membersOf().map((m) => m.toLowerCase()).sort();
+    const key = members.join(",");
+    if (key !== idsKey) {
+      idsKey = key;
+      ids = resolveMemberIds(opts.net, members as Address[]);
+    }
+    return ids;
+  };
+
+  // monadLogs pushes each log once per commit stage (Proposed, Voted, Finalized): emit it once.
+  const seen = new Set<string>();
   const handleLog = async (log: RoomLog) => {
     if (closed) return;
+    const key = `${log.txHash ?? ""}:${log.data.slice(0, 200)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (seen.size > 5000) seen.clear();
     const decoded = decodeRoomLog(log.data, log.topics);
     if (!decoded) return;
-    const resolve = opts.resolveAccount ?? ((id: bigint) => defaultResolveAccount(opts.net, id));
+    // Match against the room's own account ids, resolved once per member. Resolving every log's account
+    // over RPC (about 70 logs a second on testnet) got rate-limited and cached the failures as "no owner",
+    // so no room event ever matched (browser test 2026-10-02).
     let owner: Address | null;
     try {
-      owner = await resolve(decoded.accountId);
+      owner = opts.resolveAccount
+        ? await opts.resolveAccount(decoded.accountId)
+        : (await memberIds()).get(decoded.accountId.toString()) ?? null;
     } catch {
       return;
     }

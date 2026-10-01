@@ -171,3 +171,10 @@ describe("extractRoomLog", () => {
     expect(extractRoomLog({ jsonrpc: "2.0", id: 1, result: "0x1" })).toBeNull();
   });
 });
+
+describe("decideRoomKind self calls", () => {
+  it("treats a caller equal to the owner as the trader's own order", () => {
+    const a = "0xb3790F7EBa6bd875714bBeD7e3f9F303871F0CCC";
+    expect(decideRoomKind({ owner: a, caller: a, members: [a] })).toBe("order");
+  });
+});
