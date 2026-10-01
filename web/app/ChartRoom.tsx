@@ -24,6 +24,8 @@ import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, 
 import { encodeCopyOrder, toCopyOrder } from "@/lib/copy";
 import { encodeRoom } from "@/lib/roomlink";
 import { encodeSuggestion, type Suggestion } from "@/lib/suggest";
+import { NETWORKS, type Network } from "@/lib/perpl";
+import { explorerTxUrl, roomLink } from "@/lib/network";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
 import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { SuggestionBanner } from "./SuggestionBanner";
@@ -40,8 +42,7 @@ const TIMEFRAMES = [
   { label: "4h", res: 14400 },
   { label: "1d", res: 86400 },
 ];
-const EXCHANGE = "0x34B6552d57a35a1D042CcAe1951BD1C370112a6F";
-const MONAD_VISION = "https://monadvision.com/tx";
+const DEFAULT_MARKET: Record<Network, number> = { mainnet: 1, testnet: 16 };
 // Bottom ~14% of the pane is the volume strip: bottom-pinned faces stack
 // upward from just above it, never on top of it.
 const VOL_STRIP_FRAC = 0.14;
@@ -87,15 +88,21 @@ export function ChartRoom({
   initialAccounts,
   viewerAddress,
   initialView,
+  initialNet,
 }: {
   initialAccounts?: string[];
   viewerAddress?: string;
   /// Room links (/r/<room>) open in the saved room; the bare URL defaults to
   /// the live Perpl view so faces sit on recent candles.
   initialView?: "live" | "frens";
+  /// Network from the URL (?net=mainnet or ?net=testnet, default testnet),
+  /// read server side from searchParams so the first paint is already on the
+  /// right deployment.
+  initialNet?: Network;
 }) {
+  const [net, setNet] = useState<Network>(initialNet ?? "testnet");
   const [markets, setMarkets] = useState<Load<Market[]>>({ state: "loading" });
-  const [marketId, setMarketId] = useState(1);
+  const [marketId, setMarketId] = useState<number>(() => DEFAULT_MARKET[initialNet ?? "testnet"]);
   const [res, setRes] = useState(3600);
   const [candles, setCandles] = useState<Load<Candle[]>>({ state: "loading" });
   const [room, setRoom] = useState<Load<{ friends: Friend[]; block: string; checked: number }>>({ state: "loading" });
@@ -146,6 +153,12 @@ export function ChartRoom({
   const dragging = useRef<SuggestKind | "ghost" | null>(null);
 
   const market = markets.state === "ready" ? markets.data.find((m) => m.id === marketId) : undefined;
+  const EXCHANGE = NETWORKS[net].exchange;
+  const chainName = net === "mainnet" ? "Monad mainnet" : "Monad testnet";
+  // The market list belongs to the network: while the selected market is not
+  // on this deployment the per-market fetches wait. The markets effect moves
+  // the selection onto a listed market instead of erroring.
+  const marketKnown = markets.state !== "ready" || markets.data.some((m) => m.id === marketId);
   const decimals = market?.priceDecimals ?? 2;
   const friends = useMemo(() => {
     if (view === "live") return byPnl(live.state === "ready" ? live.data.traders : []);
@@ -187,44 +200,55 @@ export function ChartRoom({
       ? ghostLabelText({ from: incoming.from, price: ghostPrice, pnl: ghostPnl, priceDecimals: decimals })
       : "";
 
-  // Markets once.
+  // Markets per network. When the selection is not on this deployment (for
+  // example market 1 after switching to testnet), move it onto the first
+  // listed market instead of fetching an unknown market.
   useEffect(() => {
-    fetch("/api/markets")
+    setMarkets({ state: "loading" });
+    fetch(`/api/markets?net=${net}`)
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
-      .then(({ ok, body }) => setMarkets(ok ? { state: "ready", data: body.markets } : { state: "error", message: body.error }))
+      .then(({ ok, body }) => {
+        if (!ok) {
+          setMarkets({ state: "error", message: body.error });
+          return;
+        }
+        setMarkets({ state: "ready", data: body.markets });
+        setMarketId((cur) => (body.markets.some((m: Market) => m.id === cur) ? cur : (body.markets[0]?.id ?? cur)));
+      })
       .catch((e) => setMarkets({ state: "error", message: String(e) }));
-  }, []);
+  }, [net]);
 
-  // Candles per market and timeframe.
+  // Candles per market, timeframe and network.
   useEffect(() => {
+    if (!marketKnown) return;
     setCandles({ state: "loading" });
-    fetch(`/api/candles?market=${marketId}&res=${res}`)
+    fetch(`/api/candles?market=${marketId}&res=${res}&net=${net}`)
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => setCandles(ok ? { state: "ready", data: body.candles } : { state: "error", message: body.error }))
       .catch((e) => setCandles({ state: "error", message: String(e) }));
-  }, [marketId, res]);
+  }, [marketId, res, net, marketKnown]);
 
-  // Positions per market and room: the saved My frens view.
+  // Positions per market, room and network: the saved My frens view.
   useEffect(() => {
-    if (view !== "frens") return;
+    if (view !== "frens" || !marketKnown) return;
     setRoom({ state: "loading" });
     const q = extra.length ? `&accounts=${extra.join(",")}` : "";
-    fetch(`/api/positions?market=${marketId}${q}`)
+    fetch(`/api/positions?market=${marketId}${q}&net=${net}`)
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => setRoom(ok ? { state: "ready", data: body } : { state: "error", message: body.error }))
       .catch((e) => setRoom({ state: "error", message: String(e) }));
-  }, [marketId, extra, view]);
+  }, [marketId, extra, view, net, marketKnown]);
 
-  // Recent Perpl openers per market: the default Live on Perpl view, so faces
+  // Recent Perpl openers per market and network: the default Live on Perpl view, so faces
   // land on the candles at their entry time.
   useEffect(() => {
-    if (view !== "live") return;
+    if (view !== "live" || !marketKnown) return;
     setLive({ state: "loading" });
-    fetch(`/api/live?market=${marketId}&hours=6`)
+    fetch(`/api/live?market=${marketId}&hours=6&net=${net}`)
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => setLive(ok ? { state: "ready", data: body } : { state: "error", message: body.error }))
       .catch((e) => setLive({ state: "error", message: String(e) }));
-  }, [marketId, view]);
+  }, [marketId, view, net, marketKnown]);
 
   // The chart itself, created once.
   useEffect(() => {
@@ -802,8 +826,8 @@ export function ChartRoom({
     if (!suggestPayload || typeof window === "undefined") return;
     try {
       const url = roomCodeForSuggest
-        ? `${window.location.origin}/r/${roomCodeForSuggest}?s=${suggestPayload}`
-        : `${window.location.origin}/?s=${suggestPayload}`;
+        ? `${window.location.origin}/r/${roomCodeForSuggest}?s=${suggestPayload}&net=${net}`
+        : `${window.location.origin}/?s=${suggestPayload}&net=${net}`;
       await navigator.clipboard.writeText(url);
       setCopiedSuggest(true);
       setTimeout(() => setCopiedSuggest(false), 2000);
@@ -839,8 +863,8 @@ export function ChartRoom({
     setCopyResult({ kind: "sending" });
     try {
       const data = copyOrderData();
-      await connect();
-      const hash = await sendExecOrder(EXCHANGE as Address, data);
+      await connect(net);
+      const hash = await sendExecOrder(EXCHANGE, data, net);
       setCopyResult({ kind: "ok", hash });
     } catch (e) {
       setCopyResult({ kind: "error", message: e instanceof Error ? e.message : String(e) });
@@ -855,7 +879,7 @@ export function ChartRoom({
     setCopyResult({ kind: "sending" });
     try {
       const data = copyOrderData();
-      const hash = await sendExecOrderWith(passkey, EXCHANGE as Address, data);
+      const hash = await sendExecOrderWith(passkey, EXCHANGE, data, net);
       setCopyResult({ kind: "ok", hash });
     } catch (e) {
       setCopyResult({ kind: "error", message: e instanceof Error ? e.message : String(e) });
@@ -961,11 +985,25 @@ export function ChartRoom({
     try {
       const code = encodeRoom(extra);
       if (!code) return;
-      await navigator.clipboard.writeText(`${window.location.origin}/r/${code}`);
+      await navigator.clipboard.writeText(`${window.location.origin}${roomLink(code, net)}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+    }
+  }
+
+  // Switch deployments: the URL owns the network so a refresh, a room link or
+  // a suggestion link stays on the same deployment.
+  function switchNet(next: Network) {
+    if (next === net) return;
+    setNet(next);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("net", next);
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+      // State still switches even if the URL cannot be rewritten.
     }
   }
 
@@ -976,10 +1014,29 @@ export function ChartRoom({
     <div className="mx-auto flex min-h-[100dvh] max-w-[1480px] flex-col px-4 pb-6 md:px-8">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-edge py-5">
         <div>
-          <p className="font-[family-name:var(--font-display)] text-[22px] font-bold tracking-tight">frens</p>
+          <p className="font-[family-name:var(--font-display)] text-[22px] font-bold tracking-tight">
+            frens
+            {net === "testnet" && (
+              <span className="num ml-2 rounded-[6px] border border-edge bg-raised px-1.5 py-0.5 align-middle text-[11px] font-medium text-muted">
+                testnet
+              </span>
+            )}
+          </p>
           <p className="text-[14px] text-muted">Trade perps with your frens.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="Network" className="flex rounded-[6px] border border-edge">
+            {(["testnet", "mainnet"] as const).map((n) => (
+              <button
+                key={n}
+                onClick={() => switchNet(n)}
+                aria-pressed={n === net}
+                className={`px-3 py-1.5 text-[12px] ${n === net ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"}`}
+              >
+                {n === "testnet" ? "Testnet" : "Mainnet"}
+              </button>
+            ))}
+          </div>
           <div role="group" aria-label="Market" className="flex rounded-[6px] border border-edge">
             {markets.state === "ready" &&
               markets.data.map((m) => (
@@ -1063,6 +1120,7 @@ export function ChartRoom({
           friends={friends}
           roomReady={room.state === "ready"}
           marketId={marketId}
+          network={net}
           priceDecimals={decimals}
           lotDecimals={market?.lotDecimals ?? 0}
           onSuggestion={handleSuggestion}
@@ -1358,7 +1416,7 @@ export function ChartRoom({
                 {copyResult.kind === "sending" ? "Waiting for wallet" : "Copy with wallet"}
               </button>
               <div className="mt-2">
-                <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="copy" />
+                <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="copy" network={net} />
               </div>
               {passkey && passkeyFunded && (
                 <button
@@ -1373,7 +1431,7 @@ export function ChartRoom({
               )}
               {copyResult.kind === "ok" && (
                 <p className="num mt-2 break-all text-[12px] text-gain">
-                  Sent. <a className="underline" href={`${MONAD_VISION}/${copyResult.hash}`} target="_blank" rel="noreferrer">View on MonadVision</a>
+                  Sent. <a className="underline" href={explorerTxUrl(net, copyResult.hash)} target="_blank" rel="noreferrer">View on the {net === "mainnet" ? "MonadVision" : "testnet"} explorer</a>
                 </p>
               )}
               {copyResult.kind === "error" && (
@@ -1613,7 +1671,7 @@ export function ChartRoom({
 
       <footer className="mt-6 border-t border-edge pt-3 text-[12px] text-muted">
         {view === "live" ? "Live traders opened" : "Positions read"} from Perpl&apos;s Exchange contract{" "}
-        <span className="num">{EXCHANGE.slice(0, 6)}…{EXCHANGE.slice(-4)}</span> on Monad mainnet
+        <span className="num">{EXCHANGE.slice(0, 6)}…{EXCHANGE.slice(-4)}</span> on {chainName}
         {view === "live"
           ? live.state === "ready" && <> at block <span className="num">{Number(live.data.block).toLocaleString("en-US")}</span>, last {live.data.hours} hours</>
           : room.state === "ready" && <> at block <span className="num">{Number(room.data.block).toLocaleString("en-US")}</span></>}. Read-only.
