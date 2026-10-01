@@ -6,9 +6,11 @@ import {
   type AbiEvent,
   type Address,
   type Hex,
+  type PublicClient,
 } from "viem";
 import {
   decodeDescId,
+  fetchCallRecordRpc,
   MAKER_ORDER_FILLED_TOPIC0,
   ORDER_PLACED_TOPIC0,
   ORDER_REQUEST_V2_TOPIC0,
@@ -216,5 +218,89 @@ describe("parseCallRecord", () => {
     expect(record.accepted).toBe(0);
     expect(record.hit).toBe(0);
     expect(record.calls).toEqual([]);
+  });
+});
+
+describe("fetchCallRecordRpc", () => {
+  type RpcRow = { name: string; block: number; tx: Hex; data: Hex };
+
+  // Recorded logs reshaped as viem eth_getLogs rows, tagged by event so the
+  // fake client can filter the way a node filters on topics.
+  function rows(): RpcRow[] {
+    const mine = suggestionDescId(FRIEND, CREATED_AT);
+    const other = suggestionDescId(STRANGER, CREATED_AT);
+    return [
+      { name: "OrderRequestV2", block: 100, tx: "0xaaa" as Hex, data: orderV2Log({ perpId: 16n, accountId: 7n, orderDescId: mine, orderType: 2, pricePNS: 732293n, block: 100, tx: "0xaaa" as Hex }).data },
+      { name: "OrderRequestV2", block: 101, tx: "0xbbb" as Hex, data: orderV2Log({ perpId: 16n, accountId: 7n, orderDescId: mine, orderType: 2, pricePNS: 732293n, block: 101, tx: "0xbbb" as Hex }).data },
+      { name: "OrderRequestV2", block: 102, tx: "0xccc" as Hex, data: orderV2Log({ perpId: 16n, accountId: 9n, orderDescId: other, orderType: 2, pricePNS: 700000n, block: 102, tx: "0xccc" as Hex }).data },
+      { name: "OrderPlaced", block: 100, tx: "0xaaa" as Hex, data: placedLog(11n, 100, "0xaaa" as Hex).data },
+      { name: "OrderPlaced", block: 101, tx: "0xbbb" as Hex, data: placedLog(12n, 101, "0xbbb" as Hex).data },
+      { name: "OrderPlaced", block: 102, tx: "0xccc" as Hex, data: placedLog(13n, 102, "0xccc" as Hex).data },
+      { name: "MakerOrderFilled", block: 104, tx: "0xddd" as Hex, data: fillLog(11n, 104, "0xddd" as Hex).data },
+    ];
+  }
+
+  function fakeClient(all: RpcRow[], onCall?: () => void) {
+    return {
+      async getLogs(args: { event: AbiEvent; fromBlock: bigint; toBlock: bigint }) {
+        onCall?.();
+        const name = (args.event as AbiEvent)?.name;
+        return all
+          .filter((r) => r.name === name && BigInt(r.block) >= args.fromBlock && BigInt(r.block) <= args.toBlock)
+          .map((r) => ({ blockNumber: BigInt(r.block), transactionHash: r.tx, data: r.data }));
+      },
+    } as unknown as PublicClient;
+  }
+
+  it("counts 2 accepted calls with 1 hit over recorded logs", async () => {
+    const record = await fetchCallRecordRpc(FRIEND, {
+      network: "testnet",
+      client: fakeClient(rows()),
+      fromBlock: 90n,
+      toBlock: 110n,
+    });
+    expect(record.accepted).toBe(2);
+    expect(record.hit).toBe(1);
+    expect(record.calls.map((c) => c.orderId)).toEqual(["11", "12"]);
+    expect(record.calls[0]!.hit).toBe(true);
+    expect(record.calls[1]!.hit).toBe(false);
+  });
+
+  it("pages in 1,000-block chunks: 0 to 2500 is 3 chunks across 3 topics", async () => {
+    let calls = 0;
+    const record = await fetchCallRecordRpc(FRIEND, {
+      network: "testnet",
+      client: fakeClient(rows(), () => {
+        calls++;
+      }),
+      fromBlock: 0n,
+      toBlock: 2500n,
+    });
+    expect(calls).toBe(9);
+    expect(record.accepted).toBe(2);
+    expect(record.hit).toBe(1);
+  });
+
+  it("retries 429s instead of failing", async () => {
+    let attempts = 0;
+    const flaky = {
+      async getLogs(_args: { event: AbiEvent; fromBlock: bigint; toBlock: bigint }) {
+        attempts++;
+        if (attempts <= 2) {
+          const e = new Error("429 Too Many Requests") as Error & { status: number };
+          e.status = 429;
+          throw e;
+        }
+        return [] as { blockNumber: bigint; transactionHash: Hex; data: Hex }[];
+      },
+    } as unknown as PublicClient;
+    const record = await fetchCallRecordRpc(FRIEND, {
+      network: "testnet",
+      client: flaky,
+      fromBlock: 90n,
+      toBlock: 110n,
+    });
+    expect(record.accepted).toBe(0);
+    expect(attempts).toBeGreaterThan(3);
   });
 });

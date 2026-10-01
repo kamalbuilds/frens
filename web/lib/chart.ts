@@ -70,6 +70,12 @@ export function shortName(address: string): string {
   return `${address.slice(2, 6)}`.toUpperCase();
 }
 
+/// Room subtitle: market names already end in "Perp" ("BTC Perp"), so the
+/// subtitle reads "<name> on Perpl", never "<name> perpetual on Perpl".
+export function subtitleForMarket(marketName: string): string {
+  return `${marketName} on Perpl`;
+}
+
 /// The two letters printed inside an on-chart avatar: the head of the
 /// shortName, in surface colour on the friend's hue.
 export function avatarLabel(address: string): string {
@@ -135,10 +141,10 @@ export type Chip = {
   entry: string;
 };
 
-export function chipFor(f: Friend, priceDecimals: number): Chip {
+export function chipFor(f: Friend, priceDecimals: number, label?: string): Chip {
   return {
     account: f.account,
-    label: shortName(f.account),
+    label: label ?? shortName(f.account),
     colour: colourFor(f.account),
     side: f.side === "long" ? "LONG" : "SHORT",
     inProfit: f.unrealizedPnl >= 0,

@@ -146,6 +146,20 @@ describe("bannerText", () => {
     expect(text).toContain("long");
     expect(text).toMatch(/\(\+\$/);
   });
+
+  it("shows room nicknames instead of the 4-char address", () => {
+    const nameFor = (a: string) =>
+      a.toLowerCase() === FROM.toLowerCase() ? "ana" : a.toLowerCase() === OWNER.toLowerCase() ? "cy" : a;
+    const text = bannerText(suggestion({ price: 85000 }), longPosition(), 1, nameFor);
+    expect(text).toContain("ana suggests a TP at");
+    expect(text).toContain("cy's long");
+    expect(evaluateSuggestion(encodeSuggestion(suggestion({ price: 85000 })), {
+      positionFor: () => longPosition(),
+      priceDecimals: 1,
+      lotDecimals: 5,
+      nameFor,
+    }).status).toBe("valid");
+  });
 });
 
 describe("acceptOwnerCheck", () => {

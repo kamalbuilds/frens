@@ -76,9 +76,15 @@ export function explorerTxUrl(network: Network, hash: string): string {
 }
 
 /// Room links keep the network: /r/<room>?net=<net> so a shared room opens on
-/// the deployment its positions were read from.
-export function roomLink(code: string, network: Network): string {
-  return `/r/${code}?net=${network}`;
+/// the deployment its positions were read from. Optional nicknames ride along
+/// in ?n=, one slot per room address in the same order (empty slots for
+/// unnamed frens), so the room the link opens shows the same names.
+export function roomLink(code: string, network: Network, namesQuery?: string): string {
+  const base = `/r/${code}?net=${network}`;
+  if (typeof namesQuery === "string" && namesQuery.length > 0) {
+    return `${base}&n=${encodeURIComponent(namesQuery)}`;
+  }
+  return base;
 }
 
 /// Set ?net= on a path or URL while preserving every other query param and

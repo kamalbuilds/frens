@@ -31,9 +31,11 @@ export function ghostColorFor(side: Side): string {
 /// Axis pill text for the ghost line: "<FROM> TP <price> <signed PnL>".
 /// PnL comes from pnlAtPrice against the owner's room position, so it matches
 /// the chart's own TP/SL tags. Valid suggestions rest on the take-profit side,
-/// so the pill always reads TP.
-export function ghostLabelText(opts: { from: string; price: number; pnl: number; priceDecimals: number }): string {
-  return `${shortName(opts.from)} · TP ${formatPrice(opts.price, opts.priceDecimals)} · ${formatUsd(opts.pnl)}`;
+/// so the pill always reads TP. FROM renders through nameFor so a room
+/// nickname shows instead of the 4-char address.
+export function ghostLabelText(opts: { from: string; price: number; pnl: number; priceDecimals: number; nameFor?: (addr: string) => string }): string {
+  const from = (opts.nameFor ?? shortName)(opts.from);
+  return `${from} · TP ${formatPrice(opts.price, opts.priceDecimals)} · ${formatUsd(opts.pnl)}`;
 }
 
 /// Build the counter suggestion after the owner drags the ghost line to their
