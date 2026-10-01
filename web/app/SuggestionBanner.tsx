@@ -73,6 +73,7 @@ export function SuggestionBanner({
   onSuggestion,
   ghostPrice,
   onAcceptedChange,
+  roomShareLink,
   acceptRequest,
   passRequest,
 }: {
@@ -86,6 +87,8 @@ export function SuggestionBanner({
   onSuggestion?: (s: Suggestion | null) => void;
   ghostPrice?: number | null;
   onAcceptedChange?: (info: { orderId: string; hash: string } | null) => void;
+  /// Room link carrying the ?c= receipts, offered for sharing after Accept.
+  roomShareLink?: string | null;
   acceptRequest?: number;
   passRequest?: number;
 }) {
@@ -94,6 +97,7 @@ export function SuggestionBanner({
   const [dismissed, setDismissed] = useState(false);
   const [accept, setAccept] = useState<AcceptState>({ kind: "idle" });
   const [counterCopied, setCounterCopied] = useState(false);
+  const [roomCopied, setRoomCopied] = useState(false);
   const [passkey, setPasskey] = useState<LocalAccount | null>(null);
   const [passkeyFunded, setPasskeyFunded] = useState(false);
 
@@ -145,6 +149,7 @@ export function SuggestionBanner({
   useEffect(() => {
     setAccept({ kind: "idle" });
     setCounterCopied(false);
+    setRoomCopied(false);
     onAcceptedRef.current?.(null);
   }, [validSuggestion?.owner, validSuggestion?.price, validSuggestion?.market, validSuggestion?.from]);
 
@@ -267,6 +272,20 @@ export function SuggestionBanner({
     }
   }
 
+  // After Accept the room link carries the new ?c= receipt, so the next
+  // opener sees the accepted call verified. The chart owns the hash list;
+  // the banner only copies the link it is given.
+  async function copyRoomLink() {
+    if (!roomShareLink || typeof window === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${roomShareLink}`);
+      setRoomCopied(true);
+      setTimeout(() => setRoomCopied(false), 2000);
+    } catch {
+      setRoomCopied(false);
+    }
+  }
+
   if (!seen || raw === null || dismissed || evaluated === null) return null;
 
   // The link decoded but the room is still reading positions: do not call it
@@ -368,6 +387,15 @@ export function SuggestionBanner({
               View on the {network === "mainnet" ? "MonadVision" : "testnet"} explorer
             </a>
           </p>
+        )}
+        {accept.kind === "ok" && roomShareLink && (
+          <button
+            type="button"
+            onClick={copyRoomLink}
+            className="self-start rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97]"
+          >
+            {roomCopied ? "Copied" : "Copy room link"}
+          </button>
         )}
         {accept.kind === "error" && <p className="text-[12px] text-loss">{accept.message}</p>}
       </div>
