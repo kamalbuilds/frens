@@ -185,6 +185,15 @@ describe("visiblePriceRange", () => {
 });
 
 describe("placeAvatar", () => {
+
+  it("snaps an entry inside the newest, still-open candle onto that candle", () => {
+    const first = 1000 * 3600, last = first + 10 * 3600;
+    const entry = last + 1800; // half way through the open candle
+    const timeToX = (t: number) => (t >= first && t <= last && (t - first) % 3600 === 0 ? (t - first) / 3600 * 10 : null);
+    const out = placeAvatar({ entryTime: entry, entryPrice: 100, firstTime: first, lastTime: last, viewMin: 90, viewMax: 110, timeToX, priceToY: () => 50, height: 200, barSeconds: 3600 });
+    expect(out.mode).toBe("candle");
+    expect(out.x).toBe(100);
+  });
   const ctx = {
     firstTime: 1000,
     lastTime: 2000,
