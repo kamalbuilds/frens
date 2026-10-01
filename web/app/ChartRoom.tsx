@@ -965,8 +965,8 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       {/* N9 edge-aligned nav: brand left, controls right, no centre links. */}
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-rule py-5">
         <div>
-          <p className="font-[family-name:var(--font-display)] text-[20px] font-bold tracking-tight">Cosign</p>
-          <p className="text-[14px] text-muted">Your friends call the exit. You sign it.</p>
+          <p className="font-[family-name:var(--font-display)] text-[20px] font-bold tracking-tight">frens</p>
+          <p className="text-[14px] text-muted">Trade perps with your frens.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div role="group" aria-label="Market" className="flex border border-ink">

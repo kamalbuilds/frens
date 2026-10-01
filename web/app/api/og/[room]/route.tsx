@@ -71,8 +71,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ room: s
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: 64, fontWeight: 700, letterSpacing: -2 }}>Cosign</div>
-          <div style={{ fontSize: 28, color: MUTED }}>Your friends call the exit. You sign it.</div>
+          <div style={{ fontSize: 64, fontWeight: 700, letterSpacing: -2 }}>frens</div>
+          <div style={{ fontSize: 28, color: MUTED }}>Trade perps with your frens.</div>
           <div style={{ fontSize: 32, fontWeight: 700, color: ACCENT, marginTop: 12 }}>{label}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 24 }}>
