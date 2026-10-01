@@ -26,7 +26,7 @@ import { encodeRoom } from "@/lib/roomlink";
 import { encodeSuggestion, type Suggestion } from "@/lib/suggest";
 import { NETWORKS, type Network } from "@/lib/perpl";
 import { explorerTxUrl, roomLink } from "@/lib/network";
-import { callLine, displayName, encodeNamesParam, namesForAddresses, sanitizeName } from "@/lib/names";
+import { callLine, displayName, encodeKeyedNames, namesForAddresses, sanitizeName } from "@/lib/names";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
 import { connect as connectWallet, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
@@ -1114,7 +1114,7 @@ export function ChartRoom({
   // (sorted) order so the room the link opens shows the same names.
   function roomNamesQuery(): string {
     const sorted = [...extra].sort();
-    return encodeNamesParam(sorted.map((a) => nameByAddr.get(a.toLowerCase()) ?? ""));
+    return encodeKeyedNames(sorted, (a) => nameByAddr.get(a));
   }
 
   async function copyRoomLink() {

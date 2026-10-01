@@ -4,6 +4,7 @@ import { roomLink } from "./network";
 import {
   callLine,
   displayName,
+  encodeKeyedNames,
   encodeNamesParam,
   namesForAddresses,
   parseNamesParam,
@@ -104,5 +105,19 @@ describe("subtitleForMarket", () => {
   it("reads '<name> on Perpl' with no 'perpetual'", () => {
     expect(subtitleForMarket("BTC Perp")).toBe("BTC Perp on Perpl");
     expect(subtitleForMarket("BTC Perp")).not.toContain("perpetual");
+  });
+});
+
+describe("keyed names", () => {
+  const sorted = ["0x073f475a00ec54172f38864b12b32e7f481607e9", "0x4eb664f1e9b7c812ddfbc4118326fe3e23b7dced", "0x91427a5de167e2fc7693ce4f0f0784a5695b6244", "0xb3790f7eba6bd875714bbed7e3f9f303871f0ccc"];
+  it("binds each name to its address whatever order the room code sorts them into", () => {
+    const m = namesForAddresses(sorted, ["b379:ana", "9142:bo", "4eb6:cy", "073f:dee"]);
+    expect(m.get(sorted[1])).toBe("cy");
+    expect(m.get(sorted[3])).toBe("ana");
+  });
+  it("round-trips through encodeKeyedNames", () => {
+    const names = new Map([[sorted[1], "cy"], [sorted[3], "ana"]]);
+    const enc = encodeKeyedNames(sorted, (a: string) => names.get(a));
+    expect(namesForAddresses(sorted, enc.split(","))).toEqual(names);
   });
 });

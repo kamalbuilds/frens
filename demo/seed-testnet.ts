@@ -117,7 +117,7 @@ const md = [
   `| cy | ${acct.cy.address} | copied ana's long in one tap |`,
   `| dee | ${acct.dee.address} | copied bo's short; has an open call from cy |`,
   "",
-  `Room: ${site}/r/${room}?net=testnet`,
+  `Room: ${site}/r/${room}?net=testnet&n=${NAMES.map((n) => acct[n].address.toLowerCase().slice(2, 6) + ":" + n).join(",")}`,
   "",
   `Open call for the live demo (dee accepts it): ${site}/r/${room}?net=testnet&s=${encodeSuggestion(callOnDee)}`,
   "",
