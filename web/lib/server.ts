@@ -7,7 +7,8 @@ import type { PublicClient } from "viem";
 /// (QuickNode, server only, never NEXT_PUBLIC); testnet uses the public
 /// testnet RPC. No module-level client: every caller names its network.
 export function clientFor(network: Network): PublicClient {
-  const rpc = network === "mainnet" ? process.env.MONAD_RPC_URL || undefined : undefined;
+  // Private endpoints (QuickNode), server only: MONAD_RPC_URL for mainnet, MONAD_TESTNET_RPC_URL for testnet.
+  const rpc = (network === "mainnet" ? process.env.MONAD_RPC_URL : process.env.MONAD_TESTNET_RPC_URL) || undefined;
   return publicClient(network, rpc);
 }
 
