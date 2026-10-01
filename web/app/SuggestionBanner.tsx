@@ -8,8 +8,10 @@ import { decodeSuggestion, encodeCloseOrder, encodeSuggestion, sizeToLots, toClo
 import { buildCounterSuggestion } from "@/lib/ghost";
 import type { Position } from "@/lib/readPosition";
 import { NETWORKS } from "@/lib/perpl";
-import { connect, sendExecOrder } from "@/lib/wallet";
+import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { acceptOwnerCheck, evaluateSuggestion } from "@/lib/acceptance";
+import { PasskeyWallet } from "./PasskeyWallet";
+import type { LocalAccount } from "viem";
 
 type AcceptState =
   | { kind: "idle" }
@@ -89,6 +91,8 @@ export function SuggestionBanner({
   const [dismissed, setDismissed] = useState(false);
   const [accept, setAccept] = useState<AcceptState>({ kind: "idle" });
   const [counterCopied, setCounterCopied] = useState(false);
+  const [passkey, setPasskey] = useState<LocalAccount | null>(null);
+  const [passkeyFunded, setPasskeyFunded] = useState(false);
 
   useEffect(() => {
     setRaw(readRawParam());
@@ -147,6 +151,25 @@ export function SuggestionBanner({
     onSuggestionRef.current?.(null);
   }
 
+  // Order id of the close order built by buildCloseOrderData, read back by the
+  // accept wrappers below so both wallet paths report the same receipt.
+  const lastCloseOrderId = useRef("");
+
+  function buildCloseOrderData(): `0x${string}` {
+    if (!suggestion || !ownerFriend) throw new Error("that suggestion is no longer open");
+    const fullSizeLots = sizeToLots(ownerFriend.size, lotDecimals);
+    if (fullSizeLots <= 0n) {
+      throw new Error("The owner position is under one whole lot, so there is nothing to close.");
+    }
+    const order = toCloseOrder(
+      { ...suggestion, sizeLots: undefined },
+      { priceDecimals: BigInt(priceDecimals), lotDecimals: BigInt(lotDecimals) },
+      { fullSizeLots },
+    );
+    lastCloseOrderId.current = order.orderDescId.toString();
+    return encodeCloseOrder(order);
+  }
+
   async function doAccept() {
     if (!suggestion || !ownerFriend) return;
     setAccept({ kind: "sending" });
@@ -157,19 +180,31 @@ export function SuggestionBanner({
         setAccept({ kind: "error", message: gate.reason });
         return;
       }
-      const fullSizeLots = sizeToLots(ownerFriend.size, lotDecimals);
-      if (fullSizeLots <= 0n) {
-        setAccept({ kind: "error", message: "The owner position is under one whole lot, so there is nothing to close." });
+      const data = buildCloseOrderData();
+      const hash = await sendExecOrder(NETWORKS.mainnet.exchange, data);
+      const orderId = lastCloseOrderId.current;
+      setAccept({ kind: "ok", hash, orderId });
+      onAcceptedRef.current?.({ orderId, hash });
+    } catch (e) {
+      setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  // Passkey sibling of doAccept: the same close order signed by the in-memory
+  // passkey account. The owner gate still applies, so this succeeds when the
+  // owner opens the link with the same passkey that holds the position.
+  async function doAcceptWithPasskey() {
+    if (!suggestion || !ownerFriend || !passkey) return;
+    setAccept({ kind: "sending" });
+    try {
+      const gate = acceptOwnerCheck(passkey.address, suggestion);
+      if (!gate.ok) {
+        setAccept({ kind: "error", message: gate.reason });
         return;
       }
-      const order = toCloseOrder(
-        { ...suggestion, sizeLots: undefined },
-        { priceDecimals: BigInt(priceDecimals), lotDecimals: BigInt(lotDecimals) },
-        { fullSizeLots },
-      );
-      const data = encodeCloseOrder(order);
-      const hash = await sendExecOrder(NETWORKS.mainnet.exchange, data);
-      const orderId = order.orderDescId.toString();
+      const data = buildCloseOrderData();
+      const hash = await sendExecOrderWith(passkey, NETWORKS.mainnet.exchange, data);
+      const orderId = lastCloseOrderId.current;
       setAccept({ kind: "ok", hash, orderId });
       onAcceptedRef.current?.({ orderId, hash });
     } catch (e) {
@@ -276,22 +311,39 @@ export function SuggestionBanner({
       <p className="num text-[13px]">
         {evaluated.text} <span className="text-muted">PnL from the room position.</span>
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-2 flex flex-col gap-2">
         {!accepted && (
-          <button
-            type="button"
-            onClick={doAccept}
-            disabled={accept.kind === "sending"}
-            className="rounded-[6px] bg-ink px-3 py-1.5 text-[13px] font-medium text-surface active:scale-[0.97] disabled:opacity-40"
-          >
-            {accept.kind === "sending" ? "Waiting for wallet" : "Accept"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={doAccept}
+              disabled={accept.kind === "sending"}
+              className="rounded-[6px] bg-ink px-3 py-1.5 text-[13px] font-medium text-surface active:scale-[0.97] disabled:opacity-40"
+            >
+              {accept.kind === "sending" ? "Waiting for wallet" : "Use browser wallet"}
+            </button>
+            {passkey && passkeyFunded && (
+              <button
+                type="button"
+                onClick={doAcceptWithPasskey}
+                disabled={accept.kind === "sending"}
+                className="rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97] disabled:opacity-40"
+              >
+                {accept.kind === "sending" ? "Waiting for passkey" : "Accept with passkey"}
+              </button>
+            )}
+          </div>
+        )}
+        {!accepted && (
+          <div className="max-w-[320px]">
+            <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="suggest" />
+          </div>
         )}
         {counterReady && !accepted && (
           <button
             type="button"
             onClick={sendCounter}
-            className="rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
+            className="self-start rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
           >
             {counterCopied ? "Copied" : "Send counter link"}
           </button>
@@ -299,7 +351,7 @@ export function SuggestionBanner({
         <button
           type="button"
           onClick={pass}
-          className="rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
+          className="self-start rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
         >
           Pass
         </button>

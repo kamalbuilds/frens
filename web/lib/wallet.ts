@@ -10,7 +10,7 @@
 // hoisting from a seed and no signing helper: the only two things the copier can
 // do are grant access to an address and have their own wallet sign bytes we
 // built in copy.ts.
-import { createWalletClient, custom, toHex, type Address, type EIP1193Provider, type Hex } from "viem";
+import { createWalletClient, custom, http, toHex, type Address, type EIP1193Provider, type Hex, type LocalAccount } from "viem";
 import { monad } from "viem/chains";
 import { NETWORKS } from "./perpl";
 
@@ -112,5 +112,16 @@ export async function sendExecOrder(exchange: Address, data: Hex): Promise<Hex> 
   const account = await connect();
   const eth = injectedProvider();
   const client = createWalletClient({ account, chain: monad, transport: custom(eth) });
+  return client.sendTransaction({ account, to: exchange, data });
+}
+
+// Passkey sibling of sendExecOrder: same execOrder calldata, but signed by a
+// Mera passkey LocalAccount (lib/passkey.ts) instead of an injected wallet.
+// The client points at the public Monad mainnet RPC literally, never at the
+// server-only MONAD_RPC_URL, so this stays callable from browser code. Returns
+// the broadcast hash; the caller must still wait on a receipt before claiming
+// the position opened.
+export async function sendExecOrderWith(account: LocalAccount, exchange: Address, data: Hex): Promise<Hex> {
+  const client = createWalletClient({ account, chain: monad, transport: http("https://rpc.monad.xyz") });
   return client.sendTransaction({ account, to: exchange, data });
 }
