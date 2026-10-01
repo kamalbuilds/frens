@@ -40,7 +40,8 @@ type OrderDesc = {
 // On-chain order types are 0-indexed (dex-sdk RequestType). maxNegPnlCollatBPS 0 makes a taker
 // fill that starts below mark revert (TakerOrderSettlementFailed, code 14); 1000 is the market cap.
 const OPEN_LONG = 0, CLOSE_LONG = 2, CANCEL = 4;
-let descId = BigInt(Date.now());
+// DESC_ID_BASE lets a run prove Perpl accepts large caller-chosen ids, e.g. a suggester address in the high bits.
+let descId = process.env.DESC_ID_BASE ? BigInt(process.env.DESC_ID_BASE) : BigInt(Date.now());
 const order = (o: Partial<OrderDesc> & Pick<OrderDesc, "orderType">): OrderDesc => ({
   orderDescId: descId++, perpId: BigInt(MARKET), orderId: 0n, pricePNS: 0n, lotLNS: 0n, expiryBlock: 0n,
   postOnly: false, fillOrKill: false, immediateOrCancel: false, maxMatches: 0n, leverageHdths: LEVERAGE_HDTHS,
