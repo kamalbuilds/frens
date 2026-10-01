@@ -24,8 +24,6 @@ import officialAbi from "./exchange-official.abi.json";
 import { NETWORKS, type Network } from "./perpl";
 import type { AbiEvent } from "viem";
 
-export const EXCHANGE_ADDRESS = NETWORKS.mainnet.exchange;
-
 const exchangeOfficialAbi = officialAbi as readonly AbiEvent[];
 
 function eventAbi(name: string): AbiEvent {
