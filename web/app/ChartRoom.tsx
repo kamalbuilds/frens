@@ -27,7 +27,9 @@ import { encodeSuggestion, type Suggestion } from "@/lib/suggest";
 import { NETWORKS, type Network } from "@/lib/perpl";
 import { explorerTxUrl, roomLink } from "@/lib/network";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
-import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
+import { connect as connectWallet, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
+import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
+import { subscribeRoomFeed } from "@/lib/roomfeed";
 import { SuggestionBanner } from "./SuggestionBanner";
 import { PasskeyWallet } from "./PasskeyWallet";
 import { Face } from "./Face";
@@ -140,6 +142,8 @@ export function ChartRoom({
   const [hoverGhost, setHoverGhost] = useState(false);
   const [acceptReq, setAcceptReq] = useState(0);
   const [passReq, setPassReq] = useState(0);
+  const [feedTick, setFeedTick] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
 
   const wrap = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -218,7 +222,8 @@ export function ChartRoom({
       .catch((e) => setMarkets({ state: "error", message: String(e) }));
   }, [net]);
 
-  // Candles per market, timeframe and network.
+  // Candles per market, timeframe and network. The REST load owns history;
+  // the market-data socket below patches the last candle live.
   useEffect(() => {
     if (!marketKnown) return;
     setCandles({ state: "loading" });
@@ -228,7 +233,79 @@ export function ChartRoom({
       .catch((e) => setCandles({ state: "error", message: String(e) }));
   }, [marketId, res, net, marketKnown]);
 
+  const historyReady = candles.state === "ready";
+  const livePriceDecimals = market?.priceDecimals ?? decimals;
+
+  // Live candles: one market-data socket per market/resolution. Every push
+  // updates the last candle through series.update() and folds into state, so
+  // a reconnect or a reload never loses history. Reconnects on market, res,
+  // network or history readiness; closes on unmount.
+  useEffect(() => {
+    if (!marketKnown || !historyReady || !market) return;
+    const priceDecimals = livePriceDecimals;
+    return connectMarketWs({
+      net,
+      market: marketId,
+      res,
+      priceDecimals,
+      onPush: ({ candles: pushed }) => {
+        if (!pushed.length) return;
+        setCandles((prev) => {
+          if (prev.state !== "ready") return prev;
+          let data = prev.data;
+          for (const c of pushed) data = mergeCandle(data, c);
+          return { state: "ready", data };
+        });
+        const s = series.current;
+        const v = volSeries.current;
+        for (const c of pushed) {
+          try {
+            s?.update({ time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close });
+          } catch {
+            // The series throws when the chart is tearing down; state holds it.
+          }
+          try {
+            v?.update({ time: c.time as UTCTimestamp, value: c.volume, color: volumeColorFor(c) });
+          } catch {
+            // Same teardown race as above.
+          }
+        }
+      },
+    });
+  }, [net, marketId, res, marketKnown, historyReady, market, livePriceDecimals]);
+
+  const friendsRef = useRef(friends);
+  friendsRef.current = friends;
+
+  // Room activity: monadLogs for OrderRequestV2 on this network's Exchange,
+  // filtered to room members (owner or descId caller). Shows a toast for 6 s
+  // and refreshes positions. Members read through a ref so room changes do
+  // not reconnect the socket.
+  useEffect(() => {
+    return subscribeRoomFeed({
+      net,
+      members: () => friendsRef.current.map((f) => f.account),
+      priceDecimals: livePriceDecimals,
+      onEvent: (ev) => {
+        const msg =
+          ev.kind === "call-accepted"
+            ? `${shortName(ev.caller ?? ev.owner)}'s call was accepted by ${shortName(ev.owner)}`
+            : `${shortName(ev.owner)} placed an order`;
+        setToast(msg);
+        setFeedTick((t) => t + 1);
+      },
+    });
+  }, [net, livePriceDecimals]);
+
+  // Toast lifetime: 6 s on screen, then gone.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   // Positions per market, room and network: the saved My frens view.
+  // feedTick refreshes it when the room feed sees member activity.
   useEffect(() => {
     if (view !== "frens" || !marketKnown) return;
     setRoom({ state: "loading" });
@@ -237,10 +314,10 @@ export function ChartRoom({
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => setRoom(ok ? { state: "ready", data: body } : { state: "error", message: body.error }))
       .catch((e) => setRoom({ state: "error", message: String(e) }));
-  }, [marketId, extra, view, net, marketKnown]);
+  }, [marketId, extra, view, net, marketKnown, feedTick]);
 
   // Recent Perpl openers per market and network: the default Live on Perpl view, so faces
-  // land on the candles at their entry time.
+  // land on the candles at their entry time. feedTick refreshes it on room feed events.
   useEffect(() => {
     if (view !== "live" || !marketKnown) return;
     setLive({ state: "loading" });
@@ -248,7 +325,7 @@ export function ChartRoom({
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => setLive(ok ? { state: "ready", data: body } : { state: "error", message: body.error }))
       .catch((e) => setLive({ state: "error", message: String(e) }));
-  }, [marketId, view, net, marketKnown]);
+  }, [marketId, view, net, marketKnown, feedTick]);
 
   // The chart itself, created once.
   useEffect(() => {
@@ -863,7 +940,7 @@ export function ChartRoom({
     setCopyResult({ kind: "sending" });
     try {
       const data = copyOrderData();
-      await connect(net);
+      await connectWallet(net);
       const hash = await sendExecOrder(EXCHANGE, data, net);
       setCopyResult({ kind: "ok", hash });
     } catch (e) {
@@ -1142,6 +1219,11 @@ export function ChartRoom({
           style={{ cursor: dragging.current ? "grabbing" : hoverLine || hoverGhost ? "ns-resize" : undefined, touchAction: "pan-x pan-y" }}
         >
           <div ref={box} className="absolute inset-0" />
+          {toast && (
+            <p role="status" className="num absolute left-1/2 top-2 z-20 max-w-[calc(100%-16px)] -translate-x-1/2 truncate rounded-[6px] border border-edge bg-raised px-2.5 py-1.5 text-[12px] text-ink">
+              {toast}
+            </p>
+          )}
           {/* PnL marker for the selected trader. On-chart entries keep the
               clipped wash band; an entry off-screen would stretch that wash
               from the mark to the chart edge, so it becomes a 6px bar at the
