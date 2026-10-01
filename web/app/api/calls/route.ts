@@ -1,6 +1,7 @@
 import type { Hex } from "viem";
-import { parseCallsParam, verifyCallReceipts, type VerifiedCall } from "@/lib/receipts";
+import { parseCallsParam, priceCalls, verifyCallReceipts, type PricedCall, type VerifiedCall } from "@/lib/receipts";
 import { parseNetParam } from "@/lib/network";
+import { NETWORKS } from "@/lib/perpl";
 import { clientFor } from "@/lib/server";
 
 type Cached = { at: number; call: VerifiedCall | null };
@@ -31,9 +32,9 @@ export async function GET(req: Request) {
     }
   }
 
+  const client = clientFor(net);
   try {
     if (missing.length > 0) {
-      const client = clientFor(net);
       const verified = await verifyCallReceipts(net, missing, client);
       const byHash = new Map(verified.map((v) => [v.hash.toLowerCase(), v]));
       for (const h of missing) {
@@ -47,9 +48,11 @@ export async function GET(req: Request) {
   }
 
   // Verified calls only, in link order. Hit detection is out of scope: every
-  // entry is an accepted call whose fill state is unknown.
-  const calls = hashes
+  // entry is an accepted call whose fill state is unknown. "price" is the
+  // pricePNS scaled into that market's own units, "pricePNS" the raw value.
+  const verifiedInOrder = hashes
     .map((h) => fresh.get(h.toLowerCase()))
     .filter((c): c is VerifiedCall => c !== undefined);
+  const calls: PricedCall[] = await priceCalls(verifiedInOrder, client, NETWORKS[net].exchange);
   return Response.json({ net, calls });
 }

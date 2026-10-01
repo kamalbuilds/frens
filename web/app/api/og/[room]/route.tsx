@@ -1,27 +1,26 @@
 import { ImageResponse } from "next/og";
 import type { Address } from "viem";
-import { formatUsd, shortName } from "@/lib/chart";
-import { LONG_RING, SHORT_RING } from "@/lib/faces";
-import { NETWORKS } from "@/lib/perpl";
+import { Card } from "./card";
+import { namesForAddresses, parseNamesParam } from "@/lib/names";
 import { parseNetParam } from "@/lib/network";
-import { readPosition, type Position } from "@/lib/readPosition";
+import { buildCardData } from "@/lib/ogcard";
+import { NETWORKS } from "@/lib/perpl";
+import { parseCallsParam, verifyCallReceipts } from "@/lib/receipts";
 import { decodeRoom } from "@/lib/roomlink";
+import { readPosition, type Position } from "@/lib/readPosition";
 import { clientFor } from "@/lib/server";
 
 export const revalidate = 60;
 
-const PAGE = "#0A0A0F";
-const PANEL = "#13131A";
-const INK = "#ECECF1";
-const ACCENT = "#C8FF3D";
-const MUTED = "#8B8B9E";
-const RULE = "#26263A";
-const GAIN = "#2BD67B";
-const LOSS = "#FF6B57";
-
+/// The room share card. Everything it prints is measured: the market, its mark
+/// and every PnL read from the Exchange at one block, the call counts from
+/// the same receipts the room verifies, one per hash in ?c=. The link's own
+/// network, nicknames and receipts ride through, so the card shows the same
+/// frens the room does.
 export async function GET(req: Request, { params }: { params: Promise<{ room: string }> }) {
   const { room } = await params;
-  const net = parseNetParam(new URL(req.url).searchParams);
+  const q = new URL(req.url).searchParams;
+  const net = parseNetParam(q);
   const client = clientFor(net);
   const MARKETS = [...NETWORKS[net].markets];
   const chainName = net === "mainnet" ? "Monad mainnet" : "Monad testnet";
@@ -39,85 +38,38 @@ export async function GET(req: Request, { params }: { params: Promise<{ room: st
   }
 
   const accounts = decodeRoom(room);
-  const shown = accounts.slice(0, 5);
+  const names = namesForAddresses(accounts, parseNamesParam(q.get("n")));
 
-  let rows: { account: string; side: "long" | "short"; pnl: number; symbol: string }[] = [];
+  // Every trader in the room is read, not just the first few: the card sorts
+  // by live PnL, so showing the first addresses would rank the room by
+  // nothing. A room holds at most 20 and each account stops at its first
+  // market with a position.
+  let positions: Position[] = [];
   let live = true;
   try {
     const block = await client.getBlockNumber().catch(() => undefined);
-    const found = await Promise.all(shown.map((a) => firstPosition(a, block)));
-    rows = found.flatMap((p) =>
-      p ? [{ account: p.account, side: p.side, pnl: p.unrealizedPnl, symbol: p.symbol }] : [],
-    );
+    const found = await Promise.all(accounts.map((a) => firstPosition(a, block)));
+    positions = found.filter((p): p is Position => p !== null);
   } catch {
     live = false;
   }
 
-  const count = accounts.length;
-  // Say how many hold a position right now: a room of two with one row shown read as a bug.
-  const label = `${count} ${count === 1 ? "trader" : "traders"} in the room, ${rows.length} with an open position`;
+  // A failed receipt read costs the call counts, never the positions.
+  const calls = await verifyCallReceipts(net, parseCallsParam(q.get("c")), client).catch(() => []);
 
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: 1200,
-          height: 630,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          background: PAGE,
-          color: INK,
-          padding: 64,
-          fontFamily: "sans-serif",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: 64, fontWeight: 700, letterSpacing: -2 }}>frens</div>
-          <div style={{ fontSize: 28, color: MUTED }}>Trade perps with your frens.</div>
-          <div style={{ fontSize: 32, fontWeight: 700, color: ACCENT, marginTop: 12 }}>{label}</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 24 }}>
-          {rows.map((r) => {
-            const c = r.side === "long" ? LONG_RING : SHORT_RING;
-            const profit = r.pnl >= 0;
-            return (
-              <div
-                key={r.account}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: PANEL,
-                  borderLeft: `8px solid ${c}`,
-                  borderTop: `1px solid ${RULE}`,
-                  borderRight: `1px solid ${RULE}`,
-                  borderBottom: `1px solid ${RULE}`,
-                  padding: "12px 20px",
-                  fontSize: 26,
-                }}
-              >
-                <div style={{ display: "flex", gap: 16 }}>
-                  <span style={{ fontWeight: 700 }}>{shortName(r.account)}</span>
-                  <span style={{ color: MUTED }}>
-                    {r.side === "long" ? "LONG" : "SHORT"} {r.symbol}
-                  </span>
-                </div>
-                <span style={{ color: profit ? GAIN : LOSS, fontFamily: "monospace" }}>{formatUsd(r.pnl)}</span>
-              </div>
-            );
-          })}
-          {rows.length === 0 && (
-            <div style={{ fontSize: 24, color: MUTED }}>
-              {live ? "No open Perpl positions for these traders right now." : "Live positions unavailable right now."}
-            </div>
-          )}
-        </div>
-        <div style={{ fontSize: 20, color: MUTED, marginTop: 24 }}>
-          Positions read from Perpl Exchange on {chainName}. Read-only.
-        </div>
-      </div>
-    ),
-    { width: 1200, height: 630 },
-  );
+  const card = buildCardData({
+    accounts,
+    positions: positions.map((p) => ({
+      account: p.account,
+      side: p.side,
+      pnl: p.unrealizedPnl,
+      symbol: p.symbol,
+      markPrice: p.markPrice,
+    })),
+    names,
+    calls,
+    live,
+  });
+
+  return new ImageResponse(<Card card={card} chainName={chainName} />, { width: 1200, height: 630 });
 }

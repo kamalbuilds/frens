@@ -16,6 +16,7 @@ import {
 import officialAbi from "./exchange-official.abi.json";
 import { decodeDescId, ORDER_REQUEST_V2_TOPIC0 } from "./callbook";
 import { NETWORKS, type Network } from "./perpl";
+import { readPerpMeta } from "./readPosition";
 import type { AbiEvent } from "viem";
 
 const exchangeOfficialAbi = officialAbi as readonly AbiEvent[];
@@ -54,10 +55,19 @@ export type VerifiedCall = {
   caller: Address;
   /// Account that sent the accept transaction (receipt from).
   owner: Address;
-  /// pricePNS from the OrderRequestV2 log, as a decimal string.
-  price: string;
+  /// Market the call was placed in, the OrderRequestV2 perpId.
+  market: number;
+  /// pricePNS from the OrderRequestV2 log, as a decimal string: the raw
+  /// on-chain value, unscaled.
+  pricePNS: string;
   block: number;
 };
+
+/// A verified call with its price in the market's own units, ready to format
+/// like every other price in the app. Null only when that market's
+/// priceDecimals could not be read, which is never silently replaced by a
+/// guess.
+export type PricedCall = VerifiedCall & { price: number | null };
 
 type ReceiptLike = {
   status: string;
@@ -105,14 +115,15 @@ async function verifyOne(
         topics,
       });
       if (ev.eventName !== "OrderRequestV2") continue;
-      const args = ev.args as unknown as { orderDescId: bigint; pricePNS: bigint };
+      const args = ev.args as unknown as { perpId: bigint; orderDescId: bigint; pricePNS: bigint };
       const decoded = decodeDescId(args.orderDescId);
       if (!decoded) continue;
       return {
         hash,
         caller: decoded.suggester,
         owner: getAddress(receipt.from),
-        price: args.pricePNS.toString(),
+        market: Number(args.perpId),
+        pricePNS: args.pricePNS.toString(),
         block: Number(receipt.blockNumber),
       };
     } catch {
@@ -152,4 +163,35 @@ export async function verifyCallReceipts(
   const typed = client as unknown as ReceiptClient;
   const results = await mapPool(valid, 8, (h) => verifyOne(net, typed, h));
   return results.filter((r): r is VerifiedCall => r !== null);
+}
+
+/// Market-unit price from a raw PNS price: pricePNS / 10^priceDecimals, the
+/// same scaling readPosition applies to entry and mark prices, so a call
+/// price reads the same as the chart.
+export function priceInMarketUnits(pricePNS: string | bigint, priceDecimals: number | bigint): number {
+  return Number(pricePNS) / 10 ** Number(priceDecimals);
+}
+
+/// Price every verified call in its own market's units. Each distinct market's
+/// decimals are read once (readPerpMeta caches per exchange and market, so a
+/// later render pays nothing), and a market whose decimals cannot be read
+/// leaves price null: the call still counts, but nobody gets a wrong number.
+export async function priceCalls(
+  calls: VerifiedCall[],
+  client: PublicClient,
+  exchange: Address,
+): Promise<PricedCall[]> {
+  const decimals = new Map<number, number | null>();
+  for (const market of new Set(calls.map((c) => c.market))) {
+    try {
+      const meta = await readPerpMeta(client, exchange, market);
+      decimals.set(market, Number(meta.priceDecimals));
+    } catch {
+      decimals.set(market, null);
+    }
+  }
+  return calls.map((c) => {
+    const d = decimals.get(c.market) ?? null;
+    return { ...c, price: d === null ? null : priceInMarketUnits(c.pricePNS, d) };
+  });
 }
