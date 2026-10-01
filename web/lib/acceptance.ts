@@ -101,6 +101,13 @@ export function replacementNotice(oldPrice: number, priceDecimals: number): stri
   return `Replaces your TP at ${formatPrice(oldPrice, priceDecimals)}`;
 }
 
+// A resting close at the call's own price means the owner already took this
+// call: Accept would cancel and re-place the identical order for gas.
+export function alreadyTaken(resting: { price: number }[], price: number, priceDecimals: number): boolean {
+  const tick = 10 ** -priceDecimals;
+  return resting.some((r) => Math.abs(r.price - price) < tick / 2);
+}
+
 // Gate for the Accept button: only the suggestion owner can place the close
 // order. Comparison is case-insensitive because addresses checksum differently
 // across wallets. Returns ok, or the exact notice the banner should show.

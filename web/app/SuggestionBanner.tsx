@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Address, Hex } from "viem";
-import type { Friend } from "@/lib/chart";
+import { formatPrice, type Friend } from "@/lib/chart";
 import { nameForAddress, type NamesByAddress } from "@/lib/names";
 import {
   ACCEPT_BATCH_SUPPORTED,
@@ -23,7 +23,7 @@ import type { Position } from "@/lib/readPosition";
 import { NETWORKS, publicClient, type Network } from "@/lib/perpl";
 import { explorerTxUrl } from "@/lib/network";
 import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
-import { acceptOwnerCheck, evaluateSuggestion, replacementNotice } from "@/lib/acceptance";
+import { acceptOwnerCheck, alreadyTaken, evaluateSuggestion, replacementNotice } from "@/lib/acceptance";
 import { PasskeyWallet } from "./PasskeyWallet";
 import type { LocalAccount } from "viem";
 
@@ -382,6 +382,15 @@ export function SuggestionBanner({
     }
   }
 
+  // The owner already took this call: tell the chart so the ghost shows it as accepted.
+  const takenOrderId =
+    suggestion && resting && accept.kind !== "ok"
+      ? resting.find((r) => alreadyTaken([r], suggestion.price, priceDecimals))?.orderId.toString() ?? null
+      : null;
+  useEffect(() => {
+    if (takenOrderId) onAcceptedRef.current?.({ orderId: takenOrderId, hash: "" });
+  }, [takenOrderId]);
+
   if (!seen || raw === null || dismissed || evaluated === null) return null;
 
   // The link decoded but the room is still reading positions: do not call it
@@ -425,10 +434,11 @@ export function SuggestionBanner({
     Number.isFinite(ghostPrice) &&
     ghostPrice > 0 &&
     ghostPrice !== suggestion.price;
-  const accepted = accept.kind === "ok";
   const replacing = (resting ?? []).filter((r) =>
     suggestion.side === "long" ? r.side === "close-long" : r.side === "close-short",
   );
+  const taken = takenOrderId !== null;
+  const accepted = accept.kind === "ok" || taken;
 
   return (
     <div className="rounded-[10px] border border-edge bg-panel px-3 py-2 sm:py-2.5" role="status" aria-label={`Suggestion from ${nameFor(suggestion.from)}`}>
@@ -487,6 +497,11 @@ export function SuggestionBanner({
               <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="suggest" network={network} />
             </div>
           </div>
+        )}
+        {taken && (
+          <p data-already-taken className="num order-4 basis-full text-[12px] text-gain sm:order-none sm:basis-auto sm:mt-1">
+            You took this call · TP resting at {formatPrice(suggestion.price, priceDecimals)}
+          </p>
         )}
         {accept.kind === "ok" && (
           <p className="num order-6 w-full shrink-0 break-all text-[12px] text-gain sm:order-none sm:w-auto sm:mt-2">
