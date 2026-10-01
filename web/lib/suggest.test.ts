@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { Address } from "viem";
+import { suggestionDescId } from "./callbook";
 import type { Position } from "./readPosition";
 import {
   CLOSE_LONG,
@@ -204,9 +205,10 @@ describe("toCloseOrder", () => {
 
   it("builds the exact resting CloseLong trade.ts places", () => {
     // Hand computed: 73229.31 at 1 price decimal floors to 732293 ticks;
-    // 0.00179 BTC at 5 lot decimals is 179 lots.
+    // 0.00179 BTC at 5 lot decimals is 179 lots. The order id packs the
+    // suggester (FRIEND) into the top 160 bits and CREATED_AT below.
     expect(toCloseOrder(suggestion(), meta)).toEqual({
-      orderDescId: BigInt(CREATED_AT),
+      orderDescId: suggestionDescId(FRIEND, CREATED_AT),
       perpId: 16n,
       orderType: CLOSE_LONG,
       orderId: 0n,
