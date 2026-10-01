@@ -28,7 +28,7 @@ import { NETWORKS, type Network } from "@/lib/perpl";
 import { explorerTxUrl, roomLink } from "@/lib/network";
 import { callLine, displayName, encodeKeyedNames, namesForAddresses, sanitizeName } from "@/lib/names";
 import { encodeCallsParam } from "@/lib/receipts";
-import type { VerifiedCall } from "@/lib/receipts";
+import type { PricedCall } from "@/lib/receipts";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
 import { connect as connectWallet, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
@@ -193,7 +193,7 @@ export function ChartRoom({
   // Trustless call receipts from the room link (?c=): each hash verified
   // against its own transaction receipt, no log scanning.
   const [callHashes, setCallHashes] = useState<string[]>(() => initialCalls ?? []);
-  const [receiptCalls, setReceiptCalls] = useState<VerifiedCall[]>([]);
+  const [receiptCalls, setReceiptCalls] = useState<PricedCall[]>([]);
   const recFor = (addr: string) => {
     const hyper = callRecords[`${net}:${addr.toLowerCase()}`] ?? null;
     if (hyper) return hyper;
@@ -403,7 +403,7 @@ export function ChartRoom({
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => {
         if (cancelled || !ok || !Array.isArray(body.calls)) return;
-        setReceiptCalls(body.calls as VerifiedCall[]);
+        setReceiptCalls(body.calls as PricedCall[]);
       })
       .catch(() => {
         // A missing record hides the line; the card still shows the position.

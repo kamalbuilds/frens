@@ -15,6 +15,8 @@ import { roomLink } from "./network";
 import {
   encodeCallsParam,
   parseCallsParam,
+  priceCalls,
+  priceInMarketUnits,
   verifyCallReceipts,
   type VerifiedCall,
 } from "./receipts";
@@ -159,7 +161,7 @@ describe("verifyCallReceipts", () => {
   it("keeps the call and drops the self order, the failed tx and the empty receipt", async () => {
     const out = await verifyCallReceipts("testnet", [H1, H2, H3, H4], fakeClient(byHash));
     expect(out).toEqual([
-      { hash: H1, caller: getAddress(FRIEND), owner: OWNER, price: "732293", block: 100 },
+      { hash: H1, caller: getAddress(FRIEND), owner: OWNER, market: 16, pricePNS: "732293", block: 100 },
     ] satisfies VerifiedCall[]);
   });
 
@@ -207,5 +209,78 @@ describe("room link with calls", () => {
   it("omits ?c= when no call hashes are attached", () => {
     expect(roomLink("abc123", "testnet")).toBe("/r/abc123?net=testnet");
     expect(roomLink("abc123", "testnet", "", "")).toBe("/r/abc123?net=testnet");
+  });
+});
+
+describe("priceInMarketUnits", () => {
+  it("divides the raw PNS value by 10^priceDecimals", () => {
+    expect(priceInMarketUnits("866780", 1)).toBe(86678);
+    expect(priceInMarketUnits("732293", 4)).toBeCloseTo(73.2293, 10);
+    expect(priceInMarketUnits(175000n, 4n)).toBe(17.5);
+  });
+
+  it("keeps zero and sub-unit prices exact", () => {
+    expect(priceInMarketUnits("0", 4)).toBe(0);
+    expect(priceInMarketUnits("204", 4)).toBeCloseTo(0.0204, 10);
+  });
+});
+
+describe("priceCalls", () => {
+  // readPerpMeta caches decimals by exchange and market for the life of the
+  // process, so every case gets its own exchange address: a shared one would
+  // make the read counts below meaningless.
+  let seq = 0;
+  const freshExchange = (): Address => `0x${(seq += 1).toString(16).padStart(40, "0")}` as Address;
+
+  function metaClient(decimals: Record<number, number>, reads: number[]): PublicClient {
+    return {
+      readContract: (async ({ args }: { args: readonly unknown[] }) => {
+        const market = Number(args?.[0]);
+        reads.push(market);
+        const d = decimals[market];
+        if (d === undefined) throw new Error(`no market ${market}`);
+        return { symbol: `M${market}`, priceDecimals: BigInt(d), lotDecimals: 4n };
+      }),
+    } as unknown as PublicClient;
+  }
+
+  function call(market: number, pricePNS: string, hash: Hex): VerifiedCall {
+    return { hash, caller: FRIEND, owner: OWNER, market, pricePNS, block: 1 };
+  }
+
+  it("prices each call in its own market's units", async () => {
+    const reads: number[] = [];
+    const calls = [call(16, "732293", H1), call(32, "204", H2)];
+    const out = await priceCalls(calls, metaClient({ 16: 4, 32: 6 }, reads), freshExchange());
+    expect(out[0]?.price).toBeCloseTo(73.2293, 10);
+    expect(out[1]?.price).toBeCloseTo(0.000204, 12);
+  });
+
+  it("keeps the raw PNS value next to the scaled price", async () => {
+    const reads: number[] = [];
+    const out = await priceCalls([call(16, "732293", H1)], metaClient({ 16: 4 }, reads), freshExchange());
+    expect(out[0]).toMatchObject({ pricePNS: "732293", price: 73.2293 });
+  });
+
+  it("reads each market's decimals once, however many calls it carries", async () => {
+    const reads: number[] = [];
+    const calls = [call(16, "1", H1), call(16, "2", H2), call(32, "3", H3), call(16, "4", H4)];
+    const out = await priceCalls(calls, metaClient({ 16: 4, 32: 4 }, reads), freshExchange());
+    expect(reads).toEqual([16, 32]);
+    expect(out.length).toBe(4);
+  });
+
+  it("leaves price null when a market's decimals cannot be read", async () => {
+    const reads: number[] = [];
+    const calls = [call(16, "732293", H1), call(999, "1", H2)];
+    const out = await priceCalls(calls, metaClient({ 16: 4 }, reads), freshExchange());
+    expect(out[0]?.price).toBeCloseTo(73.2293, 10);
+    expect(out[1]?.price).toBeNull();
+  });
+
+  it("prices nothing when there are no calls", async () => {
+    const reads: number[] = [];
+    expect(await priceCalls([], metaClient({}, reads), freshExchange())).toEqual([]);
+    expect(reads).toEqual([]);
   });
 });

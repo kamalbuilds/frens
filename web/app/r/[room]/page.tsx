@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { ChartRoom } from "@/app/ChartRoom";
 import { parseNet } from "@/lib/network";
-import { parseNamesParam } from "@/lib/names";
-import { parseCallsParam } from "@/lib/receipts";
+import { encodeNamesParam, parseNamesParam } from "@/lib/names";
+import { ogImagePath } from "@/lib/ogcard";
+import { encodeCallsParam, parseCallsParam } from "@/lib/receipts";
 import { decodeRoom } from "@/lib/roomlink";
 
 type Params = { room: string };
@@ -12,18 +13,27 @@ export async function generateMetadata({
   searchParams,
 }: {
   params: Promise<Params>;
-  searchParams: Promise<{ net?: string }>;
+  searchParams: Promise<{ net?: string; n?: string; c?: string }>;
 }): Promise<Metadata> {
   const { room } = await params;
-  const { net } = await searchParams;
+  const { net, n, c } = await searchParams;
   const network = parseNet(net);
-  const n = decodeRoom(room).length;
-  const title = n > 0 ? `frens: ${n} traders on one chart` : "frens. Trade perps with your frens.";
+  const count = decodeRoom(room).length;
+  const title = count > 0 ? `frens: ${count} traders on one chart` : "frens. Trade perps with your frens.";
+  // The card reads the same link the room does: its network, its nicknames and
+  // its verified call receipts, so a shared card shows the frens, not short
+  // addresses, and counts the calls the room counts.
+  const card = ogImagePath(
+    room,
+    network,
+    encodeNamesParam(parseNamesParam(n)),
+    encodeCallsParam(parseCallsParam(c)),
+  );
   return {
     title,
     description: "Every trader in the room, pinned at their entry price on one live Perpl chart.",
-    openGraph: { title, description: "Your frens' Perpl positions on one chart. Call their exits, copy their trades.", images: [`/api/og/${room}?net=${network}`] },
-    twitter: { card: "summary_large_image", title, description: "Trade perps with your frens.", images: [`/api/og/${room}?net=${network}`] },
+    openGraph: { title, description: "Your frens' Perpl positions on one chart. Call their exits, copy their trades.", images: [card] },
+    twitter: { card: "summary_large_image", title, description: "Trade perps with your frens.", images: [card] },
   };
 }
 
