@@ -86,6 +86,17 @@ function mockClient(): PublicClient {
   const placedTopics = [topic0("OrderPlaced")];
   return {
     getBlockNumber: async () => 5000n,
+    getTransactionReceipt: async ({ hash }: { hash: Hex }) => {
+      if (hash !== tx) throw new Error("unknown tx");
+      return {
+        status: "success",
+        blockNumber: 4900n,
+        logs: [
+          { topics: v2topics, data: v2data },
+          { topics: placedTopics, data: placedData },
+        ],
+      };
+    },
     getLogs: async (args: { event?: { name?: string } }) => {
       const name = (args.event as { name?: string } | undefined)?.name;
       if (name === "OrderRequestV2") {
@@ -160,7 +171,7 @@ describe("accept batch", () => {
 
 describe("findRestingCloses", () => {
   it("reads the owner's resting close with lots and price", async () => {
-    const out = await findRestingCloses("testnet", mockClient(), OWNER, MARKET);
+    const out = await findRestingCloses("testnet", mockClient(), OWNER, MARKET, { scan: true });
     expect(out).toHaveLength(1);
     expect(out[0]!.orderId).toBe(41n);
     expect(out[0]!.side).toBe("close-long");
@@ -176,6 +187,18 @@ describe("findRestingCloses", () => {
       if (args.functionName === "getAccountByAddr") return { accountId: 0n };
       return (read as (a: never) => Promise<unknown>)({ functionName: args.functionName, args: [] } as never);
     };
-    expect(await findRestingCloses("testnet", client, OWNER, MARKET)).toEqual([]);
+    expect(await findRestingCloses("testnet", client, OWNER, MARKET, { scan: true })).toEqual([]);
+  });
+});
+
+describe("findRestingCloses from known accept receipts", () => {
+  it("finds a resting close from the room's receipts without any log scan", async () => {
+    const tx = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Hex;
+    const out = await findRestingCloses("testnet", mockClient(), OWNER, MARKET, { knownTxs: [tx] });
+    expect(out).toHaveLength(1);
+    expect(out[0]!.orderId).toBe(41n);
+  });
+  it("finds nothing when no receipts are known and scanning is off", async () => {
+    expect(await findRestingCloses("testnet", mockClient(), OWNER, MARKET)).toEqual([]);
   });
 });

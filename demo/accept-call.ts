@@ -8,7 +8,8 @@ import { createWalletClient, decodeEventLog, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { NETWORKS, publicClient } from "../web/lib/perpl";
 import { readPerpMeta, readPosition } from "../web/lib/readPosition";
-import { decodeSuggestion, encodeCloseOrder, sizeToLots, toCloseOrder, validateSuggestion } from "../web/lib/suggest";
+import { buildAcceptOrders, decodeSuggestion, encodeAcceptBatch, encodeCloseOrder, sizeToLots, toCloseOrder, validateSuggestion } from "../web/lib/suggest";
+import { findRestingCloses } from "../web/lib/resting";
 import { decodeDescId } from "../web/lib/callbook";
 import officialAbi from "../spike/exchange-official.abi.json";
 
@@ -31,8 +32,15 @@ const problems = validateSuggestion(s, position, meta.lotDecimals);
 if (problems.length) throw new Error(`call rejected: ${problems.join("; ")}`);
 
 const order = toCloseOrder(s, meta, { fullSizeLots: sizeToLots(position.size, meta.lotDecimals) });
+// Same as the app: resting closes found from the room's accept receipts (KNOWN_TXS, comma separated) are
+// cancelled and the new close placed in one execOrders batch, so a single signature replaces an old TP.
+const knownTxs = (process.env.KNOWN_TXS ?? "").split(",").map((h) => h.trim()).filter((h) => /^0x[0-9a-fA-F]{64}$/.test(h)) as Hex[];
+const resting = (await findRestingCloses("testnet", client, s.owner, s.market, { knownTxs })).filter((r) => r.side === (s.side === "long" ? "close-long" : "close-short"));
+const orders = buildAcceptOrders(order, resting.map((r) => r.orderId));
+const data = orders.length > 1 ? encodeAcceptBatch(orders, true) : encodeCloseOrder(order);
+console.log(`resting closes replaced: ${resting.map((r) => `${r.orderId}@${r.price}`).join(", ") || "none"}`);
 const w = createWalletClient({ account: owner, chain, transport: http(net.rpc) });
-const hash = await w.sendTransaction({ to: net.exchange, data: encodeCloseOrder(order) });
+const hash = await w.sendTransaction({ to: net.exchange, data });
 const r = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
 if (r.status !== "success") throw new Error(`accept reverted: ${hash}`);
 
