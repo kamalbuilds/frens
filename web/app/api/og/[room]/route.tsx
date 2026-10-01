@@ -3,9 +3,10 @@ import type { Address } from "viem";
 import { formatUsd, shortName } from "@/lib/chart";
 import { LONG_RING, SHORT_RING } from "@/lib/faces";
 import { NETWORKS } from "@/lib/perpl";
+import { parseNetParam } from "@/lib/network";
 import { readPosition, type Position } from "@/lib/readPosition";
 import { decodeRoom } from "@/lib/roomlink";
-import { client } from "@/lib/server";
+import { clientFor } from "@/lib/server";
 
 export const revalidate = 60;
 
@@ -18,22 +19,25 @@ const RULE = "#26263A";
 const GAIN = "#2BD67B";
 const LOSS = "#FF6B57";
 
-const MARKETS = [...NETWORKS.mainnet.markets];
-
-async function firstPosition(account: string, block?: bigint): Promise<Position | null> {
-  for (const m of MARKETS) {
-    try {
-      const p = await readPosition(account as Address, m, { client, blockNumber: block });
-      if (p) return p;
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
-export async function GET(_req: Request, { params }: { params: Promise<{ room: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ room: string }> }) {
   const { room } = await params;
+  const net = parseNetParam(new URL(req.url).searchParams);
+  const client = clientFor(net);
+  const MARKETS = [...NETWORKS[net].markets];
+  const chainName = net === "mainnet" ? "Monad mainnet" : "Monad testnet";
+
+  async function firstPosition(account: string, block?: bigint): Promise<Position | null> {
+    for (const m of MARKETS) {
+      try {
+        const p = await readPosition(account as Address, m, { network: net, client, blockNumber: block });
+        if (p) return p;
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
   const accounts = decodeRoom(room);
   const shown = accounts.slice(0, 5);
 
@@ -110,7 +114,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ room: s
           )}
         </div>
         <div style={{ fontSize: 20, color: MUTED, marginTop: 24 }}>
-          Positions read from Perpl Exchange on Monad mainnet. Read-only.
+          Positions read from Perpl Exchange on {chainName}. Read-only.
         </div>
       </div>
     ),

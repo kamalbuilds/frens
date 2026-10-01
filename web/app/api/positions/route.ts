@@ -1,6 +1,7 @@
 import { isAddress, type Address } from "viem";
 import { readPosition } from "@/lib/readPosition";
-import { blockTime, client } from "@/lib/server";
+import { blockTime, clientFor } from "@/lib/server";
+import { parseNetParam } from "@/lib/network";
 import room from "@/lib/room.json";
 
 const DEFAULT_ROOM = Array.from(new Set((room.positions as { account: string }[]).map((p) => p.account)));
@@ -8,15 +9,17 @@ const DEFAULT_ROOM = Array.from(new Set((room.positions as { account: string }[]
 export async function GET(req: Request) {
   const u = new URL(req.url);
   const market = Number(u.searchParams.get("market"));
+  const net = parseNetParam(u.searchParams);
   const extra = (u.searchParams.get("accounts") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const bad = extra.filter((a) => !isAddress(a));
   if (bad.length) return Response.json({ error: `not an address: ${bad.join(", ")}` }, { status: 400 });
   const accounts = Array.from(new Set([...DEFAULT_ROOM, ...extra].map((a) => a.toLowerCase())));
+  const client = clientFor(net);
   try {
     const block = await client.getBlockNumber();
     const read = await Promise.all(
       accounts.map(async (a) => {
-        const p = await readPosition(a as Address, market, { client, blockNumber: block });
+        const p = await readPosition(a as Address, market, { network: net, client, blockNumber: block });
         if (!p) return null;
         return {
           account: p.account,
@@ -27,7 +30,7 @@ export async function GET(req: Request) {
           unrealizedPnl: p.unrealizedPnl,
           fundingPnl: p.fundingPnl,
           entryBlock: p.entryBlock.toString(),
-          entryTime: await blockTime(p.entryBlock),
+          entryTime: await blockTime(net, p.entryBlock),
         };
       }),
     );

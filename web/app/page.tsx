@@ -1,5 +1,7 @@
 import { ChartRoom } from "./ChartRoom";
+import { parseNet } from "@/lib/network";
 
-export default function Page() {
-  return <ChartRoom />;
+export default async function Page({ searchParams }: { searchParams: Promise<{ net?: string }> }) {
+  const { net } = await searchParams;
+  return <ChartRoom initialNet={parseNet(net)} />;
 }
