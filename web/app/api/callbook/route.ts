@@ -1,14 +1,18 @@
 import { isAddress, type Address } from "viem";
-import { fetchCallRecord, fetchCallRecordRpc, RPC_LOOKBACK_BLOCKS, type CallRecord } from "@/lib/callbook";
+import { fetchCallRecord, type CallRecord } from "@/lib/callbook";
 import { parseNetParam } from "@/lib/network";
 import { clientFor } from "@/lib/server";
+
+export const maxDuration = 30;
 
 // Monad produces a block every 0.3 s: 288_000 blocks per day.
 const BLOCKS_PER_DAY = 288_000;
 
-type Cached = { at: number; body: CallRecord & { suggester: string; fromBlock: string; toBlock: string; source: "hypersync" | "rpc" } };
+type Cached = { at: number; body: CallRecord & { suggester: string; fromBlock: string; toBlock: string; source: "hypersync" } };
 
 const cache = new Map<string, Cached>();
+// Last HyperSync failure: a denied token is not retried for every face on every load.
+let failedAt = 0;
 
 export async function GET(req: Request) {
   const u = new URL(req.url);
@@ -24,10 +28,10 @@ export async function GET(req: Request) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < 600_000) return Response.json(hit.body);
 
-  // HyperSync first when a token is configured; a missing or rejected token
-  // falls through to the RPC path so the callbook works without Envio.
+  // Full call history needs HyperSync: Perpl logs are unindexed, and an RPC log scan took 35 s per
+  // caller on mainnet for 13 minutes of history. Without it the room's ?c= receipts carry the record.
   const token = process.env.ENVIO_API_TOKEN;
-  if (token) {
+  if (token && Date.now() - failedAt > 600_000) {
     try {
       const client = clientFor(net);
       const latest = await client.getBlockNumber();
@@ -37,20 +41,10 @@ export async function GET(req: Request) {
       const body = { suggester, fromBlock: fromBlock.toString(), toBlock: latest.toString(), source: "hypersync" as const, ...record };
       cache.set(key, { at: Date.now(), body });
       return Response.json(body);
-    } catch {
-      // Fall through to the RPC path below.
+    } catch (e) {
+      failedAt = Date.now();
+      return Response.json({ error: `HyperSync: ${String(e instanceof Error ? e.message : e)}` }, { status: 503 });
     }
   }
-
-  try {
-    const client = clientFor(net);
-    const latest = await client.getBlockNumber();
-    const fromBlock = latest > RPC_LOOKBACK_BLOCKS ? latest - RPC_LOOKBACK_BLOCKS : 0n;
-    const record = await fetchCallRecordRpc(suggester as Address, { network: net, client, fromBlock, toBlock: latest });
-    const body = { suggester, fromBlock: fromBlock.toString(), toBlock: latest.toString(), source: "rpc" as const, ...record };
-    cache.set(key, { at: Date.now(), body });
-    return Response.json(body);
-  } catch (e) {
-    return Response.json({ error: String(e instanceof Error ? e.message : e) }, { status: 502 });
-  }
+  return Response.json({ error: "no call index configured" }, { status: 503 });
 }
