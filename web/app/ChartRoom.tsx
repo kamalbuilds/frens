@@ -2055,7 +2055,18 @@ export function ChartRoom({
                     {copiedSuggest ? "Copied" : "Copy suggestion link"}
                   </button>
                 ) : (
-                  <p className="text-[13px] text-muted">Connect a wallet to suggest. Paste your address above.</p>
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[13px] text-muted">Your address goes on the call, so it is credited to you when they take it. Nothing is signed.</p>
+                    <button
+                      type="button"
+                      data-call-wallet
+                      onClick={() => connectWallet(net).then(onViewerChange, (e) => setViewerError(e instanceof Error ? e.message : String(e)))}
+                      className="rounded-[6px] border border-edge px-3 py-2 text-[13px] font-medium hover:bg-raised active:scale-[0.97]"
+                    >
+                      Use browser wallet
+                    </button>
+                    <PasskeyWallet account={passkey} onAccount={(a) => { setPasskey(a); if (a) onViewerChange(a.address); }} onFunded={setPasskeyFunded} idPrefix="call" network={net} />
+                  </div>
                 )}
               </>
             )}
