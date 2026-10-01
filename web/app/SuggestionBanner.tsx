@@ -274,7 +274,7 @@ export function SuggestionBanner({
     }
     if (decodable) {
       return (
-        <p className="num border border-rule bg-[var(--surface)] px-3 py-2 text-[12px] text-muted" role="status">
+        <p className="num rounded-[10px] border border-edge bg-panel px-3 py-2 text-[12px] text-muted" role="status">
           Reading the suggested position from the Exchange contract
         </p>
       );
@@ -283,12 +283,12 @@ export function SuggestionBanner({
 
   if (evaluated.status === "malformed" || evaluated.status === "stale") {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-2 border border-rule bg-[var(--surface)] px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-edge bg-panel px-3 py-2">
         <p className="text-[12px] text-muted">{evaluated.reason}</p>
         <button
           type="button"
           onClick={pass}
-          className="rounded-[6px] border border-ink px-3 py-1.5 text-[12px] font-medium hover:bg-rule active:scale-[0.97]"
+          className="rounded-[6px] border border-edge px-3 py-1.5 text-[12px] font-medium hover:bg-raised active:scale-[0.97]"
         >
           Pass
         </button>
@@ -307,7 +307,7 @@ export function SuggestionBanner({
   const accepted = accept.kind === "ok";
 
   return (
-    <div className="border border-ink bg-[var(--surface)] px-3 py-2.5" role="status" aria-label={`Suggestion from ${shortName(suggestion.from)}`}>
+    <div className="rounded-[10px] border border-edge bg-panel px-3 py-2.5" role="status" aria-label={`Suggestion from ${shortName(suggestion.from)}`}>
       <p className="num text-[13px]">
         {evaluated.text} <span className="text-muted">PnL from the room position.</span>
       </p>
@@ -318,7 +318,7 @@ export function SuggestionBanner({
               type="button"
               onClick={doAccept}
               disabled={accept.kind === "sending"}
-              className="rounded-[6px] bg-ink px-3 py-1.5 text-[13px] font-medium text-surface active:scale-[0.97] disabled:opacity-40"
+              className="rounded-[6px] bg-accent px-3 py-1.5 text-[13px] font-medium text-page active:scale-[0.97] disabled:opacity-40"
             >
               {accept.kind === "sending" ? "Waiting for wallet" : "Use browser wallet"}
             </button>
@@ -327,7 +327,7 @@ export function SuggestionBanner({
                 type="button"
                 onClick={doAcceptWithPasskey}
                 disabled={accept.kind === "sending"}
-                className="rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97] disabled:opacity-40"
+                className="rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97] disabled:opacity-40"
               >
                 {accept.kind === "sending" ? "Waiting for passkey" : "Accept with passkey"}
               </button>
@@ -343,7 +343,7 @@ export function SuggestionBanner({
           <button
             type="button"
             onClick={sendCounter}
-            className="self-start rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
+            className="self-start rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97]"
           >
             {counterCopied ? "Copied" : "Send counter link"}
           </button>
@@ -351,19 +351,19 @@ export function SuggestionBanner({
         <button
           type="button"
           onClick={pass}
-          className="self-start rounded-[6px] border border-ink px-3 py-1.5 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
+          className="self-start rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97]"
         >
           Pass
         </button>
         {accept.kind === "ok" && (
-          <p className="num break-all text-[12px]" style={{ color: "var(--gain)" }}>
+          <p className="num break-all text-[12px] text-gain">
             Accepted · order {accept.orderId}{" "}
             <a className="underline" href={`${MONAD_VISION}/${accept.hash}`} target="_blank" rel="noreferrer">
               View on MonadVision
             </a>
           </p>
         )}
-        {accept.kind === "error" && <p className="text-[12px] text-[var(--loss)]">{accept.message}</p>}
+        {accept.kind === "error" && <p className="text-[12px] text-loss">{accept.message}</p>}
       </div>
     </div>
   );

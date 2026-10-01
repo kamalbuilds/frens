@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import type { Address } from "viem";
-import { FRIEND_HUES, assignColours, formatUsd, shortName } from "@/lib/chart";
+import { formatUsd, shortName } from "@/lib/chart";
+import { LONG_RING, SHORT_RING } from "@/lib/faces";
 import { NETWORKS } from "@/lib/perpl";
 import { readPosition, type Position } from "@/lib/readPosition";
 import { decodeRoom } from "@/lib/roomlink";
@@ -8,14 +9,14 @@ import { client } from "@/lib/server";
 
 export const revalidate = 60;
 
-const SURFACE = "#F3EFE6";
-const INK = "#1C1B19";
-const ACCENT = "#2F5BEA";
-const MUTED = "rgba(28, 27, 25, 0.62)";
-const RULE = "rgba(28, 27, 25, 0.14)";
-const GRID = "rgba(28, 27, 25, 0.06)";
-const GAIN = "#1F7A4D";
-const LOSS = "#C2412D";
+const PAGE = "#0A0A0F";
+const PANEL = "#13131A";
+const INK = "#ECECF1";
+const ACCENT = "#C8FF3D";
+const MUTED = "#8B8B9E";
+const RULE = "#26263A";
+const GAIN = "#2BD67B";
+const LOSS = "#FF6B57";
 
 const MARKETS = [...NETWORKS.mainnet.markets];
 
@@ -35,7 +36,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ room: s
   const { room } = await params;
   const accounts = decodeRoom(room);
   const shown = accounts.slice(0, 5);
-  const colours = assignColours(accounts);
 
   let rows: { account: string; side: "long" | "short"; pnl: number; symbol: string }[] = [];
   let live = true;
@@ -62,9 +62,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ room: s
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          background: SURFACE,
-          backgroundImage: `linear-gradient(${GRID} 1px, transparent 1px), linear-gradient(90deg, ${GRID} 1px, transparent 1px)`,
-          backgroundSize: "24px 24px",
+          background: PAGE,
           color: INK,
           padding: 64,
           fontFamily: "sans-serif",
@@ -77,7 +75,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ room: s
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 24 }}>
           {rows.map((r) => {
-            const c = colours.get(r.account.toLowerCase()) ?? FRIEND_HUES[0];
+            const c = r.side === "long" ? LONG_RING : SHORT_RING;
             const profit = r.pnl >= 0;
             return (
               <div
@@ -86,6 +84,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ room: s
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
+                  background: PANEL,
                   borderLeft: `8px solid ${c}`,
                   borderTop: `1px solid ${RULE}`,
                   borderRight: `1px solid ${RULE}`,

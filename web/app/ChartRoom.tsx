@@ -18,15 +18,17 @@ import {
 } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
-import { assignColours, avatarLabel, byPnl, candleChange, chipFor, colourFor, formatPrice, formatUsd, placeAvatar, shortName, sideCounts, stackChips, visiblePriceRange, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
+import { byPnl, candleChange, chipFor, formatPrice, formatUsd, placeAvatar, shortName, sideCounts, visiblePriceRange, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
+import { FACE_SIZE, clusterFaces, ringColorFor } from "@/lib/faces";
 import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, type SuggestKind } from "@/lib/drag";
 import { encodeCopyOrder, toCopyOrder } from "@/lib/copy";
 import { encodeRoom } from "@/lib/roomlink";
 import { encodeSuggestion, type Suggestion } from "@/lib/suggest";
-import { ghostColorFor, ghostLabelText } from "@/lib/ghost";
+import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
 import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { SuggestionBanner } from "./SuggestionBanner";
 import { PasskeyWallet } from "./PasskeyWallet";
+import { Face } from "./Face";
 import type { LocalAccount } from "viem";
 
 type Market = { id: number; name: string; priceDecimals: number; lotDecimals: number };
@@ -40,17 +42,14 @@ const TIMEFRAMES = [
 ];
 const EXCHANGE = "0x34B6552d57a35a1D042CcAe1951BD1C370112a6F";
 const MONAD_VISION = "https://monadvision.com/tx";
-const CHIP_H = 30;
-const AVATAR = 22;
-const AVATAR_GAP = AVATAR + 4;
-// Bottom ~14% of the pane is the volume strip: bottom-anchored tags stack
+// Bottom ~14% of the pane is the volume strip: bottom-pinned faces stack
 // upward from just above it, never on top of it.
 const VOL_STRIP_FRAC = 0.14;
-const MAX_BOTTOM_TAGS = 4;
+// Edge-pinned faces stack with a 6px gap between 28px circles.
+const EDGE_STEP = FACE_SIZE + 6;
 
 type Overlay = {
   account: string;
-  chipY: number;
   entryY: number;
   markY: number;
   bandLeft: number;
@@ -66,18 +65,22 @@ type Ohlc = { o: number; h: number; l: number; c: number; change: number; pct: n
 
 type CopyResult = { kind: "idle" } | { kind: "sending" } | { kind: "ok"; hash: string } | { kind: "error"; message: string };
 
-/// The chart library parses colours itself and rejects CSS color-mix(), which the
-/// page tokens use. So the chart gets concrete values computed from the same
-/// DESIGN.md hexes: ink #1C1B19 at the token's mix ratios over surface #F3EFE6.
+/// The chart library parses colours itself and rejects CSS color-mix(), so the
+/// chart gets concrete hex values from the dark system: page #0A0A0F, muted
+/// #8B8B9E, grid rgba(255,255,255,0.04), candles green #2BD67B and red
+/// #FF6B57 with wicks in the same hue, brand accent #C8FF3D only for the
+/// viewer's own price line.
 const CHART = {
-  ink: "#1C1B19",
-  surface: "#F3EFE6",
-  accent: "#2F5BEA",
-  muted: "rgba(28, 27, 25, 0.62)",
-  rule: "rgba(28, 27, 25, 0.14)",
-  grid: "rgba(28, 27, 25, 0.03)",
-  upWash: "#DCEEDD",
-  downWash: "#F6DCD3",
+  page: "#0A0A0F",
+  panel: "#13131A",
+  raised: "#1B1B24",
+  muted: "#8B8B9E",
+  edge: "#26263A",
+  grid: "rgba(255, 255, 255, 0.04)",
+  ink: "#ECECF1",
+  accent: "#C8FF3D",
+  up: "#2BD67B",
+  down: "#FF6B57",
 };
 
 export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?: string[]; viewerAddress?: string }) {
@@ -118,7 +121,6 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const [hoverGhost, setHoverGhost] = useState(false);
   const [acceptReq, setAcceptReq] = useState(0);
   const [passReq, setPassReq] = useState(0);
-  const [bottomExpanded, setBottomExpanded] = useState(false);
 
   const wrap = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -134,8 +136,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const market = markets.state === "ready" ? markets.data.find((m) => m.id === marketId) : undefined;
   const decimals = market?.priceDecimals ?? 2;
   const friends = useMemo(() => (room.state === "ready" ? byPnl(room.data.friends) : []), [room]);
-  const palette = useMemo(() => assignColours(friends.map((f) => f.account)), [friends]);
-  const hue = (a: string) => palette.get(a.toLowerCase()) ?? colourFor(a);
+  const ring = (f: Pick<Friend, "side">) => ringColorFor(f.side);
   const lastClose = candles.state === "ready" && candles.data.length ? candles.data[candles.data.length - 1].close : null;
   const counts = useMemo(() => sideCounts(friends), [friends]);
   const copyFriend = copyFor ? friends.find((f) => f.account === copyFor) ?? null : null;
@@ -161,7 +162,11 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     ghostFriend && ghostPrice !== null
       ? pnlAtPrice(ghostPrice, ghostFriend.entryPrice, ghostFriend.size, ghostFriend.side)
       : 0;
-  const ghostColour = incoming ? colourFor(incoming.from) : CHART.ink;
+  const ghostColour = incoming
+    ? ghostAccepted !== null
+      ? CHART.accent
+      : hexWithAlpha(ringColorFor(incoming.side), 0.6)
+    : CHART.muted;
   const ghostLabel =
     incoming && ghostPrice !== null
       ? ghostLabelText({ from: incoming.from, price: ghostPrice, pnl: ghostPnl, priceDecimals: decimals })
@@ -197,8 +202,6 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   // The chart itself, created once.
   useEffect(() => {
     if (!box.current) return;
-    const ink = CHART.ink;
-    const surface = CHART.surface;
     const c = createChart(box.current, {
       autoSize: true,
       layout: {
@@ -209,20 +212,20 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         attributionLogo: false,
       },
       grid: { vertLines: { color: CHART.grid }, horzLines: { color: CHART.grid } },
-      rightPriceScale: { borderColor: CHART.rule, scaleMargins: { top: 0.12, bottom: 0.18 } },
-      timeScale: { borderColor: CHART.rule, timeVisible: true, rightOffset: 14 },
+      rightPriceScale: { borderColor: CHART.edge, scaleMargins: { top: 0.12, bottom: 0.18 } },
+      timeScale: { borderColor: CHART.edge, timeVisible: true, rightOffset: 14 },
       crosshair: { mode: CrosshairMode.Normal },
     });
-    // Candles in the DESIGN.md washes with ink borders and wicks. The last
+    // Candles filled green and red with wicks in the same hue. The last
     // price draws a dotted line with a solid accent pill: the one accent on
     // the chart, reserved for the viewer's own price.
     const s = c.addSeries(CandlestickSeries, {
-      upColor: CHART.upWash,
-      borderUpColor: ink,
-      wickUpColor: ink,
-      downColor: CHART.downWash,
-      borderDownColor: ink,
-      wickDownColor: ink,
+      upColor: CHART.up,
+      borderUpColor: CHART.up,
+      wickUpColor: CHART.up,
+      downColor: CHART.down,
+      borderDownColor: CHART.down,
+      wickDownColor: CHART.down,
       priceLineVisible: true,
       priceLineColor: CHART.accent,
       priceLineStyle: LineStyle.Dotted,
@@ -253,10 +256,10 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     };
   }, []);
 
-  // Where every friend's chip, line and band sit, from the chart's own coordinates.
+  // Where every friend's face sits, from the chart's own coordinates.
   // The price scale fits the candles plus the selected TP/SL only: friend
   // entries never stretch it. Entries outside the visible range pin to the
-  // top or bottom edge via placeAvatar.
+  // top or bottom edge via placeAvatar. On-chart faces cluster at render.
   const layout = useCallback(() => {
     const c = chart.current;
     const s = series.current;
@@ -290,68 +293,55 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         timeToX,
         priceToY,
         height,
+        avatar: FACE_SIZE,
       }),
     );
-    const candleIdx: number[] = [];
     const topIdx: number[] = [];
     const bottomIdx: number[] = [];
     placedAll.forEach((p, i) => {
-      if (p.mode === "candle") candleIdx.push(i);
-      else if (p.mode === "top") topIdx.push(i);
-      else bottomIdx.push(i);
+      if (p.mode === "top") topIdx.push(i);
+      else if (p.mode === "bottom") bottomIdx.push(i);
     });
-    const candleStack = stackChips(
-      candleIdx.map((i) => placedAll[i].y - CHIP_H / 2),
-      CHIP_H + 4,
-    );
-    const candleAvatarStack = stackChips(
-      candleIdx.map((i) => placedAll[i].y - AVATAR / 2),
-      AVATAR_GAP,
-    );
-    const byIndex = new Map<string, { chipY: number; avatarX: number | null; avatarY: number; mode: "candle" | "top" | "bottom" }>();
-    candleIdx.forEach((fi, k) => {
-      byIndex.set(friends[fi].account, {
-        chipY: candleStack[k],
-        avatarX: placedAll[fi].x,
-        avatarY: candleAvatarStack[k],
-        mode: "candle",
-      });
+    const byIndex = new Map<string, { avatarX: number | null; avatarY: number; mode: "candle" | "top" | "bottom" }>();
+    friends.forEach((f, i) => {
+      const p = placedAll[i];
+      if (p.mode === "candle") {
+        byIndex.set(f.account, { avatarX: p.x, avatarY: p.y, mode: "candle" });
+      }
     });
     topIdx.forEach((fi, k) => {
       byIndex.set(friends[fi].account, {
-        chipY: 4 + k * (CHIP_H + 4),
         avatarX: null,
-        avatarY: 4 + AVATAR / 2 + k * (CHIP_H + 4),
+        avatarY: FACE_SIZE / 2 + 4 + k * EDGE_STEP,
         mode: "top",
       });
     });
     bottomIdx.forEach((fi, k) => {
-      // Bottom tags stack upward from just above the volume strip, which
+      // Bottom faces stack upward from just above the volume strip, which
       // owns the bottom ~14% of the pane, so they never cover the bars.
-      const base = height * (1 - VOL_STRIP_FRAC) - CHIP_H - 4;
+      const base = height * (1 - VOL_STRIP_FRAC) - FACE_SIZE / 2 - 4;
       byIndex.set(friends[fi].account, {
-        chipY: base - k * (CHIP_H + 4),
         avatarX: null,
-        avatarY: base - AVATAR / 2 - 4 + CHIP_H / 2 - k * (CHIP_H + 4),
+        avatarY: base - k * EDGE_STEP,
         mode: "bottom",
       });
     });
     setOverlays(
       friends.map((f) => {
-        const pos = byIndex.get(f.account) ?? { chipY: 0, avatarX: null, avatarY: 0, mode: "candle" as const };
+        const pos = byIndex.get(f.account) ?? { avatarX: null, avatarY: 0, mode: "candle" as const };
         const entryY = priceToY(f.entryPrice) ?? (pos.mode === "top" ? -10 : height + 10);
         const markY = priceToY(f.markPrice) ?? entryY;
         const markStart = Math.max(f.entryTime ?? first, first) as UTCTimestamp;
         const bandX = timeToX(markStart) ?? 0;
         // Clip the PnL band to the visible price range so it never washes the
         // whole chart when the entry sits far outside the candles.
-        const lo = Math.max(Math.min(f.entryPrice, f.markPrice), viewMin);
-        const hi = Math.min(Math.max(f.entryPrice, f.markPrice), viewMax);
+        const blo = Math.max(Math.min(f.entryPrice, f.markPrice), viewMin);
+        const bhi = Math.min(Math.max(f.entryPrice, f.markPrice), viewMax);
         let bandTop = Math.min(entryY, markY);
         let bandHeight = Math.max(1, Math.abs(entryY - markY));
-        if (hi > lo) {
-          const yHi = priceToY(hi) ?? bandTop;
-          const yLo = priceToY(lo) ?? bandTop + bandHeight;
+        if (bhi > blo) {
+          const yHi = priceToY(bhi) ?? bandTop;
+          const yLo = priceToY(blo) ?? bandTop + bandHeight;
           bandTop = Math.min(yHi, yLo);
           bandHeight = Math.max(1, Math.abs(yHi - yLo));
         } else {
@@ -361,13 +351,12 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
           account: f.account,
           entryY,
           markY,
-          chipY: pos.chipY,
-          avatarX: pos.avatarX,
-          avatarY: pos.avatarY,
           bandLeft: bandX,
           bandTop,
           bandHeight,
           right,
+          avatarX: pos.avatarX,
+          avatarY: pos.avatarY,
           mode: pos.mode,
         };
       }),
@@ -379,6 +368,33 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     (selectedAccount ? friends.find((f) => f.account === selectedAccount) : undefined) ??
     (active ? friends.find((f) => f.account === active) : undefined) ??
     null;
+
+  // On-chart faces clustered for rendering: faces within 14px overlap, more
+  // than 5 in one spot collapse into a +N circle. Clustering runs on the
+  // entry price coordinate so stacked layout never hides a cluster.
+  const faceClusters = useMemo(() => {
+    const pts = overlays.flatMap((o) => {
+      if (o.mode !== "candle" || o.avatarX === null) return [];
+      const f = friends.find((x) => x.account === o.account);
+      if (!f) return [];
+      return [{ account: o.account, x: o.avatarX, y: o.entryY, side: f.side }];
+    });
+    return clusterFaces(pts);
+  }, [overlays, friends]);
+
+  function selectStrongest(members: { account: string }[]) {
+    let best: string | null = null;
+    let bestPnl = -Infinity;
+    for (const m of members) {
+      const f = friends.find((x) => x.account === m.account);
+      const pnl = f?.unrealizedPnl ?? -Infinity;
+      if (pnl > bestPnl) {
+        bestPnl = pnl;
+        best = m.account;
+      }
+    }
+    setActive((cur) => (best && cur !== best ? best : cur === best ? null : best));
+  }
 
   // Motion stays instant when the viewer asked for less of it.
   useEffect(() => {
@@ -410,8 +426,8 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   }, [selected?.account, selected?.markPrice, selected?.side]);
 
   // Draggable TP/SL visuals on the candle series, glued on pan, zoom and edit.
-  // Each line takes the selected friend's hue with a filled axis pill: TP
-  // solid, SL dashed.
+  // Each line takes the selected fren's side colour with a filled axis pill:
+  // TP solid, SL dashed.
   useEffect(() => {
     const s = series.current;
     if (!s || !selected || tp === null || sl === null) {
@@ -429,7 +445,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       setSlY(null);
       return;
     }
-    const colour = hue(selected.account);
+    const colour = ring(selected);
     const tpTitle = `TP ${formatPrice(tp, decimals)} (${formatUsd(pnlAtPrice(tp, selected.entryPrice, selected.size, selected.side))})`;
     const slTitle = `SL ${formatPrice(sl, decimals)} (${formatUsd(pnlAtPrice(sl, selected.entryPrice, selected.size, selected.side))})`;
     if (!tpLine.current) {
@@ -440,11 +456,11 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         lineStyle: LineStyle.Solid,
         axisLabelVisible: true,
         axisLabelColor: colour,
-        axisLabelTextColor: CHART.surface,
+        axisLabelTextColor: CHART.page,
         title: tpTitle,
       });
     } else {
-      tpLine.current.applyOptions({ price: tp, color: colour, axisLabelColor: colour, axisLabelTextColor: CHART.surface, title: tpTitle });
+      tpLine.current.applyOptions({ price: tp, color: colour, axisLabelColor: colour, axisLabelTextColor: CHART.page, title: tpTitle });
     }
     if (!slLine.current) {
       slLine.current = s.createPriceLine({
@@ -454,11 +470,11 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
         axisLabelColor: colour,
-        axisLabelTextColor: CHART.surface,
+        axisLabelTextColor: CHART.page,
         title: slTitle,
       });
     } else {
-      slLine.current.applyOptions({ price: sl, color: colour, axisLabelColor: colour, axisLabelTextColor: CHART.surface, title: slTitle });
+      slLine.current.applyOptions({ price: sl, color: colour, axisLabelColor: colour, axisLabelTextColor: CHART.page, title: slTitle });
     }
     setTpY(s.priceToCoordinate(tp));
     setSlY(s.priceToCoordinate(sl));
@@ -466,12 +482,12 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   }, [tp, sl, selected, decimals, overlays]);
 
   // The open suggestion link is the centrepiece of the owner's chart: a ghost
-  // line in the suggester's hue at 60% opacity (8-digit hex, never CSS
-  // color-mix which the chart library cannot parse), dashed, with an axis
+  // line in the suggested side's colour at 60% opacity (8-digit hex, never
+  // CSS color-mix which the chart library cannot parse), dashed, with an axis
   // pill naming the suggester, the TP price and the live signed PnL. The
   // owner drags it to their own price to counter; the pill updates live and
   // the banner offers "Send counter link" on release. After Accept the line
-  // stays solid in the suggester's hue.
+  // stays solid in the brand accent.
   useEffect(() => {
     const s = series.current;
     if (!s) return;
@@ -484,15 +500,14 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       return;
     }
     const accepted = ghostAccepted !== null;
-    const colour = accepted ? ghostColour : ghostColorFor(incoming.from);
     sugLine.current = s.createPriceLine({
       price: ghostPrice,
-      color: colour,
+      color: ghostColour,
       lineWidth: 2,
       lineStyle: accepted ? LineStyle.Solid : LineStyle.Dashed,
       axisLabelVisible: true,
-      axisLabelColor: colour,
-      axisLabelTextColor: CHART.surface,
+      axisLabelColor: ghostColour,
+      axisLabelTextColor: CHART.page,
       title: ghostLabel,
     });
     setGhostY(s.priceToCoordinate(ghostPrice) ?? null);
@@ -559,12 +574,12 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
 
   // Drag listeners live on the wrapping container, not on the chart box: the
   // box is the bottom layer and every overlay above it would otherwise steal
-  // the pointer. Decorative overlays are pointer-events-none; only chips,
-  // avatars, Copy buttons and grips take events, and grips restart the drag
-  // through their data-drag-kind. Clamping still starts from the mark, per
-  // lib/drag.ts. The ghost line drags the same way with no clamp: the owner
-  // drags it to their own price to counter, and the banner offers "Send
-  // counter link" on release.
+  // the pointer. Decorative overlays are pointer-events-none; only faces,
+  // buttons and grips take events, and grips restart the drag through their
+  // data-drag-kind. Clamping still starts from the mark, per lib/drag.ts.
+  // The ghost line drags the same way with no clamp: the owner drags it to
+  // their own price to counter, and the banner offers "Send counter link" on
+  // release.
   function onChartPointerDown(e: React.PointerEvent) {
     const target = e.target as HTMLElement;
     if (target.closest("[data-nodrag]")) return;
@@ -834,10 +849,11 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       for (const f of friends) {
         const startTime = data.find((k) => k.time >= (f.entryTime ?? 0))?.time ?? data[0].time;
         const dim = active && active.toLowerCase() !== f.account.toLowerCase();
+        const colour = ring(f);
         // Friend entries never move the price scale: the candles plus the
         // selected TP/SL own the range, entries outside it pin to the edge.
         const l = c.addSeries(LineSeries, {
-          color: dim ? `${hue(f.account)}40` : hue(f.account),
+          color: dim ? `${colour}40` : colour,
           lineWidth: active && !dim ? 3 : 2,
           priceLineVisible: false,
           lastValueVisible: false,
@@ -923,68 +939,33 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     }
   }
 
-  const hovered = friends.find((f) => f.account === hover);
   const totalSides = counts.long + counts.short;
   const lastVolume = candles.state === "ready" && candles.data.length ? candles.data[candles.data.length - 1].volume : null;
 
-  // Bottom-anchored tags (entries below the visible range) stack upward from
-  // just above the volume strip. Past four, the rest collapse into a +N tag.
-  const bottomOverlays = useMemo(() => overlays.filter((o) => o.mode === "bottom"), [overlays]);
-  const bottomCollapsed = !bottomExpanded && bottomOverlays.length > MAX_BOTTOM_TAGS;
-  const bottomVisible = useMemo(
-    () =>
-      new Set(
-        (bottomCollapsed ? bottomOverlays.slice(0, MAX_BOTTOM_TAGS) : bottomOverlays).map((o) => o.account),
-      ),
-    [bottomOverlays, bottomCollapsed],
-  );
-  const bottomHidden = bottomOverlays.length - Math.min(bottomOverlays.length, MAX_BOTTOM_TAGS);
-  const bottomPlusY =
-    bottomOverlays.length >= MAX_BOTTOM_TAGS
-      ? bottomOverlays[MAX_BOTTOM_TAGS - 1].chipY - (CHIP_H + 4)
-      : null;
-  const bottomPlotRight = bottomOverlays.length ? bottomOverlays[0].right : 0;
-  // Collapse again once the overflow clears so a fresh room starts tidy.
-  useEffect(() => {
-    if (bottomOverlays.length <= MAX_BOTTOM_TAGS) setBottomExpanded(false);
-  }, [bottomOverlays.length]);
-  // Per-mode order for the left edge markers so stacked pills never sit on
-  // top of each other or on the volume strip.
-  const edgeOrder = useMemo(() => {
-    const top = new Map<string, number>();
-    const bottom = new Map<string, number>();
-    overlays.forEach((o) => {
-      if (o.mode === "top") top.set(o.account, top.size);
-      else if (o.mode === "bottom") bottom.set(o.account, bottom.size);
-    });
-    return { top, bottom };
-  }, [overlays]);
-
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-[1480px] flex-col px-4 pb-6 md:px-8">
-      {/* N9 edge-aligned nav: brand left, controls right, no centre links. */}
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-rule py-5">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-edge py-5">
         <div>
-          <p className="font-[family-name:var(--font-display)] text-[20px] font-bold tracking-tight">frens</p>
+          <p className="font-[family-name:var(--font-display)] text-[22px] font-bold tracking-tight">frens</p>
           <p className="text-[14px] text-muted">Trade perps with your frens.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div role="group" aria-label="Market" className="flex border border-ink">
+          <div role="group" aria-label="Market" className="flex rounded-[6px] border border-edge">
             {markets.state === "ready" &&
               markets.data.map((m) => (
                 <button
                   key={m.id}
                   onClick={() => setMarketId(m.id)}
                   aria-pressed={m.id === marketId}
-                  className={`num px-3 py-1.5 text-[12px] ${m.id === marketId ? "bg-ink text-surface" : "hover:bg-rule"}`}
+                  className={`num px-3 py-1.5 text-[12px] ${m.id === marketId ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"}`}
                 >
                   {m.name}
                 </button>
               ))}
             {markets.state === "loading" && <span className="px-3 py-1.5 text-[12px] text-muted">loading markets</span>}
-            {markets.state === "error" && <span className="px-3 py-1.5 text-[12px] text-[var(--loss)]">{markets.message}</span>}
+            {markets.state === "error" && <span className="px-3 py-1.5 text-[12px] text-loss">{markets.message}</span>}
           </div>
-          <div role="group" aria-label="Timeframe" className="flex border border-rule">
+          <div role="group" aria-label="Timeframe" className="flex rounded-[6px] border border-edge">
             {TIMEFRAMES.map((t) => (
               <button
                 key={t.res}
@@ -1018,7 +999,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               <span>H {formatPrice(ohlc.h, decimals)}</span>{" "}
               <span>L {formatPrice(ohlc.l, decimals)}</span>{" "}
               <span>C {formatPrice(ohlc.c, decimals)}</span>{" "}
-              <span style={{ color: ohlc.change >= 0 ? "var(--gain)" : "var(--loss)" }}>
+              <span className={ohlc.change >= 0 ? "text-gain" : "text-loss"}>
                 {ohlc.change >= 0 ? "+" : "-"}{formatPrice(Math.abs(ohlc.change), decimals)} ({ohlc.pct >= 0 ? "+" : "-"}{Math.abs(ohlc.pct).toFixed(2)}%)
               </span>
             </>
@@ -1034,12 +1015,12 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               {counts.long} long · {counts.short} short
             </span>
             <div
-              className="flex h-2 min-w-12 flex-1 overflow-hidden"
+              className="flex h-2 min-w-12 flex-1 overflow-hidden rounded-full"
               role="img"
               aria-label={`${counts.long} traders long, ${counts.short} traders short`}
             >
-              <div style={{ width: `${(counts.long / totalSides) * 100}%`, background: "var(--gain)" }} />
-              <div style={{ width: `${(counts.short / totalSides) * 100}%`, background: "var(--loss)" }} />
+              <div className="bg-gain" style={{ width: `${(counts.long / totalSides) * 100}%` }} />
+              <div className="bg-loss" style={{ width: `${(counts.short / totalSides) * 100}%` }} />
             </div>
           </div>
         )}
@@ -1063,7 +1044,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       <main className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div
           ref={wrap}
-          className="relative h-[60vh] max-h-[70vh] min-h-[420px] border border-ink bg-[var(--surface)] lg:min-h-[420px]"
+          className="relative h-[60vh] max-h-[70vh] min-h-[420px] rounded-[10px] border border-edge bg-panel lg:min-h-[420px]"
           onPointerDown={onChartPointerDown}
           onPointerMove={onChartPointerMove}
           onPointerUp={endChartDrag}
@@ -1074,7 +1055,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
           {/* PnL marker for the selected trader. On-chart entries keep the
               clipped wash band; an entry off-screen would stretch that wash
               from the mark to the chart edge, so it becomes a 6px bar at the
-              right edge of the plot area instead, solid in --gain/--loss. */}
+              right edge of the plot area instead, solid in gain/loss. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
               const f = friends.find((x) => x.account === o.account);
@@ -1084,6 +1065,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               if (o.account !== selected?.account) return null;
               if (o.bandHeight <= 0) return null;
               const gain = f.unrealizedPnl >= 0;
+              const wash = gain ? CHART.up : CHART.down;
               if (o.mode !== "candle") {
                 const barStyle =
                   o.mode === "top"
@@ -1093,195 +1075,120 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                   <div
                     key={`band-${o.account}`}
                     className="absolute"
-                    style={{ ...barStyle, background: gain ? "var(--gain)" : "var(--loss)" }}
+                    style={{ ...barStyle, background: wash }}
                   />
                 );
               }
               return (
                 <div key={`band-${o.account}`} className="absolute" style={{ left: o.bandLeft, width: Math.max(0, o.right - o.bandLeft), top: o.bandTop, height: o.bandHeight }}>
-                  <div className="absolute inset-0" style={{ background: gain ? "var(--gain)" : "var(--loss)", opacity: 0.12 }} />
+                  <div className="absolute inset-0" style={{ background: wash, opacity: 0.12 }} />
                 </div>
               );
             })}
           </div>
-          {/* Avatars sit ON the chart at each friend's entry time and price.
-              The layer is decorative; only the avatar and Copy buttons take events.
-              Friends outside the visible range pin to the edge layer below. */}
+          {/* Fren faces ON the chart at each entry. The layer is decorative;
+              only the face buttons take events. Faces within 14px cluster
+              with an overlap offset; more than 5 collapse into a +N circle. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            {overlays.map((o) => {
-              const f = friends.find((x) => x.account === o.account);
-              if (!f || o.avatarX === null || o.mode !== "candle") return null;
-              const colour = hue(f.account);
-              const dim = active && active !== o.account;
-              return (
+            {faceClusters.map((c) =>
+              c.collapsed ? (
                 <div
-                  key={`avatar-${o.account}`}
-                  className="marker-anim absolute left-0 top-0 flex items-center"
-                  style={{
-                    transform: `translate(${o.avatarX - AVATAR / 2}px, ${o.avatarY - AVATAR / 2}px)`,
-                    opacity: dim ? 0.35 : 1,
-                    zIndex: hover === o.account || active === o.account ? 4 : 3,
-                  }}
+                  key={`cluster-${c.key}`}
+                  className="marker-anim absolute left-0 top-0"
+                  style={{ transform: `translate(${c.x - FACE_SIZE / 2}px, ${c.y - FACE_SIZE / 2}px)` }}
                 >
                   <button
-                    onMouseEnter={() => setHover(o.account)}
-                    onMouseLeave={() => setHover(null)}
-                    onFocus={() => setHover(o.account)}
-                    onBlur={() => setHover(null)}
-                    onClick={() => setActive(active === o.account ? null : o.account)}
-                    aria-pressed={active === o.account}
-                    aria-label={`${shortName(f.account)} ${f.side} entry ${formatPrice(f.entryPrice, decimals)}`}
-                    className="pointer-events-auto block rounded-full text-center font-bold"
-                    style={{
-                      width: AVATAR,
-                      height: AVATAR,
-                      background: colour,
-                      color: CHART.surface,
-                      fontSize: 9,
-                      lineHeight: `${AVATAR}px`,
-                      boxShadow: `0 0 0 1px ${CHART.surface}`,
-                    }}
+                    onClick={() => selectStrongest(c.members)}
+                    aria-label={`${c.members.length} frens entered here. Show the strongest position.`}
+                    title={`${c.members.length} frens entered here`}
+                    className="num pointer-events-auto flex items-center justify-center rounded-full bg-raised text-[11px] font-medium text-ink"
+                    style={{ width: FACE_SIZE, height: FACE_SIZE, boxShadow: `0 0 0 2px ${CHART.page}` }}
                   >
-                    {avatarLabel(f.account)}
+                    +{c.members.length}
                   </button>
-                  <CopyButton account={o.account} friend={f} decimals={decimals} onCopy={() => openCopy(o.account)} />
                 </div>
-              );
-            })}
+              ) : (
+                c.members.map((m) => {
+                  const f = friends.find((x) => x.account === m.account);
+                  if (!f) return null;
+                  const dim = active !== null && active !== m.account;
+                  const raised = hover === m.account || active === m.account;
+                  return (
+                    <div
+                      key={`face-${m.account}`}
+                      className="marker-anim absolute left-0 top-0"
+                      style={{
+                        transform: `translate(${c.x + m.dx - FACE_SIZE / 2}px, ${c.y - FACE_SIZE / 2}px)`,
+                        zIndex: raised ? 4 : 3,
+                      }}
+                    >
+                      <button
+                        onMouseEnter={() => setHover(m.account)}
+                        onMouseLeave={() => setHover(null)}
+                        onFocus={() => setHover(m.account)}
+                        onBlur={() => setHover(null)}
+                        onClick={() => setActive(active === m.account ? null : m.account)}
+                        aria-pressed={active === m.account}
+                        aria-label={`${shortName(f.account)} ${f.side} entry ${formatPrice(f.entryPrice, decimals)}`}
+                        className="pointer-events-auto block rounded-full"
+                      >
+                        <Face address={f.account} side={f.side} dim={dim} />
+                      </button>
+                    </div>
+                  );
+                })
+              ),
+            )}
           </div>
-          {/* Edge markers for entries outside the visible range: pinned to the
-              top edge, or stacked upward from just above the volume strip at
-              the bottom, with an arrow and the entry price, so they never
-              stretch the scale or cover the bars. */}
+          {/* Edge markers for entries outside the visible range: the fren's
+              face pinned to the top or bottom edge with an arrow and the
+              entry price, so off-screen entries never stretch the scale. */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {overlays.map((o) => {
               const f = friends.find((x) => x.account === o.account);
               if (!f || o.mode === "candle") return null;
-              if (o.mode === "bottom" && !bottomVisible.has(o.account)) return null;
-              const colour = hue(f.account);
               const arrow = o.mode === "top" ? "↑" : "↓";
-              const order = o.mode === "top" ? (edgeOrder.top.get(o.account) ?? 0) : (edgeOrder.bottom.get(o.account) ?? 0);
-              const style =
-                o.mode === "top"
-                  ? { top: 8 + order * (CHIP_H + 4) }
-                  : { bottom: `calc(${VOL_STRIP_FRAC * 100}% + ${8 + order * (CHIP_H + 4)}px)` };
+              const dim = active !== null && active !== o.account;
               return (
                 <div
                   key={`edge-${o.account}`}
                   className="absolute left-3 z-[3]"
-                  style={style}
+                  style={{ top: o.avatarY - FACE_SIZE / 2 }}
                 >
-                  <button
-                    onMouseEnter={() => setHover(o.account)}
-                    onMouseLeave={() => setHover(null)}
-                    onFocus={() => setHover(o.account)}
-                    onBlur={() => setHover(null)}
-                    onClick={() => setActive(active === o.account ? null : o.account)}
-                    aria-pressed={active === o.account}
-                    aria-label={`${shortName(f.account)} entry ${formatPrice(f.entryPrice, decimals)} ${o.mode === "top" ? "above" : "below"} the visible range`}
-                    className="num pointer-events-auto flex items-center gap-1.5 rounded-[6px] border bg-[var(--surface)] px-2 py-1 text-[11px]"
-                    style={{ borderColor: colour }}
-                  >
-                    <span className="font-medium">{shortName(f.account)} entry {formatPrice(f.entryPrice, decimals)} {arrow}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onMouseEnter={() => setHover(o.account)}
+                      onMouseLeave={() => setHover(null)}
+                      onFocus={() => setHover(o.account)}
+                      onBlur={() => setHover(null)}
+                      onClick={() => setActive(active === o.account ? null : o.account)}
+                      aria-pressed={active === o.account}
+                      aria-label={`${shortName(f.account)} entry ${formatPrice(f.entryPrice, decimals)} ${o.mode === "top" ? "above" : "below"} the visible range`}
+                      className="pointer-events-auto block rounded-full"
+                    >
+                      <Face address={f.account} side={f.side} dim={dim} />
+                    </button>
+                    <span className="num pointer-events-none rounded-[6px] bg-raised px-1.5 py-0.5 text-[11px] text-muted">
+                      {arrow} {formatPrice(f.entryPrice, decimals)}
+                    </span>
+                  </div>
                 </div>
               );
             })}
-          </div>
-          {/* Chips pinned at each friend's entry price on the right edge.
-              Bottom tags stack upward from just above the volume strip; past
-              four they collapse into a +N tag that expands on click. */}
-          <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            {overlays.map((o) => {
-              const f = friends.find((x) => x.account === o.account);
-              if (!f) return null;
-              if (o.mode === "bottom" && !bottomVisible.has(o.account)) return null;
-              const chip = { ...chipFor(f, decimals), colour: hue(f.account) };
-              const dim = active && active !== o.account;
-              const arrow = o.mode === "top" ? " ↑" : o.mode === "bottom" ? " ↓" : "";
-              return (
-                <div
-                  key={`chip-${o.account}`}
-                  className="absolute flex items-center"
-                  style={{ top: o.chipY, right: `calc(100% - ${o.right - 8}px)`, height: CHIP_H }}
-                >
-                  <button
-                    onMouseEnter={() => setHover(o.account)}
-                    onMouseLeave={() => setHover(null)}
-                    onFocus={() => setHover(o.account)}
-                    onBlur={() => setHover(null)}
-                    onClick={() => setActive(active === o.account ? null : o.account)}
-                    className="chip num pointer-events-auto flex items-center gap-2 rounded-[6px] border bg-[var(--surface)] px-2 text-[11px] leading-none"
-                    style={{
-                      height: CHIP_H,
-                      borderColor: chip.colour,
-                      opacity: dim ? 0.35 : 1,
-                      zIndex: hover === o.account || active === o.account ? 3 : 2,
-                    }}
-                    aria-label={`${chip.label} ${chip.side} entry ${chip.entry}${arrow}, ${chip.pnl}`}
-                  >
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: chip.colour }} />
-                    <span className="font-medium">{chip.label}</span>
-                    <span className="text-muted">{chip.side}</span>
-                    <span style={{ color: chip.inProfit ? "var(--gain)" : "var(--loss)" }}>{chip.pnl}</span>
-                    {arrow && <span className="text-muted">{arrow.trim()}</span>}
-                  </button>
-                  <CopyButton account={o.account} friend={f} decimals={decimals} onCopy={() => openCopy(o.account)} />
-                </div>
-              );
-            })}
-            {bottomCollapsed && bottomPlusY !== null && (
-              <div
-                className="absolute flex items-center"
-                style={{ top: bottomPlusY, right: `calc(100% - ${bottomPlotRight - 8}px)`, height: CHIP_H }}
-              >
-                <button
-                  type="button"
-                  data-nodrag
-                  onClick={() => setBottomExpanded(true)}
-                  aria-label={`Show ${bottomHidden} more traders below the visible range`}
-                  className="num pointer-events-auto rounded-[6px] border border-dashed border-ink bg-[var(--surface)] px-2 text-[11px] font-medium leading-none hover:bg-rule"
-                  style={{ height: CHIP_H }}
-                >
-                  +{bottomHidden}
-                </button>
-              </div>
-            )}
-            {bottomExpanded && bottomOverlays.length > MAX_BOTTOM_TAGS && (
-              <div
-                className="absolute flex items-center"
-                style={{
-                  top: bottomOverlays[bottomOverlays.length - 1].chipY - (CHIP_H + 4),
-                  right: `calc(100% - ${bottomPlotRight - 8}px)`,
-                  height: CHIP_H,
-                }}
-              >
-                <button
-                  type="button"
-                  data-nodrag
-                  onClick={() => setBottomExpanded(false)}
-                  aria-label="Collapse the overflow traders"
-                  className="num pointer-events-auto rounded-[6px] border border-dashed border-ink bg-[var(--surface)] px-2 text-[11px] font-medium leading-none hover:bg-rule"
-                  style={{ height: CHIP_H }}
-                >
-                  Show less
-                </button>
-              </div>
-            )}
           </div>
           {/* TP/SL floating tags glide with the lines. Decorative. */}
           {selected && tp !== null && tpY !== null && (
             <div
-              className="marker-anim num pointer-events-none absolute left-8 z-10 border bg-[var(--surface)] px-2 py-1 text-[11px]"
-              style={{ transform: `translateY(${tpY - 13}px)`, top: 0, borderColor: hue(selected.account), transition: reducedMotion ? "none" : undefined }}
+              className="marker-anim num pointer-events-none absolute left-8 z-10 rounded-[6px] border border-edge bg-raised px-2 py-1 text-[11px]"
+              style={{ transform: `translateY(${tpY - 13}px)`, top: 0, borderColor: ring(selected), transition: reducedMotion ? "none" : undefined }}
             >
               TP {formatPrice(tp, decimals)} · {formatUsd(pnlAtPrice(tp, selected.entryPrice, selected.size, selected.side))}
             </div>
           )}
           {selected && sl !== null && slY !== null && (
             <div
-              className="marker-anim num pointer-events-none absolute left-8 z-10 border border-dashed bg-[var(--surface)] px-2 py-1 text-[11px]"
-              style={{ transform: `translateY(${slY - 13}px)`, top: 0, borderColor: hue(selected.account), transition: reducedMotion ? "none" : undefined }}
+              className="marker-anim num pointer-events-none absolute left-8 z-10 rounded-[6px] border border-dashed bg-raised px-2 py-1 text-[11px]"
+              style={{ transform: `translateY(${slY - 13}px)`, top: 0, borderColor: ring(selected), transition: reducedMotion ? "none" : undefined }}
             >
               SL {formatPrice(sl, decimals)} · {formatUsd(pnlAtPrice(sl, selected.entryPrice, selected.size, selected.side))}
             </div>
@@ -1297,7 +1204,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               className="marker-anim absolute left-2 z-10 flex cursor-ns-resize items-center justify-center rounded-full"
               style={{ transform: `translateY(${tpY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
             >
-              <span className="block h-[10px] w-[10px] rounded-full border-2 bg-[var(--surface)]" style={{ borderColor: hue(selected.account) }} />
+              <span className="block h-[10px] w-[10px] rounded-full border-2 bg-page" style={{ borderColor: ring(selected) }} />
             </button>
           )}
           {selected && sl !== null && slY !== null && (
@@ -1309,42 +1216,28 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               className="marker-anim absolute left-2 z-10 flex cursor-ns-resize items-center justify-center rounded-full"
               style={{ transform: `translateY(${slY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
             >
-              <span className="block h-[10px] w-[10px] rounded-full border-2 border-dashed bg-[var(--surface)]" style={{ borderColor: hue(selected.account) }} />
+              <span className="block h-[10px] w-[10px] rounded-full border-2 border-dashed bg-page" style={{ borderColor: ring(selected) }} />
             </button>
           )}
-          {/* Ghost suggestion: the suggester's 22px initials avatar sits ON
-              the dashed line at its left end and drags it to a counter
-              price. The pill names the suggester with the live TP price and
-              signed PnL; Accept and Pass resolve right on the chart, and the
-              banner mirrors all three. */}
+          {/* Ghost suggestion: the caller's face sits ON the dashed line at
+              its left end and drags it to a counter price. The pill names the
+              caller with the live TP price and signed PnL; Accept and Pass
+              resolve right on the chart, and the banner mirrors all three. */}
           {incoming && ghostPrice !== null && ghostY !== null && (
             <button
               data-drag-kind="ghost"
               disabled={ghostAccepted !== null}
               onKeyDown={onGhostKeyDown}
               aria-label={`Suggested take-profit at ${formatPrice(ghostPrice, decimals)} from ${shortName(incoming.from)}. Drag to counter, arrow keys nudge by one tick. Escape resets.`}
-              className="marker-anim absolute left-2 z-10 flex cursor-ns-resize items-center justify-center rounded-full disabled:cursor-default"
+              className="marker-anim absolute left-2 z-10 block cursor-ns-resize rounded-full disabled:cursor-default"
               style={{ transform: `translateY(${ghostY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
             >
-              <span
-                className="block rounded-full text-center font-bold"
-                style={{
-                  width: AVATAR,
-                  height: AVATAR,
-                  background: ghostColour,
-                  color: CHART.surface,
-                  fontSize: 9,
-                  lineHeight: `${AVATAR}px`,
-                  boxShadow: `0 0 0 1px ${CHART.surface}`,
-                }}
-              >
-                {avatarLabel(incoming.from)}
-              </span>
+              <Face address={incoming.from} side={incoming.side} />
             </button>
           )}
           {incoming && ghostPrice !== null && ghostY !== null && (
             <div
-              className="marker-anim num pointer-events-none absolute left-12 z-10 border bg-[var(--surface)] px-2 py-1 text-[11px]"
+              className="marker-anim num pointer-events-none absolute left-12 z-10 rounded-[6px] border bg-raised px-2 py-1 text-[11px]"
               style={{ transform: `translateY(${ghostY - 13}px)`, top: 0, borderColor: ghostColour, transition: reducedMotion ? "none" : undefined }}
             >
               {ghostLabel}
@@ -1361,7 +1254,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                   data-nodrag
                   onClick={() => setAcceptReq((r) => r + 1)}
                   aria-label={`Accept the suggestion at ${formatPrice(ghostPrice, decimals)}`}
-                  className="rounded-[6px] bg-ink px-2.5 py-1 text-[12px] font-medium text-surface active:scale-[0.97]"
+                  className="rounded-[6px] bg-accent px-2.5 py-1 text-[12px] font-medium text-page active:scale-[0.97]"
                 >
                   Accept
                 </button>
@@ -1371,7 +1264,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                 data-nodrag
                 onClick={() => setPassReq((r) => r + 1)}
                 aria-label="Pass on this suggestion"
-                className="rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-1 text-[12px] font-medium hover:bg-rule active:scale-[0.97]"
+                className="rounded-[6px] border border-edge bg-panel px-2.5 py-1 text-[12px] font-medium hover:bg-raised active:scale-[0.97]"
               >
                 Pass
               </button>
@@ -1390,14 +1283,14 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               role="dialog"
               aria-label={`Copy ${shortName(copyFriend.account)}`}
               data-nodrag
-              className="absolute right-2 top-2 z-20 w-[min(280px,calc(100%-16px))] border border-ink bg-[var(--surface)] p-3 text-[13px]"
+              className="absolute right-2 top-2 z-20 w-[min(280px,calc(100%-16px))] rounded-[10px] border border-edge bg-raised p-3 text-[13px]"
               onKeyDown={(e) => {
                 if (e.key === "Escape") setCopyFor(null);
               }}
             >
               <div className="mb-2 flex items-start justify-between gap-2">
                 <p className="font-[family-name:var(--font-display)] text-[14px] font-bold">
-                  Copy <span style={{ color: hue(copyFriend.account) }}>{shortName(copyFriend.account)}</span>{" "}
+                  Copy <span style={{ color: ring(copyFriend) }}>{shortName(copyFriend.account)}</span>{" "}
                   <span className="text-muted">{copyFriend.side === "long" ? "LONG" : "SHORT"} {market.name}</span>
                 </p>
                 <button onClick={() => setCopyFor(null)} aria-label="Close copy dialog" className="px-2 py-1 text-[12px] text-muted hover:text-ink">Close</button>
@@ -1413,7 +1306,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                 value={copySize}
                 onChange={(e) => setCopySize(e.target.value)}
                 placeholder={String(copyFriend.size)}
-                className="num mb-2 w-full rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
+                className="num mb-2 w-full rounded-[6px] border border-edge bg-page px-2.5 py-2 text-[12px]"
               />
               <label htmlFor="copy-slip" className="mb-1 block text-[12px] font-medium">Max slippage (bps)</label>
               <input
@@ -1422,14 +1315,14 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                 value={copySlip}
                 onChange={(e) => setCopySlip(e.target.value)}
                 placeholder="50"
-                className="num mb-3 w-full rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
+                className="num mb-3 w-full rounded-[6px] border border-edge bg-page px-2.5 py-2 text-[12px]"
               />
               <button
                 onClick={doCopy}
                 disabled={copyResult.kind === "sending"}
-                className="w-full rounded-[6px] bg-ink px-3 py-2 text-[13px] font-medium text-surface active:scale-[0.97] disabled:opacity-40"
+                className="w-full rounded-[6px] bg-accent px-3 py-2 text-[13px] font-medium text-page active:scale-[0.97] disabled:opacity-40"
               >
-                {copyResult.kind === "sending" ? "Waiting for wallet" : "Use browser wallet"}
+                {copyResult.kind === "sending" ? "Waiting for wallet" : "Copy with wallet"}
               </button>
               <div className="mt-2">
                 <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="copy" />
@@ -1438,7 +1331,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                 <button
                   onClick={doCopyWithPasskey}
                   disabled={copyResult.kind === "sending"}
-                  className="mt-2 w-full rounded-[6px] border border-ink px-3 py-2 text-[13px] font-medium hover:bg-rule active:scale-[0.97] disabled:opacity-40"
+                  className="mt-2 w-full rounded-[6px] border border-edge px-3 py-2 text-[13px] font-medium hover:bg-panel active:scale-[0.97] disabled:opacity-40"
                 >
                   {copyResult.kind === "sending"
                     ? "Waiting for passkey"
@@ -1446,75 +1339,118 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                 </button>
               )}
               {copyResult.kind === "ok" && (
-                <p className="num mt-2 break-all text-[12px]" style={{ color: "var(--gain)" }}>
+                <p className="num mt-2 break-all text-[12px] text-gain">
                   Sent. <a className="underline" href={`${MONAD_VISION}/${copyResult.hash}`} target="_blank" rel="noreferrer">View on MonadVision</a>
                 </p>
               )}
               {copyResult.kind === "error" && (
-                <p className="mt-2 text-[12px] text-[var(--loss)]">{copyResult.message}</p>
+                <p className="mt-2 text-[12px] text-loss">{copyResult.message}</p>
               )}
             </div>
           )}
-          {hovered && (
-            <div className="num pointer-events-none absolute left-3 top-3 z-10 w-[240px] border border-ink bg-[var(--surface)] p-3 text-[12px]">
-              <p className="mb-2 font-[family-name:var(--font-display)] text-[14px] font-bold" style={{ color: hue(hovered.account) }}>
-                {shortName(hovered.account)} · {hovered.side === "long" ? "Long" : "Short"}
-              </p>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                <dt className="text-muted">Entry</dt><dd className="text-right">{formatPrice(hovered.entryPrice, decimals)}</dd>
-                <dt className="text-muted">Size</dt><dd className="text-right">{hovered.size}</dd>
-                <dt className="text-muted">Unrealised</dt>
-                <dd className="text-right" style={{ color: hovered.unrealizedPnl >= 0 ? "var(--gain)" : "var(--loss)" }}>{formatUsd(hovered.unrealizedPnl)}</dd>
-                <dt className="text-muted">Funding</dt><dd className="text-right">{formatUsd(hovered.fundingPnl)}</dd>
-                <dt className="text-muted">Entry block</dt><dd className="text-right">{Number(hovered.entryBlock).toLocaleString("en-US")}</dd>
+          {/* Hover card for the inspected fren: face, side pill, size, entry
+              and live PnL, with Call exit (selects the fren and shows their
+              TP/SL drag lines) and Copy (opens the copy popover). Tapping a
+              face selects it so the card stays put on touch. */}
+          {selected && (
+            <div
+              className="absolute left-3 top-3 z-10 w-[240px] rounded-[10px] border border-edge bg-raised p-3"
+              onMouseEnter={() => setHover(selected.account)}
+              onMouseLeave={() => setHover(null)}
+            >
+              <div className="flex items-center gap-2.5">
+                <Face address={selected.account} side={selected.side} />
+                <div className="min-w-0">
+                  <p className="num text-[13px] font-medium leading-tight">{shortName(selected.account)}</p>
+                  <span
+                    className="num mt-1 inline-block rounded border px-1.5 py-px text-[10px] font-medium"
+                    style={{ color: ring(selected), borderColor: ring(selected) }}
+                  >
+                    {selected.side === "long" ? "LONG" : "SHORT"}
+                  </span>
+                </div>
+                <span
+                  className="num ml-auto text-[13px]"
+                  style={{ color: selected.unrealizedPnl >= 0 ? CHART.up : CHART.down }}
+                >
+                  {formatUsd(selected.unrealizedPnl)}
+                </span>
+              </div>
+              <dl className="num mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+                <dt className="text-muted">Size</dt><dd className="text-right">{selected.size}</dd>
+                <dt className="text-muted">Entry</dt><dd className="text-right">{formatPrice(selected.entryPrice, decimals)}</dd>
               </dl>
+              <div className="mt-2.5 flex gap-2">
+                <button
+                  type="button"
+                  data-nodrag
+                  onClick={() => setActive(selected.account)}
+                  className="flex-1 rounded-[6px] bg-accent px-3 py-1.5 text-[13px] font-medium text-page active:scale-[0.97]"
+                >
+                  Call exit
+                </button>
+                <button
+                  type="button"
+                  data-nodrag
+                  onClick={() => openCopy(selected.account)}
+                  className="flex-1 rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-panel active:scale-[0.97]"
+                >
+                  Copy
+                </button>
+              </div>
             </div>
           )}
           {candles.state === "loading" && (
             <p className="pointer-events-none absolute inset-0 grid place-items-center text-[14px] text-muted">Loading candles from Perpl</p>
           )}
           {candles.state === "error" && (
-            <p className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-[14px] text-[var(--loss)]">
+            <p className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-[14px] text-loss">
               Could not load candles: {candles.message}
             </p>
           )}
         </div>
 
         <aside aria-label="In the room" className="flex flex-col gap-4">
-          <div className="flex items-baseline justify-between border-b border-ink pb-2">
+          <div className="flex items-baseline justify-between border-b border-edge pb-2">
             <h2 className="font-[family-name:var(--font-display)] text-[20px] font-bold">In the room</h2>
             <span className="num text-[12px] text-muted">by unrealised PnL</span>
           </div>
           {room.state === "loading" && <p className="text-[14px] text-muted">Reading positions from the Exchange contract</p>}
-          {room.state === "error" && <p className="text-[14px] text-[var(--loss)]">Could not read positions: {room.message}</p>}
+          {room.state === "error" && <p className="text-[14px] text-loss">Could not read positions: {room.message}</p>}
           {room.state === "ready" && friends.length === 0 && (
             <p className="text-[14px] text-muted">
               Nobody in the room holds {market?.name ?? "this market"} right now. Try another market, or add a trader below.
             </p>
           )}
-          <ol className="flex gap-3 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
+          <ol className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
             {friends.map((f) => {
-              const chip = { ...chipFor(f, decimals), colour: hue(f.account) };
+              const chip = chipFor(f, decimals);
               const on = active === f.account;
               return (
                 <li key={f.account} className="min-w-[210px] lg:min-w-0">
                   <button
                     onClick={() => setActive(on ? null : f.account)}
                     aria-pressed={on}
-                    className="num flex w-full items-center justify-between gap-3 border-l-4 bg-[var(--surface)] px-3 py-2.5 text-left text-[13px] hover:bg-rule"
-                    style={{ borderLeftColor: chip.colour, outline: on ? `2px solid ${chip.colour}` : undefined }}
+                    className="num flex w-full items-center gap-2.5 rounded-[10px] border bg-panel p-2.5 text-left text-[13px] hover:bg-raised"
+                    style={{ borderColor: on ? CHART.accent : CHART.edge }}
                   >
-                    <span>
-                      <span className="block font-medium">{chip.label} <span className="text-muted">{chip.side}</span></span>
-                      <span className="block text-[12px] text-muted">in at {chip.entry}</span>
+                    <Face address={f.account} side={f.side} />
+                    <span className="min-w-0">
+                      <span className="block font-medium">{chip.label}</span>
+                      <span
+                        className="mt-0.5 inline-block rounded border px-1.5 py-px text-[10px] font-medium"
+                        style={{ color: ring(f), borderColor: ring(f) }}
+                      >
+                        {chip.side}
+                      </span>
                     </span>
-                    <span style={{ color: chip.inProfit ? "var(--gain)" : "var(--loss)" }}>{chip.pnl}</span>
+                    <span className="ml-auto" style={{ color: chip.inProfit ? CHART.up : CHART.down }}>{chip.pnl}</span>
                   </button>
                 </li>
               );
             })}
           </ol>
-          <section aria-label="Suggest TP or SL" className="flex flex-col gap-2 border-t border-rule pt-4">
+          <section aria-label="Suggest TP or SL" className="flex flex-col gap-2 border-t border-edge pt-4">
             <h3 className="font-[family-name:var(--font-display)] text-[16px] font-bold">Suggest TP or SL</h3>
             {!selected && (
               <p className="text-[13px] text-muted">Select a trader to drag TP and SL lines for them.</p>
@@ -1542,15 +1478,15 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                         onKeyDown={(e) => onLineKeyDown(kind, e)}
                         aria-pressed={on}
                         aria-label={`${kind === "tp" ? "Take profit" : "Stop loss"} line at ${formatPrice(price, decimals)}, ${formatUsd(pnl)}. Arrow keys nudge by one tick. Escape resets.`}
-                        className="num flex-1 rounded-[6px] border px-2.5 py-2 text-left text-[12px] hover:bg-rule"
+                        className="num flex-1 rounded-[6px] border px-2.5 py-2 text-left text-[12px] hover:bg-raised"
                         style={{
-                          borderColor: hue(selected.account),
-                          outline: focusKind === kind ? `2px solid ${hue(selected.account)}` : undefined,
-                          background: on ? "var(--surface)" : undefined,
+                          borderColor: ring(selected),
+                          outline: focusKind === kind ? `2px solid ${ring(selected)}` : undefined,
+                          background: on ? CHART.raised : undefined,
                         }}
                       >
                         <span className="block font-medium">{kind === "tp" ? "TP" : "SL"} {formatPrice(price, decimals)}</span>
-                        <span className="block" style={{ color: pnl >= 0 ? "var(--gain)" : "var(--loss)" }}>
+                        <span className="block" style={{ color: pnl >= 0 ? CHART.up : CHART.down }}>
                           {formatUsd(pnl)}
                         </span>
                       </button>
@@ -1569,15 +1505,15 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                   onChange={(e) => onViewerChange(e.target.value)}
                   placeholder="0x…"
                   spellCheck={false}
-                  className="num min-w-0 flex-1 rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
+                  className="num min-w-0 flex-1 rounded-[6px] border border-edge bg-panel px-2.5 py-2 text-[12px]"
                 />
-                {viewerError && <p className="text-[12px] text-[var(--loss)]">{viewerError}</p>}
+                {viewerError && <p className="text-[12px] text-loss">{viewerError}</p>}
                 {viewerOk && suggestPayload ? (
                   <button
                     type="button"
                     onClick={copySuggestLink}
                     title="Copy a link with this suggestion"
-                    className="rounded-[6px] border border-ink px-3 py-2 text-[13px] font-medium hover:bg-rule active:scale-[0.97]"
+                    className="rounded-[6px] border border-edge px-3 py-2 text-[13px] font-medium hover:bg-raised active:scale-[0.97]"
                   >
                     {copiedSuggest ? "Copied" : "Copy suggestion link"}
                   </button>
@@ -1587,8 +1523,8 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
               </>
             )}
           </section>
-          <form onSubmit={addTrader} className="mt-auto flex flex-col gap-2 border-t border-rule pt-4">
-            <label htmlFor="add" className="text-[13px] font-medium">Add a trader by address</label>
+          <form onSubmit={addTrader} className="mt-auto flex flex-col gap-2 border-t border-edge pt-4">
+            <label htmlFor="add" className="text-[13px] font-medium">Add a fren by address</label>
             <div className="flex gap-2">
               <input
                 id="add"
@@ -1596,55 +1532,30 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="0x…"
                 spellCheck={false}
-                className="num min-w-0 flex-1 rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
+                className="num min-w-0 flex-1 rounded-[6px] border border-edge bg-panel px-2.5 py-2 text-[12px]"
               />
-              <button className="rounded-[6px] bg-ink px-3 text-[13px] font-medium text-surface active:scale-[0.97]">Add</button>
+              <button className="rounded-[6px] bg-accent px-3 text-[13px] font-medium text-page active:scale-[0.97]">Add</button>
               <button
                 type="button"
                 onClick={copyRoomLink}
                 disabled={extra.length === 0}
                 title={extra.length === 0 ? "Add a trader first, then share the room" : "Copy a link to this room"}
-                className="rounded-[6px] border border-ink px-3 text-[13px] font-medium hover:bg-rule active:scale-[0.97] disabled:opacity-40"
+                className="rounded-[6px] border border-edge px-3 text-[13px] font-medium hover:bg-raised active:scale-[0.97] disabled:opacity-40"
               >
                 {copied ? "Copied" : "Copy room link"}
               </button>
             </div>
-            {draftError && <p className="text-[12px] text-[var(--loss)]">{draftError}</p>}
+            {draftError && <p className="text-[12px] text-loss">{draftError}</p>}
           </form>
         </aside>
       </main>
 
-      <footer className="mt-6 border-t border-rule pt-3 text-[12px] text-muted">
+      <footer className="mt-6 border-t border-edge pt-3 text-[12px] text-muted">
         Positions read from Perpl&apos;s Exchange contract{" "}
         <span className="num">{EXCHANGE.slice(0, 6)}…{EXCHANGE.slice(-4)}</span> on Monad mainnet
         {room.state === "ready" && <> at block <span className="num">{Number(room.data.block).toLocaleString("en-US")}</span></>}. Read-only.
         Candles from Perpl&apos;s public market data.
       </footer>
     </div>
-  );
-}
-
-/// Copy affordance for one on-chart avatar or chip: an icon at rest, the word
-/// Copy on hover or focus, and a 44px hit area on touch (padding with negative
-/// margin keeps the visual size while the tap target stays full size).
-function CopyButton({ account, friend, decimals, onCopy }: { account: string; friend: Friend; decimals: number; onCopy: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onCopy();
-      }}
-      aria-label={`Copy ${shortName(friend.account)} ${friend.side} at ${formatPrice(friend.entryPrice, decimals)}`}
-      title={`Copy ${shortName(friend.account)} ${friend.side}`}
-      className="copy-btn pointer-events-auto rounded-[6px] text-muted hover:text-ink"
-    >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-        <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M9.5 4.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" stroke="currentColor" strokeWidth="1.5" />
-      </svg>
-      <span className="copy-label text-[11px] font-medium">Copy</span>
-      <span className="sr-only">{account}</span>
-    </button>
   );
 }

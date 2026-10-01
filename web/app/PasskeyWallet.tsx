@@ -149,14 +149,14 @@ export function PasskeyWallet({
               type="button"
               onClick={doSignIn}
               disabled={busy !== "idle"}
-              className="rounded-[6px] border border-ink px-3 py-2 text-[13px] font-medium hover:bg-rule active:scale-[0.97] disabled:opacity-40"
+                className="rounded-[6px] border border-edge px-3 py-2 text-[13px] font-medium hover:bg-raised active:scale-[0.97] disabled:opacity-40"
             >
               {busy === "signing" ? "Waiting for passkey" : "Use a passkey"}
             </button>
             <p className="text-[12px] text-muted">Works in Chrome and Safari.</p>
             {error && (
               <div className="flex flex-col gap-1.5">
-                <p className="text-[12px] text-[var(--loss)]">{error}</p>
+                <p className="text-[12px] text-loss">{error}</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -182,13 +182,13 @@ export function PasskeyWallet({
               placeholder="trader"
               autoComplete="off"
               spellCheck={false}
-              className="num w-full rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-2 text-[12px]"
+              className="num w-full rounded-[6px] border border-edge bg-page px-2.5 py-2 text-[12px]"
             />
             <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={busy !== "idle"}
-                className="rounded-[6px] border border-ink px-3 py-2 text-[13px] font-medium hover:bg-rule active:scale-[0.97] disabled:opacity-40"
+              className="rounded-[6px] border border-edge px-3 py-2 text-[13px] font-medium hover:bg-raised active:scale-[0.97] disabled:opacity-40"
               >
                 {busy === "creating" ? "Waiting for passkey" : "Create a passkey"}
               </button>
@@ -204,7 +204,7 @@ export function PasskeyWallet({
               </button>
             </div>
             <p className="text-[12px] text-muted">Works in Chrome and Safari.</p>
-            {error && <p className="text-[12px] text-[var(--loss)]">{error}</p>}
+            {error && <p className="text-[12px] text-loss">{error}</p>}
           </form>
         )}
       </div>
@@ -212,7 +212,7 @@ export function PasskeyWallet({
   }
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-[6px] border border-rule bg-[var(--surface)] px-2.5 py-2">
+    <div className="flex flex-col gap-1.5 rounded-[10px] border border-edge bg-page px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
         <p className="num text-[12px] font-medium" title={address}>
           {shortAddress(address)}
@@ -222,7 +222,7 @@ export function PasskeyWallet({
             type="button"
             onClick={copyAddress}
             aria-label={`Copy passkey address ${address}`}
-            className="rounded-[6px] border border-rule px-2 py-1 text-[12px] font-medium text-muted hover:text-ink"
+            className="rounded-[6px] border border-edge px-2 py-1 text-[12px] font-medium text-muted hover:text-ink"
           >
             {copied ? "Copied" : "Copy"}
           </button>
@@ -243,7 +243,7 @@ export function PasskeyWallet({
           <p className="text-[11px] text-muted">Balances from Monad mainnet.</p>
         </div>
       ) : balancesError ? (
-        <p className="text-[12px] text-[var(--loss)]">{balancesError}</p>
+        <p className="text-[12px] text-loss">{balancesError}</p>
       ) : (
         <p className="text-[12px] text-muted">Reading balances from Monad mainnet</p>
       )}

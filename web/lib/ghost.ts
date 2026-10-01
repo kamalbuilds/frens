@@ -1,14 +1,15 @@
 /// Ghost suggestion line: pure logic for the friend suggestion centrepiece.
 ///
 /// When a suggestion link (?s=<payload>) is open, the owner's chart draws it
-/// as a ghost line in the suggester's hue. This module holds the pieces that
-/// do not need the chart library or the DOM, so they can be unit tested:
-/// the 60% opacity ghost colour (8-digit hex, never CSS color-mix which
-/// lightweight-charts v5 cannot parse), the axis pill label text, and the
-/// counter suggestion construction (owner/from swapped via encodeSuggestion
-/// in the banner).
+/// as a ghost line in the suggested side's colour (green long, red short).
+/// This module holds the pieces that do not need the chart library or the
+/// DOM, so they can be unit tested: the 60% opacity ghost colour (8-digit
+/// hex, never CSS color-mix which lightweight-charts v5 cannot parse), the
+/// axis pill label text, and the counter suggestion construction (owner/from
+/// swapped via encodeSuggestion in the banner).
 import type { Address } from "viem";
-import { colourFor, formatPrice, formatUsd, shortName } from "./chart";
+import { formatPrice, formatUsd, shortName } from "./chart";
+import { ringColorFor, type Side } from "./faces";
 import type { Suggestion } from "./suggest";
 
 /// Append an alpha byte to a #RRGGBB hex. alpha 0 is transparent, 1 is solid.
@@ -22,9 +23,9 @@ export function hexWithAlpha(hex: string, alpha: number): string {
   return `${hex}${byte}`;
 }
 
-/// The suggester's hue at 60% opacity for the dashed ghost line.
-export function ghostColorFor(from: string): string {
-  return hexWithAlpha(colourFor(from), 0.6);
+/// The suggested side's colour at 60% opacity for the dashed ghost line.
+export function ghostColorFor(side: Side): string {
+  return hexWithAlpha(ringColorFor(side), 0.6);
 }
 
 /// Axis pill text for the ghost line: "<FROM> TP <price> <signed PnL>".

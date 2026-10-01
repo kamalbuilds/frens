@@ -5,10 +5,11 @@
 /// viewer's own actions (last-price pill, focus rings).
 export const FRIEND_HUES = ["#E8553D", "#D9A21B", "#149C8F", "#8B3F9E", "#5B7F2A"] as const;
 
-/// Candle washes from DESIGN.md: up candles filled #DCEEDD, down #F6DCD3,
-/// borders and wicks ink. The volume strip reuses the same washes.
-export const UP_WASH = "#DCEEDD";
-export const DOWN_WASH = "#F6DCD3";
+/// Candle fills from the dark system: up filled #2BD67B, down filled
+/// #FF6B57, bodies filled with wicks in the same hue. The volume strip
+/// reuses the same fills.
+export const UP_WASH = "#2BD67B";
+export const DOWN_WASH = "#FF6B57";
 
 export type RawCandle = { t: number; o: number; c: number; h: number; l: number; v: string; n: number };
 export type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number };
