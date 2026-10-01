@@ -15,6 +15,7 @@ import {
 } from "viem";
 import officialAbi from "./exchange-official.abi.json";
 import { decodeDescId, ORDER_REQUEST_V2_TOPIC0 } from "./callbook";
+import { CLOSE_LONG, CLOSE_SHORT } from "./suggest";
 import { NETWORKS, type Network } from "./perpl";
 import { readPerpMeta } from "./readPosition";
 import type { AbiEvent } from "viem";
@@ -118,6 +119,9 @@ async function verifyOne(
       });
       if (ev.eventName !== "OrderRequestV2") continue;
       const args = ev.args as unknown as { perpId: bigint; orderDescId: bigint; pricePNS: bigint; orderType: number | bigint };
+      // A replace batch cancels the old TP first under the same caller id; only the close is the call.
+      const orderType = Number(args.orderType);
+      if (orderType !== CLOSE_LONG && orderType !== CLOSE_SHORT) continue;
       const decoded = decodeDescId(args.orderDescId);
       if (!decoded) continue;
       return {
@@ -125,7 +129,7 @@ async function verifyOne(
         caller: decoded.suggester,
         owner: getAddress(receipt.from),
         market: Number(args.perpId),
-        orderType: Number(args.orderType),
+        orderType,
         pricePNS: args.pricePNS.toString(),
         block: Number(receipt.blockNumber),
       };

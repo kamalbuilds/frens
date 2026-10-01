@@ -23,6 +23,7 @@ import {
 } from "viem";
 import officialAbi from "./exchange-official.abi.json";
 import { NETWORKS, type Network } from "./perpl";
+import { CLOSE_LONG, CLOSE_SHORT } from "./suggest";
 import type { AbiEvent } from "viem";
 
 const exchangeOfficialAbi = officialAbi as readonly AbiEvent[];
@@ -171,7 +172,11 @@ export function parseCallRecord(
         perpId: bigint;
         orderDescId: bigint;
         pricePNS: bigint;
+        orderType: number | bigint;
       };
+      // A replace batch's cancel carries the caller id too; only the close is the call.
+      const t = Number(args.orderType);
+      if (t !== CLOSE_LONG && t !== CLOSE_SHORT) continue;
       const decoded = decodeDescId(args.orderDescId);
       if (!decoded || decoded.suggester.toLowerCase() !== want) continue;
       const orderId = orderIdByTx.get(String(log.transaction_hash).toLowerCase());
