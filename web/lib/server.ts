@@ -2,7 +2,8 @@ import { NETWORKS, publicClient } from "./perpl";
 import { readPerpMeta } from "./readPosition";
 
 export const net = NETWORKS.mainnet;
-export const client = publicClient("mainnet");
+// MONAD_RPC_URL (server only, never NEXT_PUBLIC): a private endpoint such as QuickNode; the public RPC otherwise.
+export const client = publicClient("mainnet", process.env.MONAD_RPC_URL || undefined);
 
 export type Market = { id: number; name: string; priceDecimals: number; lotDecimals: number };
 
