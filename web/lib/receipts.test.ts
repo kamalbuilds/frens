@@ -51,13 +51,13 @@ function eventAbi(name: string): AbiEvent {
 // toEventSelector and data from encodeAbiParameters, the same encoding the
 // node itself produces (all OrderRequestV2 args are non-indexed, so topics
 // are exactly [topic0]).
-function v2Log(orderDescId: bigint, pricePNS: bigint): { topics: Hex[]; data: Hex } {
+function v2Log(orderDescId: bigint, pricePNS: bigint, orderType = 2): { topics: Hex[]; data: Hex } {
   const data = encodeAbiParameters(eventInputs("OrderRequestV2"), [
     16n,
     7n,
     orderDescId,
     0n,
-    2,
+    orderType,
     pricePNS,
     179n,
     0n,
@@ -163,6 +163,23 @@ describe("verifyCallReceipts", () => {
     expect(out).toEqual([
       { hash: H1, caller: getAddress(FRIEND), owner: OWNER, market: 16, orderType: 2, pricePNS: "732293", block: 100 },
     ] satisfies VerifiedCall[]);
+  });
+
+  it("takes the close, not the cancel, from a replace batch whose cancel carries the same caller", async () => {
+    const cancel = v2Log(mine, 0n, 4);
+    const replace = {
+      [H1.toLowerCase()]: {
+        status: "success" as const,
+        from: OWNER,
+        blockNumber: 100n,
+        logs: [
+          { address: EXCHANGE, topics: cancel.topics, data: cancel.data },
+          { address: EXCHANGE, topics: call.topics, data: call.data },
+        ],
+      },
+    };
+    const out = await verifyCallReceipts("testnet", [H1], fakeClient(replace));
+    expect(out.map((c) => [c.orderType, c.pricePNS])).toEqual([[2, "732293"]]);
   });
 
   it("reads the caller out of the receipt log, not the log scanner", () => {
