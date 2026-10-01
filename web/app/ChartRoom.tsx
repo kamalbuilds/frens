@@ -23,6 +23,7 @@ import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, 
 import { encodeCopyOrder, toCopyOrder } from "@/lib/copy";
 import { encodeRoom } from "@/lib/roomlink";
 import { encodeSuggestion, type Suggestion } from "@/lib/suggest";
+import { ghostColorFor, ghostLabelText } from "@/lib/ghost";
 import { connect, sendExecOrder } from "@/lib/wallet";
 import { SuggestionBanner } from "./SuggestionBanner";
 
@@ -107,6 +108,12 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const [copySlip, setCopySlip] = useState("50");
   const [copyResult, setCopyResult] = useState<CopyResult>({ kind: "idle" });
   const [incoming, setIncoming] = useState<Suggestion | null>(null);
+  const [ghostPrice, setGhostPrice] = useState<number | null>(null);
+  const [ghostY, setGhostY] = useState<number | null>(null);
+  const [ghostAccepted, setGhostAccepted] = useState<{ orderId: string; hash: string } | null>(null);
+  const [hoverGhost, setHoverGhost] = useState(false);
+  const [acceptReq, setAcceptReq] = useState(0);
+  const [passReq, setPassReq] = useState(0);
   const [bottomExpanded, setBottomExpanded] = useState(false);
 
   const wrap = useRef<HTMLDivElement>(null);
@@ -118,7 +125,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const tpLine = useRef<IPriceLine | null>(null);
   const slLine = useRef<IPriceLine | null>(null);
   const sugLine = useRef<IPriceLine | null>(null);
-  const dragging = useRef<SuggestKind | null>(null);
+  const dragging = useRef<SuggestKind | "ghost" | null>(null);
 
   const market = markets.state === "ready" ? markets.data.find((m) => m.id === marketId) : undefined;
   const decimals = market?.priceDecimals ?? 2;
@@ -128,6 +135,33 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   const lastClose = candles.state === "ready" && candles.data.length ? candles.data[candles.data.length - 1].close : null;
   const counts = useMemo(() => sideCounts(friends), [friends]);
   const copyFriend = copyFor ? friends.find((f) => f.account === copyFor) ?? null : null;
+
+  // The open suggestion link owns the ghost line. The banner decodes and
+  // validates; the chart draws and drags. A fresh suggestion resets the
+  // dragged price and the accepted receipt.
+  function handleSuggestion(s: Suggestion | null) {
+    setIncoming(s);
+    if (s) {
+      setGhostPrice(s.price);
+      setGhostAccepted(null);
+    } else {
+      setGhostPrice(null);
+      setGhostAccepted(null);
+    }
+  }
+
+  const ghostFriend = incoming
+    ? friends.find((f) => f.account.toLowerCase() === incoming.owner.toLowerCase()) ?? null
+    : null;
+  const ghostPnl =
+    ghostFriend && ghostPrice !== null
+      ? pnlAtPrice(ghostPrice, ghostFriend.entryPrice, ghostFriend.size, ghostFriend.side)
+      : 0;
+  const ghostColour = incoming ? colourFor(incoming.from) : CHART.ink;
+  const ghostLabel =
+    incoming && ghostPrice !== null
+      ? ghostLabelText({ from: incoming.from, price: ghostPrice, pnl: ghostPnl, priceDecimals: decimals })
+      : "";
 
   // Markets once.
   useEffect(() => {
@@ -427,9 +461,13 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tp, sl, selected, decimals, overlays]);
 
-  // A shared suggestion link draws its price on the chart in the suggester's
-  // hue, dashed, with an axis pill naming who suggested it. The banner owns
-  // the decode and validity check; this only draws what it approved.
+  // The open suggestion link is the centrepiece of the owner's chart: a ghost
+  // line in the suggester's hue at 60% opacity (8-digit hex, never CSS
+  // color-mix which the chart library cannot parse), dashed, with an axis
+  // pill naming the suggester, the TP price and the live signed PnL. The
+  // owner drags it to their own price to counter; the pill updates live and
+  // the banner offers "Send counter link" on release. After Accept the line
+  // stays solid in the suggester's hue.
   useEffect(() => {
     const s = series.current;
     if (!s) return;
@@ -437,37 +475,50 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       s.removePriceLine(sugLine.current);
       sugLine.current = null;
     }
-    if (!incoming) return;
-    const colour = colourFor(incoming.from);
+    if (!incoming || ghostPrice === null) {
+      setGhostY(null);
+      return;
+    }
+    const accepted = ghostAccepted !== null;
+    const colour = accepted ? ghostColour : ghostColorFor(incoming.from);
     sugLine.current = s.createPriceLine({
-      price: incoming.price,
+      price: ghostPrice,
       color: colour,
       lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
+      lineStyle: accepted ? LineStyle.Solid : LineStyle.Dashed,
       axisLabelVisible: true,
       axisLabelColor: colour,
       axisLabelTextColor: CHART.surface,
-      title: `suggested by ${shortName(incoming.from)}`,
+      title: ghostLabel,
     });
-  }, [incoming]);
+    setGhostY(s.priceToCoordinate(ghostPrice) ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming, ghostPrice, ghostAccepted, decimals, overlays, ghostPnl]);
 
-  // Price lines do not move the candle scale on their own, so a TP/SL
-  // outside the candles' range would render off screen. The visible range
-  // fits the candles plus the selected TP and SL only: friend entries never
-  // stretch the scale (their lines opt out below).
+  // Price lines do not move the candle scale on their own, so a TP/SL or a
+  // ghost suggestion outside the candles' range would render off screen. The
+  // visible range fits the candles plus the selected TP and SL plus the
+  // ghost price: friend entries never stretch the scale (their lines opt out
+  // below).
   useEffect(() => {
     const s = series.current;
     if (!s) return;
-    if (!selected || tp === null || sl === null) {
+    const fitTp = selected && tp !== null ? tp : null;
+    const fitSl = selected && sl !== null ? sl : null;
+    if (fitTp === null && fitSl === null && ghostPrice === null) {
       s.applyOptions({ autoscaleInfoProvider: undefined });
       return;
     }
+    const ghost = ghostPrice;
     s.applyOptions({
       autoscaleInfoProvider: (base: () => AutoscaleInfo | null) => {
         const info = base();
         const baseRange =
           info?.priceRange == null ? null : { min: info.priceRange.minValue, max: info.priceRange.maxValue };
-        const range = visiblePriceRange(baseRange, tp, sl);
+        let range = visiblePriceRange(baseRange, fitTp, fitSl);
+        if (typeof ghost === "number" && Number.isFinite(ghost)) {
+          range = visiblePriceRange(range, ghost, null);
+        }
         if (!range) return info;
         if (!info || !info.priceRange) return { priceRange: { minValue: range.min, maxValue: range.max } };
         return {
@@ -480,7 +531,15 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
       },
     });
     requestAnimationFrame(layout);
-  }, [tp, sl, selected, candles, layout]);
+  }, [tp, sl, selected, candles, ghostPrice, layout]);
+
+  function ghostHit(y: number): "ghost" | null {
+    const s = series.current;
+    if (!s || !incoming || ghostPrice === null || ghostAccepted) return null;
+    const yG = s.priceToCoordinate(ghostPrice);
+    if (yG === null) return null;
+    return Math.abs(y - yG) <= 10 ? "ghost" : null;
+  }
 
   function lineHit(y: number): SuggestKind | null {
     const s = series.current;
@@ -499,7 +558,9 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
   // the pointer. Decorative overlays are pointer-events-none; only chips,
   // avatars, Copy buttons and grips take events, and grips restart the drag
   // through their data-drag-kind. Clamping still starts from the mark, per
-  // lib/drag.ts.
+  // lib/drag.ts. The ghost line drags the same way with no clamp: the owner
+  // drags it to their own price to counter, and the banner offers "Send
+  // counter link" on release.
   function onChartPointerDown(e: React.PointerEvent) {
     const target = e.target as HTMLElement;
     if (target.closest("[data-nodrag]")) return;
@@ -508,9 +569,42 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     const el = box.current;
     const s = series.current;
     const c = chart.current;
-    if (!el || !s || !c || !selected || tp === null || sl === null) return;
+    if (!el || !s || !c) return;
     const y = e.clientY - el.getBoundingClientRect().top;
-    const kind = ((grip?.getAttribute("data-drag-kind") as SuggestKind | null) ?? lineHit(y));
+    const gripKind = grip?.getAttribute("data-drag-kind");
+    if (gripKind === "ghost") {
+      if (!incoming || ghostPrice === null || ghostAccepted) return;
+      dragging.current = "ghost";
+      c.applyOptions({ handleScroll: false, handleScale: false });
+      (e.currentTarget as HTMLElement).style.touchAction = "none";
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+    if (gripKind === "tp" || gripKind === "sl") {
+      if (!selected || tp === null || sl === null) return;
+      dragging.current = gripKind;
+      setFocusKind(gripKind);
+      setSuggestKind(gripKind);
+      c.applyOptions({ handleScroll: false, handleScale: false });
+      (e.currentTarget as HTMLElement).style.touchAction = "none";
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+    // No grip: the ghost wins the hit test so the centrepiece stays
+    // grabbable where it overlaps a TP/SL line.
+    const ghost = ghostHit(y);
+    if (ghost) {
+      dragging.current = ghost;
+      c.applyOptions({ handleScroll: false, handleScale: false });
+      (e.currentTarget as HTMLElement).style.touchAction = "none";
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+    if (!selected || tp === null || sl === null) return;
+    const kind = lineHit(y);
     if (!kind) return;
     dragging.current = kind;
     setFocusKind(kind);
@@ -529,6 +623,16 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     const kind = dragging.current;
     if (!kind) {
       setHoverLine(selected && tp !== null && sl !== null ? lineHit(y) : null);
+      setHoverGhost(ghostHit(y) !== null);
+      return;
+    }
+    if (kind === "ghost") {
+      const price = priceFromY(y, (yy) => {
+        const p = s.coordinateToPrice(yy);
+        return typeof p === "number" ? p : null;
+      });
+      if (price === null) return;
+      setGhostPrice(price);
       return;
     }
     const price = priceFromY(y, (yy) => {
@@ -549,6 +653,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     if (!dragging.current) return;
     dragging.current = null;
     setHoverLine(null);
+    setHoverGhost(false);
     chart.current?.applyOptions({ handleScroll: true, handleScale: true });
     (e.currentTarget as HTMLElement).style.touchAction = "";
   }
@@ -583,6 +688,20 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
     } else if (e.key === "Escape") {
       e.preventDefault();
       resetLines();
+    }
+  }
+
+  function onGhostKeyDown(e: React.KeyboardEvent) {
+    if (ghostPrice === null || !incoming || ghostAccepted) return;
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setGhostPrice(nudgePrice(ghostPrice, decimals, 1));
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setGhostPrice(nudgePrice(ghostPrice, decimals, -1));
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setGhostPrice(incoming.price);
     }
   }
 
@@ -910,7 +1029,11 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
           marketId={marketId}
           priceDecimals={decimals}
           lotDecimals={market?.lotDecimals ?? 0}
-          onSuggestion={setIncoming}
+          onSuggestion={handleSuggestion}
+          ghostPrice={ghostPrice}
+          onAcceptedChange={setGhostAccepted}
+          acceptRequest={acceptReq}
+          passRequest={passReq}
         />
       </div>
 
@@ -922,7 +1045,7 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
           onPointerMove={onChartPointerMove}
           onPointerUp={endChartDrag}
           onPointerCancel={endChartDrag}
-          style={{ cursor: dragging.current ? "grabbing" : hoverLine ? "ns-resize" : undefined, touchAction: "pan-x pan-y" }}
+          style={{ cursor: dragging.current ? "grabbing" : hoverLine || hoverGhost ? "ns-resize" : undefined, touchAction: "pan-x pan-y" }}
         >
           <div ref={box} className="absolute inset-0" />
           {/* PnL marker for the selected trader. On-chart entries keep the
@@ -1165,6 +1288,71 @@ export function ChartRoom({ initialAccounts, viewerAddress }: { initialAccounts?
             >
               <span className="block h-[10px] w-[10px] rounded-full border-2 border-dashed bg-[var(--surface)]" style={{ borderColor: hue(selected.account) }} />
             </button>
+          )}
+          {/* Ghost suggestion: the suggester's 22px initials avatar sits ON
+              the dashed line at its left end and drags it to a counter
+              price. The pill names the suggester with the live TP price and
+              signed PnL; Accept and Pass resolve right on the chart, and the
+              banner mirrors all three. */}
+          {incoming && ghostPrice !== null && ghostY !== null && (
+            <button
+              data-drag-kind="ghost"
+              disabled={ghostAccepted !== null}
+              onKeyDown={onGhostKeyDown}
+              aria-label={`Suggested take-profit at ${formatPrice(ghostPrice, decimals)} from ${shortName(incoming.from)}. Drag to counter, arrow keys nudge by one tick. Escape resets.`}
+              className="marker-anim absolute left-2 z-10 flex cursor-ns-resize items-center justify-center rounded-full disabled:cursor-default"
+              style={{ transform: `translateY(${ghostY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
+            >
+              <span
+                className="block rounded-full text-center font-bold"
+                style={{
+                  width: AVATAR,
+                  height: AVATAR,
+                  background: ghostColour,
+                  color: CHART.surface,
+                  fontSize: 9,
+                  lineHeight: `${AVATAR}px`,
+                  boxShadow: `0 0 0 1px ${CHART.surface}`,
+                }}
+              >
+                {avatarLabel(incoming.from)}
+              </span>
+            </button>
+          )}
+          {incoming && ghostPrice !== null && ghostY !== null && (
+            <div
+              className="marker-anim num pointer-events-none absolute left-12 z-10 border bg-[var(--surface)] px-2 py-1 text-[11px]"
+              style={{ transform: `translateY(${ghostY - 13}px)`, top: 0, borderColor: ghostColour, transition: reducedMotion ? "none" : undefined }}
+            >
+              {ghostLabel}
+            </div>
+          )}
+          {incoming && ghostPrice !== null && ghostY !== null && (
+            <div
+              className="absolute left-12 z-10 flex gap-1.5"
+              style={{ transform: `translateY(${ghostY + 18}px)`, top: 0 }}
+            >
+              {ghostAccepted === null && (
+                <button
+                  type="button"
+                  data-nodrag
+                  onClick={() => setAcceptReq((r) => r + 1)}
+                  aria-label={`Accept the suggestion at ${formatPrice(ghostPrice, decimals)}`}
+                  className="rounded-[6px] bg-ink px-2.5 py-1 text-[12px] font-medium text-surface active:scale-[0.97]"
+                >
+                  Accept
+                </button>
+              )}
+              <button
+                type="button"
+                data-nodrag
+                onClick={() => setPassReq((r) => r + 1)}
+                aria-label="Pass on this suggestion"
+                className="rounded-[6px] border border-ink bg-[var(--surface)] px-2.5 py-1 text-[12px] font-medium hover:bg-rule active:scale-[0.97]"
+              >
+                Pass
+              </button>
+            </div>
           )}
           {/* Volume label, top-left of the footer strip: the last candle's
               volume from the candles API field v. Decorative. */}
