@@ -33,6 +33,12 @@ type AcceptState =
   | { kind: "ok"; hash: string; orderId: string }
   | { kind: "error"; message: string };
 
+// Below 640px the banner prints under the chart as a strip: one line of
+// copy, then the actions on a single wrapping row at a touch height. At
+// 640px and up every button takes the roomy stacked layout back.
+const STRIP_BTN =
+  "min-h-[44px] shrink-0 rounded-[6px] px-2.5 py-1 text-[12px] font-medium active:scale-[0.97] sm:min-h-0 sm:px-3 sm:py-1.5 sm:text-[13px]";
+
 function readRawParam(): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -425,25 +431,18 @@ export function SuggestionBanner({
   );
 
   return (
-    <div className="rounded-[10px] border border-edge bg-panel px-3 py-2.5" role="status" aria-label={`Suggestion from ${nameFor(suggestion.from)}`}>
-      <p className="num text-[13px]">
-        {evaluated.text} <span className="text-muted">PnL from the room position.</span>
+    <div className="rounded-[10px] border border-edge bg-panel px-3 py-2 sm:py-2.5" role="status" aria-label={`Suggestion from ${nameFor(suggestion.from)}`}>
+      <p className="num truncate text-[12px] sm:text-[13px] sm:whitespace-normal">
+        {evaluated.text} <span className="hidden text-muted sm:inline">PnL from the room position.</span>
       </p>
-      {replacing.length > 0 && !accepted && (
-        <p className="num mt-1 text-[12px] text-muted">
-          {replacementNotice(replacing[0]!.price, priceDecimals)}
-          {replacing.length > 1 ? ` (+${replacing.length - 1} more)` : ""}
-          {!ACCEPT_BATCH_SUPPORTED ? ` · ${TWO_SIGNATURE_NOTICE}` : ""}
-        </p>
-      )}
-      <div className="mt-2 flex flex-col gap-2">
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:mt-2 sm:flex-col sm:items-stretch sm:gap-2">
         {!accepted && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="order-1 flex shrink-0 flex-wrap items-center gap-1.5 sm:order-none sm:gap-2">
             <button
               type="button"
               onClick={doAccept}
               disabled={accept.kind === "sending"}
-              className="rounded-[6px] bg-accent px-3 py-1.5 text-[13px] font-medium text-page active:scale-[0.97] disabled:opacity-40"
+              className={`${STRIP_BTN} bg-accent text-page disabled:opacity-40`}
             >
               {accept.kind === "sending" ? "Waiting for wallet" : "Use browser wallet"}
             </button>
@@ -452,23 +451,18 @@ export function SuggestionBanner({
                 type="button"
                 onClick={doAcceptWithPasskey}
                 disabled={accept.kind === "sending"}
-                className="rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97] disabled:opacity-40"
+                className={`${STRIP_BTN} border border-edge hover:bg-raised disabled:opacity-40`}
               >
                 {accept.kind === "sending" ? "Waiting for passkey" : "Accept with passkey"}
               </button>
             )}
           </div>
         )}
-        {!accepted && (
-          <div className="max-w-[320px]">
-            <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="suggest" network={network} />
-          </div>
-        )}
         {counterReady && !accepted && (
           <button
             type="button"
             onClick={sendCounter}
-            className="self-start rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97]"
+            className={`${STRIP_BTN} order-2 border border-edge hover:bg-raised sm:order-none`}
           >
             {counterCopied ? "Copied" : "Send counter link"}
           </button>
@@ -476,12 +470,26 @@ export function SuggestionBanner({
         <button
           type="button"
           onClick={pass}
-          className="self-start rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97]"
+          className={`${STRIP_BTN} order-3 border border-edge hover:bg-raised sm:order-none`}
         >
           Pass
         </button>
+        {replacing.length > 0 && !accepted && (
+          <p className="num order-4 basis-full text-[12px] text-muted sm:order-none sm:basis-auto sm:mt-1">
+            {replacementNotice(replacing[0]!.price, priceDecimals)}
+            {replacing.length > 1 ? ` (+${replacing.length - 1} more)` : ""}
+            {!ACCEPT_BATCH_SUPPORTED ? ` · ${TWO_SIGNATURE_NOTICE}` : ""}
+          </p>
+        )}
+        {!accepted && (
+          <div className="order-5 w-full shrink-0 sm:order-none sm:w-auto">
+            <div className="max-w-[320px]">
+              <PasskeyWallet account={passkey} onAccount={setPasskey} onFunded={setPasskeyFunded} idPrefix="suggest" network={network} />
+            </div>
+          </div>
+        )}
         {accept.kind === "ok" && (
-          <p className="num break-all text-[12px] text-gain">
+          <p className="num order-6 w-full shrink-0 break-all text-[12px] text-gain sm:order-none sm:w-auto sm:mt-2">
             Accepted · order {accept.orderId}{" "}
             <a className="underline" href={explorerTxUrl(network, accept.hash)} target="_blank" rel="noreferrer">
               View on the {network === "mainnet" ? "MonadVision" : "testnet"} explorer
@@ -493,12 +501,14 @@ export function SuggestionBanner({
           <button
             type="button"
             onClick={copyRoomLink}
-            className="self-start rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97]"
+            className={`${STRIP_BTN} order-7 w-full border border-edge hover:bg-raised sm:order-none sm:w-auto sm:self-start`}
           >
             {roomCopied ? "Copied" : "Copy room link"}
           </button>
         )}
-        {accept.kind === "error" && <p className="text-[12px] text-loss">{accept.message}</p>}
+        {accept.kind === "error" && (
+          <p className="order-8 w-full shrink-0 text-[12px] text-loss sm:order-none sm:w-auto">{accept.message}</p>
+        )}
       </div>
     </div>
   );
