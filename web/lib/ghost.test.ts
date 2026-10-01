@@ -55,10 +55,11 @@ describe("ghostLabelText", () => {
 });
 
 describe("ghostColorFor", () => {
-  it("is an 8-digit hex at 60 percent opacity, never color-mix", () => {
-    const colour = ghostColorFor(FROM);
-    expect(colour).toMatch(/^#[0-9a-fA-F]{6}99$/);
-    expect(colour).not.toContain("color-mix");
-    expect(hexWithAlpha("#E8553D", 0.6).toLowerCase()).toBe("#e8553d99");
+  it("is a side colour at 60 percent opacity, never color-mix", () => {
+    expect(ghostColorFor("long")).toMatch(/^#[0-9a-fA-F]{6}99$/);
+    expect(ghostColorFor("short")).toMatch(/^#[0-9a-fA-F]{6}99$/);
+    expect(ghostColorFor("long").toLowerCase()).toBe("#2bd67b99");
+    expect(ghostColorFor("short").toLowerCase()).toBe("#ff6b5799");
+    expect(hexWithAlpha("#2BD67B", 0.6).toLowerCase()).toBe("#2bd67b99");
   });
 });

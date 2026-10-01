@@ -122,9 +122,9 @@ describe("volumeColorFor", () => {
     expect(volumeColorFor({ open: 101, close: 100 })).toBe(DOWN_WASH);
     expect(volumeColorFor({ open: 100, close: 100 })).toBe(UP_WASH);
   });
-  it("uses concrete washes the chart library can parse", () => {
-    expect(UP_WASH).toBe("#DCEEDD");
-    expect(DOWN_WASH).toBe("#F6DCD3");
+  it("uses concrete fills the chart library can parse", () => {
+    expect(UP_WASH).toBe("#2BD67B");
+    expect(DOWN_WASH).toBe("#FF6B57");
   });
 });
 
