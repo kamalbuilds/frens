@@ -57,6 +57,8 @@ export type VerifiedCall = {
   owner: Address;
   /// Market the call was placed in, the OrderRequestV2 perpId.
   market: number;
+  /// On-chain order type from the OrderRequestV2 log.
+  orderType: number;
   /// pricePNS from the OrderRequestV2 log, as a decimal string: the raw
   /// on-chain value, unscaled.
   pricePNS: string;
@@ -115,7 +117,7 @@ async function verifyOne(
         topics,
       });
       if (ev.eventName !== "OrderRequestV2") continue;
-      const args = ev.args as unknown as { perpId: bigint; orderDescId: bigint; pricePNS: bigint };
+      const args = ev.args as unknown as { perpId: bigint; orderDescId: bigint; pricePNS: bigint; orderType: number | bigint };
       const decoded = decodeDescId(args.orderDescId);
       if (!decoded) continue;
       return {
@@ -123,6 +125,7 @@ async function verifyOne(
         caller: decoded.suggester,
         owner: getAddress(receipt.from),
         market: Number(args.perpId),
+        orderType: Number(args.orderType),
         pricePNS: args.pricePNS.toString(),
         block: Number(receipt.blockNumber),
       };
