@@ -321,6 +321,7 @@ export function ChartRoom({
         priceToY,
         height,
         avatar: FACE_SIZE,
+        barSeconds: res,
       }),
     );
     const topIdx: number[] = [];

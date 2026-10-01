@@ -207,15 +207,17 @@ export function placeAvatar(opts: {
   priceToY: (p: number) => number | null;
   height: number;
   avatar?: number;
+  /// Candle length in seconds. Entries are snapped to the start of the candle that contains them, so an
+  /// entry inside the newest, still-open candle lands on it instead of being pushed to the edge.
+  barSeconds?: number;
 }): { mode: AvatarMode; x: number; y: number } {
   const size = opts.avatar ?? 22;
   const half = size / 2;
-  const inTime =
-    typeof opts.entryTime === "number" &&
-    Number.isFinite(opts.entryTime) &&
-    opts.entryTime >= opts.firstTime &&
-    opts.entryTime <= opts.lastTime;
-  const xRaw = inTime ? opts.timeToX(opts.entryTime as number) : null;
+  const bar = opts.barSeconds && opts.barSeconds > 0 ? opts.barSeconds : 0;
+  const t = typeof opts.entryTime === "number" && Number.isFinite(opts.entryTime) ? opts.entryTime : null;
+  const snapped = t === null ? null : bar ? opts.firstTime + Math.floor((t - opts.firstTime) / bar) * bar : t;
+  const inTime = snapped !== null && snapped >= opts.firstTime && snapped <= opts.lastTime;
+  const xRaw = inTime ? opts.timeToX(snapped as number) : null;
   const yRaw = opts.priceToY(opts.entryPrice);
   const xOk = typeof xRaw === "number" && Number.isFinite(xRaw);
   const yOk = typeof yRaw === "number" && Number.isFinite(yRaw) && (yRaw as number) >= 0 && (yRaw as number) <= opts.height;
