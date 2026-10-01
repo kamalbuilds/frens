@@ -7,6 +7,7 @@ import path from "node:path";
 import { createWalletClient, decodeEventLog, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { NETWORKS, publicClient } from "../web/lib/perpl";
+import { padGas } from "../web/lib/wallet";
 import { readPerpMeta, readPosition } from "../web/lib/readPosition";
 import { buildAcceptOrders, decodeSuggestion, encodeAcceptBatch, encodeCloseOrder, sizeToLots, toCloseOrder, validateSuggestion } from "../web/lib/suggest";
 import { findRestingCloses } from "../web/lib/resting";
@@ -40,7 +41,8 @@ const orders = buildAcceptOrders(order, resting.map((r) => r.orderId));
 const data = orders.length > 1 ? encodeAcceptBatch(orders, true) : encodeCloseOrder(order);
 console.log(`resting closes replaced: ${resting.map((r) => `${r.orderId}@${r.price}`).join(", ") || "none"}`);
 const w = createWalletClient({ account: owner, chain, transport: http(net.rpc) });
-const hash = await w.sendTransaction({ to: net.exchange, data });
+const gas = padGas(await client.estimateGas({ account: owner.address, to: net.exchange, data }));
+const hash = await w.sendTransaction({ to: net.exchange, data, gas });
 const r = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
 if (r.status !== "success") throw new Error(`accept reverted: ${hash}`);
 

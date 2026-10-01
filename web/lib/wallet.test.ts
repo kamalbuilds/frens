@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { toHex } from "viem";
 import { encodeCopyOrder, toCopyOrder } from "./copy";
 import { NETWORKS } from "./perpl";
-import { chainFor, connect, sendExecOrder } from "./wallet";
+import { chainFor, connect, padGas, sendExecOrder } from "./wallet";
 
 const MAINNET_HEX = toHex(143);
 const TESTNET_HEX = toHex(10143);
@@ -205,6 +205,8 @@ describe("sendExecOrder", () => {
     // Byte for byte what copy.ts encoded, so the wallet signs the order we built.
     expect(sent[0]!.data).toBe(data);
     expect(sent[0]!.from).toBe(ACCOUNT);
+    // 1.5x the wallet's own estimate (0x5208 = 21000), so an in-block state change cannot run it out of gas.
+    expect(BigInt((sent[0] as { gas?: string }).gas ?? "0x0")).toBe(31_500n);
   });
 
   it("sends to the mainnet exchange on mainnet", async () => {
@@ -251,5 +253,12 @@ describe("sendExecOrder", () => {
     // than resolve to a hash and let the caller claim a position was opened.
     expect(sendExecOrder(TESTNET_EXCHANGE, data, "testnet")).rejects.toThrow();
     expect(fake.methods()).toContain("eth_sendTransaction");
+  });
+});
+
+describe("padGas", () => {
+  it("sends 1.5x the estimate, rounded down", () => {
+    expect(padGas(289_207n)).toBe(433_810n);
+    expect(padGas(0n)).toBe(0n);
   });
 });
