@@ -7,7 +7,7 @@ const sans = IBM_Plex_Sans({ subsets: ["latin"], variable: "--font-plex-sans", w
 const mono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-plex-mono", weight: ["400", "500"] });
 
 export const metadata: Metadata = {
-  title: "Chartroom. Your friends, on the chart.",
+  title: "Cosign. Your friends call the exit. You sign it.",
   description: "Every trader in the room, pinned at their entry price on one live Perpl chart.",
 };
 
