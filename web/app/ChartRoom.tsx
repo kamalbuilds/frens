@@ -304,8 +304,8 @@ export function ChartRoom({
       onEvent: (ev) => {
         const msg =
           ev.kind === "call-accepted"
-            ? `${shortName(ev.caller ?? ev.owner)}'s call was accepted by ${shortName(ev.owner)}`
-            : `${shortName(ev.owner)} placed an order`;
+            ? `${display(ev.caller ?? ev.owner)}'s call was accepted by ${display(ev.owner)}`
+            : `${display(ev.owner)} placed an order`;
         setToast(msg);
         setFeedTick((t) => t + 1);
       },
