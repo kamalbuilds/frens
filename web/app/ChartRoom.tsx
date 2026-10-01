@@ -27,6 +27,8 @@ import { encodeSuggestion, type Suggestion } from "@/lib/suggest";
 import { NETWORKS, type Network } from "@/lib/perpl";
 import { explorerTxUrl, roomLink } from "@/lib/network";
 import { callLine, displayName, encodeKeyedNames, namesForAddresses, sanitizeName } from "@/lib/names";
+import { encodeCallsParam } from "@/lib/receipts";
+import type { VerifiedCall } from "@/lib/receipts";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
 import { connect as connectWallet, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
@@ -90,6 +92,7 @@ const CHART = {
 export function ChartRoom({
   initialAccounts,
   initialNames,
+  initialCalls,
   viewerAddress,
   initialView,
   initialNet,
@@ -97,6 +100,8 @@ export function ChartRoom({
   initialAccounts?: string[];
   /// Nicknames from the room link (?n=), same order as initialAccounts.
   initialNames?: string[];
+  /// Accepted-call transaction hashes from the room link (?c=).
+  initialCalls?: string[];
   viewerAddress?: string;
   /// Room links (/r/<room>) open in the saved room; the bare URL defaults to
   /// the live Perpl view so faces sit on recent candles.
@@ -185,7 +190,16 @@ export function ChartRoom({
   const display = (addr: string) => displayName(addr, nameByAddr);
   // Accepted-call record per fren, keyed by network and address.
   const [callRecords, setCallRecords] = useState<Record<string, { accepted: number; hit: number }>>({});
-  const recFor = (addr: string) => callRecords[`${net}:${addr.toLowerCase()}`] ?? null;
+  // Trustless call receipts from the room link (?c=): each hash verified
+  // against its own transaction receipt, no log scanning.
+  const [callHashes, setCallHashes] = useState<string[]>(() => initialCalls ?? []);
+  const [receiptCalls, setReceiptCalls] = useState<VerifiedCall[]>([]);
+  const recFor = (addr: string) => {
+    const hyper = callRecords[`${net}:${addr.toLowerCase()}`] ?? null;
+    if (hyper) return hyper;
+    const n = receiptCalls.filter((c) => c.caller.toLowerCase() === addr.toLowerCase()).length;
+    return n > 0 ? { accepted: n, hit: 0 } : null;
+  };
   const accountsKey = useMemo(() => friends.map((f) => f.account.toLowerCase()).sort().join(","), [friends]);
 
   // The open suggestion link owns the ghost line. The banner decodes and
@@ -342,9 +356,11 @@ export function ChartRoom({
       .catch((e) => setLive({ state: "error", message: String(e) }));
   }, [marketId, view, net, marketKnown, feedTick]);
 
-  // Accepted-call record per fren, read from the callbook API (chain logs:
-  // HyperSync when configured, else the RPC path). Powers the "<n> calls
-  // taken" line and the lime dot. One cached entry per network and address.
+  // Accepted-call record per fren, read from the callbook API when it runs
+  // on HyperSync. The RPC log-scan path is retired: Perpl logs are
+  // unindexed, so a wide window downloads every order on the venue and never
+  // finishes. Without HyperSync the room's ?c= receipts (below) own the
+  // record instead, so rpc-sourced rows are discarded here.
   useEffect(() => {
     if (!accountsKey) return;
     let cancelled = false;
@@ -356,6 +372,7 @@ export function ChartRoom({
         .then(async (r) => ({ ok: r.ok, body: await r.json() }))
         .then(({ ok, body }) => {
           if (cancelled || !ok) return;
+          if (body.source !== "hypersync") return;
           setCallRecords((prev) =>
             prev[key]
               ? prev
@@ -371,6 +388,52 @@ export function ChartRoom({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountsKey, net]);
+
+  // Trustless call record from the room link: ?c= hashes verified per
+  // receipt by /api/calls. Powers the same "<n> calls taken" line where the
+  // HyperSync path above has nothing.
+  const callsKey = useMemo(() => callHashes.join(","), [callHashes]);
+  useEffect(() => {
+    if (!callsKey) {
+      setReceiptCalls([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/calls?net=${net}&c=${encodeURIComponent(callsKey)}`)
+      .then(async (r) => ({ ok: r.ok, body: await r.json() }))
+      .then(({ ok, body }) => {
+        if (cancelled || !ok || !Array.isArray(body.calls)) return;
+        setReceiptCalls(body.calls as VerifiedCall[]);
+      })
+      .catch(() => {
+        // A missing record hides the line; the card still shows the position.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [callsKey, net]);
+
+  // Append an accepted-call hash to the room's ?c= list: state owns the
+  // record, the URL follows so the link stays shareable, capped at 50.
+  function appendCallHash(hash: string) {
+    const t = hash.trim();
+    if (!/^0x[0-9a-fA-F]{64}$/.test(t)) return;
+    if (callHashes.some((h) => h.toLowerCase() === t.toLowerCase())) return;
+    const next = [...callHashes, t].slice(-50);
+    setCallHashes(next);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("c", encodeCallsParam(next));
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+      // State still holds the hashes even if the URL cannot be rewritten.
+    }
+  }
+
+  function handleAcceptedChange(info: { orderId: string; hash: string } | null) {
+    setGhostAccepted(info);
+    if (info?.hash) appendCallHash(info.hash);
+  }
 
   // The chart itself, created once.
   useEffect(() => {
@@ -1123,8 +1186,9 @@ export function ChartRoom({
       if (!code) return;
       const n = roomNamesQuery();
       const hasNames = n.split(",").some((s) => s !== "");
+      const c = encodeCallsParam(callHashes);
       await navigator.clipboard.writeText(
-        `${window.location.origin}${roomLink(code, net, hasNames ? n : undefined)}`,
+        `${window.location.origin}${roomLink(code, net, hasNames ? n : undefined, c || undefined)}`,
       );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -1132,6 +1196,23 @@ export function ChartRoom({
       setCopied(false);
     }
   }
+
+  // The room link the accept banner shares: same room, same names, plus the
+  // ?c= receipts so the next opener sees the accepted call verified.
+  const roomSharePath = useMemo(() => {
+    try {
+      const addrs = extra.length ? extra : friends.map((f) => f.account);
+      const code = encodeRoom(addrs);
+      if (!code) return null;
+      const n = roomNamesQuery();
+      const hasNames = n.split(",").some((s) => s !== "");
+      const c = encodeCallsParam(callHashes);
+      return roomLink(code, net, hasNames ? n : undefined, c || undefined);
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extra, friends, net, nameByAddr, callHashes]);
 
   // Switch deployments: the URL owns the network so a refresh, a room link or
   // a suggestion link stays on the same deployment.
@@ -1266,7 +1347,8 @@ export function ChartRoom({
           names={nameByAddr}
           onSuggestion={handleSuggestion}
           ghostPrice={ghostPrice}
-          onAcceptedChange={setGhostAccepted}
+          onAcceptedChange={handleAcceptedChange}
+          roomShareLink={roomSharePath}
           acceptRequest={acceptReq}
           passRequest={passReq}
         />
