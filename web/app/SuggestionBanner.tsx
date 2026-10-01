@@ -500,7 +500,7 @@ export function SuggestionBanner({
         )}
         {taken && (
           <p data-already-taken className="num order-4 basis-full text-[12px] text-gain sm:order-none sm:basis-auto sm:mt-1">
-            You took this call · TP resting at {formatPrice(suggestion.price, priceDecimals)}
+            {nameFor(suggestion.owner)} took this call · TP resting at {formatPrice(suggestion.price, priceDecimals)}
           </p>
         )}
         {accept.kind === "ok" && (
