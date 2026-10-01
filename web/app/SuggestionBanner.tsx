@@ -87,6 +87,7 @@ export function SuggestionBanner({
   ghostPrice,
   onAcceptedChange,
   roomShareLink,
+  callHashes,
   acceptRequest,
   passRequest,
 }: {
@@ -102,6 +103,8 @@ export function SuggestionBanner({
   onAcceptedChange?: (info: { orderId: string; hash: string } | null) => void;
   /// Room link carrying the ?c= receipts, offered for sharing after Accept.
   roomShareLink?: string | null;
+  /// The room's accepted-call receipts (?c=): resting TPs created through frens are found from these.
+  callHashes?: readonly string[];
   acceptRequest?: number;
   passRequest?: number;
 }) {
@@ -176,7 +179,7 @@ export function SuggestionBanner({
     if (!suggestion) return;
     let live = true;
     setResting(null);
-    findRestingCloses(network, publicClient(network), suggestion.owner, marketId)
+    findRestingCloses(network, publicClient(network), suggestion.owner, marketId, { knownTxs: (callHashes ?? []) as `0x${string}`[] })
       .then((all) => {
         if (!live || !suggestion) return;
         const want = suggestion.side === "long" ? "close-long" : "close-short";
@@ -232,7 +235,7 @@ export function SuggestionBanner({
     const close = buildCloseOrder();
     let restingNow: RestingClose[] = [];
     try {
-      restingNow = (await findRestingCloses(network, publicClient(network), suggestion.owner, marketId)).filter(matchingSide);
+      restingNow = (await findRestingCloses(network, publicClient(network), suggestion.owner, marketId, { knownTxs: (callHashes ?? []) as `0x${string}`[] })).filter(matchingSide);
     } catch {
       restingNow = [];
     }

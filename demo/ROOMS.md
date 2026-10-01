@@ -26,3 +26,5 @@ Read back from chain:
 - READ BACK call: TP 82617 on bo's short, resting on Perpl, caller 0xb3790F7EBa6bd875714bBeD7e3f9F303871F0CCC in orderDescId, block 67331020
 
 Accepted live (2026-10-02, demo/accept-call.ts): dee accepted cy's TP at 81,765, tx 0x850e07e613a53298c1b65df48a477dd2e714b40d00a58e1c4fa68f43388bd2f0, block 67,338,316; caller cy read back from OrderRequestV2.orderDescId.
+
+Replace (2026-10-02): bo called a TP on cy, who already had a resting TP (order 140 @ 88,144 from ana). One execOrders batch cancelled 140 and placed the new close: tx 0xeb51040c5bc7cd08695750d237eed7d3cef3a80b0d18e976c19bbcdb5814d2e4, caller bo read back.

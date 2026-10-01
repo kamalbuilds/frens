@@ -55,6 +55,10 @@ export async function findRestingCloses(
   client: PublicClient,
   account: Address,
   market: number,
+  // Accept transactions already known (the room link's c= receipts): their OrderPlaced ids are checked
+  // directly, with no log scan. The scan below needs >100-block eth_getLogs, which the public RPC a browser
+  // uses refuses, so it only runs when `scan` is set (server side, private RPC).
+  opts: { knownTxs?: readonly Hex[]; scan?: boolean } = {},
 ): Promise<RestingClose[]> {
   try {
     const exchange = NETWORKS[network].exchange;
@@ -85,11 +89,23 @@ export async function findRestingCloses(
     const reqV1 = eventAbi("OrderRequest");
     const placedEv = eventAbi("OrderPlaced");
 
-    const [v2logs, v1logs, placedLogs] = (await Promise.all([
-      client.getLogs({ address: exchange, event: reqV2, fromBlock, toBlock: latest }),
-      client.getLogs({ address: exchange, event: reqV1, fromBlock, toBlock: latest }),
-      client.getLogs({ address: exchange, event: placedEv, fromBlock, toBlock: latest }),
-    ])) as unknown as AnyLog[][];
+    const fromReceipts: AnyLog[] = [];
+    for (const hash of opts.knownTxs ?? []) {
+      try {
+        const r = await client.getTransactionReceipt({ hash });
+        if (r.status !== "success") continue;
+        for (const l of r.logs) fromReceipts.push({ topics: l.topics as Hex[], data: l.data, blockNumber: r.blockNumber, transactionHash: hash });
+      } catch {
+        continue;
+      }
+    }
+    const [v2logs, v1logs, placedLogs] = opts.scan
+      ? ((await Promise.all([
+          client.getLogs({ address: exchange, event: reqV2, fromBlock, toBlock: latest }),
+          client.getLogs({ address: exchange, event: reqV1, fromBlock, toBlock: latest }),
+          client.getLogs({ address: exchange, event: placedEv, fromBlock, toBlock: latest }),
+        ])) as unknown as AnyLog[][])
+      : [fromReceipts, [], fromReceipts];
 
     const orderIdByTx = new Map<string, bigint>();
     for (const log of placedLogs ?? []) {
