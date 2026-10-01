@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { Address } from "viem";
 import type { Position } from "./readPosition";
 import { encodeSuggestion, type Suggestion } from "./suggest";
-import { acceptOwnerCheck, bannerText, evaluateSuggestion, suggestionKind } from "./acceptance";
+import { acceptOwnerCheck, alreadyTaken, bannerText, evaluateSuggestion, suggestionKind } from "./acceptance";
 
 const OWNER = "0xf91b2eCb1cD59A36F3AED20B46943a75dB08795b" as Address;
 const FROM = "0x4981053aA266D74f9914a74Ad8ED79014846Ace9" as Address;
@@ -173,5 +173,16 @@ describe("acceptOwnerCheck", () => {
     if (other.ok === false) expect(other.reason).toMatch(/Only .* can accept this/);
     const none = acceptOwnerCheck("", s);
     expect(none.ok).toBe(false);
+  });
+});
+
+describe("alreadyTaken", () => {
+  it("a resting close at the call's price is the call already taken", () => {
+    expect(alreadyTaken([{ price: 81765 }], 81765, 1)).toBe(true);
+    expect(alreadyTaken([{ price: 81765.04 }], 81765, 1)).toBe(true);
+  });
+  it("a resting close one tick away, or none, is not", () => {
+    expect(alreadyTaken([{ price: 81765.1 }], 81765, 1)).toBe(false);
+    expect(alreadyTaken([], 81765, 1)).toBe(false);
   });
 });
