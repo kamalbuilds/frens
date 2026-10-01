@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { ChartRoom } from "@/app/ChartRoom";
 import { parseNet } from "@/lib/network";
 import { encodeNamesParam, parseNamesParam } from "@/lib/names";
@@ -29,7 +30,12 @@ export async function generateMetadata({
     encodeNamesParam(parseNamesParam(n)),
     encodeCallsParam(parseCallsParam(c)),
   );
+  // Absolute card URL from the host that served the link (Vercel or the Funnel), never localhost.
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
   return {
+    metadataBase: host ? new URL(`${proto}://${host}`) : undefined,
     title,
     description: "Every trader in the room, pinned at their entry price on one live Perpl chart.",
     openGraph: { title, description: "Your frens' Perpl positions on one chart. Call their exits, copy their trades.", images: [card] },
