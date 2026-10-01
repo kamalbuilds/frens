@@ -26,18 +26,30 @@ export function suggestionKind(s: Suggestion, markPrice: number): SuggestionKind
 
 // One-line banner text: "<from> suggests a <TP|SL> at <price> on <owner>'s
 // <side> (<signed PnL>)". PnL comes from pnlAtPrice against the owner's room
-// position, so it matches the chart's own TP/SL tags.
-export function bannerText(s: Suggestion, position: Position, priceDecimals: number): string {
+// position, so it matches the chart's own TP/SL tags. Addresses render
+// through nameFor so room nicknames show instead of the 4-char address.
+export function bannerText(
+  s: Suggestion,
+  position: Position,
+  priceDecimals: number,
+  nameFor: (addr: string) => string = shortName,
+): string {
   const kind = suggestionKind(s, position.markPrice);
   const pnl = pnlAtPrice(s.price, position.entryPrice, position.size, position.side);
-  return `${shortName(s.from)} suggests a ${kind} at ${formatPrice(s.price, priceDecimals)} on ${shortName(s.owner)}'s ${position.side} (${formatUsd(pnl)})`;
+  return `${nameFor(s.from)} suggests a ${kind} at ${formatPrice(s.price, priceDecimals)} on ${nameFor(s.owner)}'s ${position.side} (${formatUsd(pnl)})`;
 }
 
 // validateSuggestion speaks in raw checks ("must be above the mark price
 // 84008.9, got 70000"). The banner shows whatever this module returns, so
 // rewrite each known problem as a plain sentence with formatted prices.
-function friendlyReason(raw: string, s: Suggestion, position: Position, priceDecimals: number): string {
-  const who = shortName(s.owner);
+function friendlyReason(
+  raw: string,
+  s: Suggestion,
+  position: Position,
+  priceDecimals: number,
+  nameFor: (addr: string) => string = shortName,
+): string {
+  const who = nameFor(s.owner);
   if (/take-profit for a long must be above/i.test(raw)) {
     return (
       `This take-profit (${formatPrice(s.price, priceDecimals)}) is below the current price ` +
@@ -53,7 +65,7 @@ function friendlyReason(raw: string, s: Suggestion, position: Position, priceDec
   if (/does not match the position account/i.test(raw)) {
     return (
       `This suggestion is for ${who}, but the open position here belongs to ` +
-      `${shortName(position.account)}, so it cannot be applied here.`
+      `${nameFor(position.account)}, so it cannot be applied here.`
     );
   }
   if (/but the position is on market/i.test(raw)) {
@@ -89,12 +101,13 @@ export type Acceptance =
 export function acceptOwnerCheck(
   connected: string | null | undefined,
   s: Suggestion,
+  nameFor: (addr: string) => string = shortName,
 ): { ok: true } | { ok: false; reason: string } {
   if (!connected || connected.trim() === "") {
     return { ok: false, reason: "Connect the owner wallet to accept this." };
   }
   if (connected.trim().toLowerCase() !== s.owner.toLowerCase()) {
-    return { ok: false, reason: `Only ${shortName(s.owner)} can accept this.` };
+    return { ok: false, reason: `Only ${nameFor(s.owner)} can accept this.` };
   }
   return { ok: true };
 }
@@ -105,8 +118,10 @@ export function evaluateSuggestion(
     positionFor: (s: Suggestion) => Position | null;
     priceDecimals: number;
     lotDecimals?: number | bigint;
+    nameFor?: (addr: string) => string;
   },
 ): Acceptance {
+  const nameFor = opts.nameFor ?? shortName;
   if (raw === null || raw === undefined || raw === "") return { status: "empty" };
   let suggestion: Suggestion | null = null;
   try {
@@ -126,7 +141,7 @@ export function evaluateSuggestion(
   if (position === null) {
     return {
       status: "stale",
-      reason: `${shortName(suggestion.owner)} has no open position on this market right now, so this suggestion is stale.`,
+      reason: `${nameFor(suggestion.owner)} has no open position on this market right now, so this suggestion is stale.`,
       suggestion,
     };
   }
@@ -141,12 +156,12 @@ export function evaluateSuggestion(
     };
   }
   if (problems.length > 0) {
-    return { status: "stale", reason: friendlyReason(problems[0] as string, suggestion, position, opts.priceDecimals), suggestion };
+    return { status: "stale", reason: friendlyReason(problems[0] as string, suggestion, position, opts.priceDecimals, nameFor), suggestion };
   }
   return {
     status: "valid",
     suggestion,
     kind: suggestionKind(suggestion, position.markPrice),
-    text: bannerText(suggestion, position, opts.priceDecimals),
+    text: bannerText(suggestion, position, opts.priceDecimals, nameFor),
   };
 }

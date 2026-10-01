@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
 import type { Friend } from "@/lib/chart";
-import { shortName } from "@/lib/chart";
+import { nameForAddress, type NamesByAddress } from "@/lib/names";
 import { decodeSuggestion, encodeCloseOrder, encodeSuggestion, sizeToLots, toCloseOrder, type Suggestion } from "@/lib/suggest";
 import { buildCounterSuggestion } from "@/lib/ghost";
 import type { Position } from "@/lib/readPosition";
@@ -69,6 +69,7 @@ export function SuggestionBanner({
   network,
   priceDecimals,
   lotDecimals,
+  names,
   onSuggestion,
   ghostPrice,
   onAcceptedChange,
@@ -81,6 +82,7 @@ export function SuggestionBanner({
   network: Network;
   priceDecimals: number;
   lotDecimals: number;
+  names?: NamesByAddress;
   onSuggestion?: (s: Suggestion | null) => void;
   ghostPrice?: number | null;
   onAcceptedChange?: (info: { orderId: string; hash: string } | null) => void;
@@ -100,6 +102,8 @@ export function SuggestionBanner({
     setSeen(true);
   }, []);
 
+  const nameFor = useMemo(() => nameForAddress(names), [names]);
+
   const evaluated = useMemo(() => {
     if (!seen || raw === null) return null;
     try {
@@ -110,11 +114,12 @@ export function SuggestionBanner({
         },
         priceDecimals,
         lotDecimals,
+        nameFor,
       });
     } catch {
       return { status: "malformed" as const, reason: "That suggestion link is malformed and cannot be opened." };
     }
-  }, [seen, raw, friends, marketId, priceDecimals, lotDecimals]);
+  }, [seen, raw, friends, marketId, priceDecimals, lotDecimals, nameFor]);
 
   const validSuggestion = evaluated && evaluated.status === "valid" ? evaluated.suggestion : null;
   const suggestion = evaluated && evaluated.status === "valid" ? evaluated.suggestion : null;
@@ -176,7 +181,7 @@ export function SuggestionBanner({
     setAccept({ kind: "sending" });
     try {
       const connected = await connect(network);
-      const gate = acceptOwnerCheck(connected, suggestion);
+      const gate = acceptOwnerCheck(connected, suggestion, nameFor);
       if (!gate.ok) {
         setAccept({ kind: "error", message: gate.reason });
         return;
@@ -198,7 +203,7 @@ export function SuggestionBanner({
     if (!suggestion || !ownerFriend || !passkey) return;
     setAccept({ kind: "sending" });
     try {
-      const gate = acceptOwnerCheck(passkey.address, suggestion);
+      const gate = acceptOwnerCheck(passkey.address, suggestion, nameFor);
       if (!gate.ok) {
         setAccept({ kind: "error", message: gate.reason });
         return;
@@ -308,7 +313,7 @@ export function SuggestionBanner({
   const accepted = accept.kind === "ok";
 
   return (
-    <div className="rounded-[10px] border border-edge bg-panel px-3 py-2.5" role="status" aria-label={`Suggestion from ${shortName(suggestion.from)}`}>
+    <div className="rounded-[10px] border border-edge bg-panel px-3 py-2.5" role="status" aria-label={`Suggestion from ${nameFor(suggestion.from)}`}>
       <p className="num text-[13px]">
         {evaluated.text} <span className="text-muted">PnL from the room position.</span>
       </p>

@@ -18,7 +18,7 @@ import {
 } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
-import { byPnl, candleChange, chipFor, formatPrice, formatUsd, placeAvatar, shortName, sideCounts, visiblePriceRange, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
+import { byPnl, candleChange, chipFor, formatPrice, formatUsd, placeAvatar, sideCounts, subtitleForMarket, visiblePriceRange, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
 import { FACE_SIZE, clusterFaces, ringColorFor } from "@/lib/faces";
 import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, type SuggestKind } from "@/lib/drag";
 import { encodeCopyOrder, toCopyOrder } from "@/lib/copy";
@@ -26,6 +26,7 @@ import { encodeRoom } from "@/lib/roomlink";
 import { encodeSuggestion, type Suggestion } from "@/lib/suggest";
 import { NETWORKS, type Network } from "@/lib/perpl";
 import { explorerTxUrl, roomLink } from "@/lib/network";
+import { callLine, displayName, encodeNamesParam, namesForAddresses, sanitizeName } from "@/lib/names";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
 import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { SuggestionBanner } from "./SuggestionBanner";
@@ -86,11 +87,14 @@ const CHART = {
 
 export function ChartRoom({
   initialAccounts,
+  initialNames,
   viewerAddress,
   initialView,
   initialNet,
 }: {
   initialAccounts?: string[];
+  /// Nicknames from the room link (?n=), same order as initialAccounts.
+  initialNames?: string[];
   viewerAddress?: string;
   /// Room links (/r/<room>) open in the saved room; the bare URL defaults to
   /// the live Perpl view so faces sit on recent candles.
@@ -103,13 +107,18 @@ export function ChartRoom({
   const [net, setNet] = useState<Network>(initialNet ?? "testnet");
   const [markets, setMarkets] = useState<Load<Market[]>>({ state: "loading" });
   const [marketId, setMarketId] = useState<number>(() => DEFAULT_MARKET[initialNet ?? "testnet"]);
-  const [res, setRes] = useState(3600);
+  // Rooms open on the 15m candles so recent entries sit on visible candles.
+  const [res, setRes] = useState(900);
   const [candles, setCandles] = useState<Load<Candle[]>>({ state: "loading" });
   const [room, setRoom] = useState<Load<{ friends: Friend[]; block: string; checked: number }>>({ state: "loading" });
   const [view, setView] = useState<"live" | "frens">(initialView ?? "live");
   const [live, setLive] = useState<Load<{ traders: Friend[]; block: string; hours: number }>>({ state: "loading" });
   const [extra, setExtra] = useState<string[]>(initialAccounts ?? []);
+  const [nameByAddr, setNameByAddr] = useState<Map<string, string>>(
+    () => namesForAddresses(initialAccounts ?? [], initialNames ?? []),
+  );
   const [draft, setDraft] = useState("");
+  const [draftName, setDraftName] = useState("");
   const [draftError, setDraftError] = useState("");
   const [copied, setCopied] = useState(false);
   const [active, setActive] = useState<string | null>(null);
@@ -168,6 +177,12 @@ export function ChartRoom({
   const lastClose = candles.state === "ready" && candles.data.length ? candles.data[candles.data.length - 1].close : null;
   const counts = useMemo(() => sideCounts(friends), [friends]);
   const copyFriend = copyFor ? friends.find((f) => f.account === copyFor) ?? null : null;
+  // The room shows nicknames instead of the 4-char address everywhere.
+  const display = (addr: string) => displayName(addr, nameByAddr);
+  // Accepted-call record per fren, keyed by network and address.
+  const [callRecords, setCallRecords] = useState<Record<string, { accepted: number; hit: number }>>({});
+  const recFor = (addr: string) => callRecords[`${net}:${addr.toLowerCase()}`] ?? null;
+  const accountsKey = useMemo(() => friends.map((f) => f.account.toLowerCase()).sort().join(","), [friends]);
 
   // The open suggestion link owns the ghost line. The banner decodes and
   // validates; the chart draws and drags. A fresh suggestion resets the
@@ -197,7 +212,7 @@ export function ChartRoom({
     : CHART.muted;
   const ghostLabel =
     incoming && ghostPrice !== null
-      ? ghostLabelText({ from: incoming.from, price: ghostPrice, pnl: ghostPnl, priceDecimals: decimals })
+      ? ghostLabelText({ from: incoming.from, price: ghostPrice, pnl: ghostPnl, priceDecimals: decimals, nameFor: display })
       : "";
 
   // Markets per network. When the selection is not on this deployment (for
@@ -249,6 +264,36 @@ export function ChartRoom({
       .then(({ ok, body }) => setLive(ok ? { state: "ready", data: body } : { state: "error", message: body.error }))
       .catch((e) => setLive({ state: "error", message: String(e) }));
   }, [marketId, view, net, marketKnown]);
+
+  // Accepted-call record per fren, read from the callbook API (chain logs:
+  // HyperSync when configured, else the RPC path). Powers the "<n> calls
+  // taken" line and the lime dot. One cached entry per network and address.
+  useEffect(() => {
+    if (!accountsKey) return;
+    let cancelled = false;
+    const addrs = accountsKey.split(",");
+    for (const a of addrs) {
+      const key = `${net}:${a}`;
+      if (callRecords[key]) continue;
+      fetch(`/api/callbook?suggester=${a}&net=${net}`)
+        .then(async (r) => ({ ok: r.ok, body: await r.json() }))
+        .then(({ ok, body }) => {
+          if (cancelled || !ok) return;
+          setCallRecords((prev) =>
+            prev[key]
+              ? prev
+              : { ...prev, [key]: { accepted: Number(body.accepted) || 0, hit: Number(body.hit) || 0 } },
+          );
+        })
+        .catch(() => {
+          // A missing record hides the line; the card still shows the position.
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountsKey, net]);
 
   // The chart itself, created once.
   useEffect(() => {
@@ -422,6 +467,8 @@ export function ChartRoom({
     (selectedAccount ? friends.find((f) => f.account === selectedAccount) : undefined) ??
     (active ? friends.find((f) => f.account === active) : undefined) ??
     null;
+  const selectedRec = selected ? recFor(selected.account) : null;
+  const selectedLine = selectedRec ? callLine(selectedRec.accepted, selectedRec.hit) : null;
 
   // On-chart faces clustered for rendering: faces within 14px overlap, more
   // than 5 in one spot collapse into a +N circle. Clustering runs on the
@@ -976,16 +1023,32 @@ export function ChartRoom({
     e.preventDefault();
     const a = draft.trim();
     if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return setDraftError("That is not a Monad address.");
+    const clean = sanitizeName(draftName);
+    if (draftName.trim() !== "" && !clean) return setDraftError("That name cannot be used. Keep it under 24 characters, no commas.");
     setDraftError("");
-    setExtra((x) => (x.includes(a.toLowerCase()) ? x : [...x, a.toLowerCase()]));
+    const lower = a.toLowerCase();
+    setExtra((x) => (x.includes(lower) ? x : [...x, lower]));
+    if (clean) setNameByAddr((m) => new Map(m).set(lower, clean));
     setDraft("");
+    setDraftName("");
+  }
+
+  // Room links carry nicknames in ?n=, one slot per room address in the same
+  // (sorted) order so the room the link opens shows the same names.
+  function roomNamesQuery(): string {
+    const sorted = [...extra].sort();
+    return encodeNamesParam(sorted.map((a) => nameByAddr.get(a.toLowerCase()) ?? ""));
   }
 
   async function copyRoomLink() {
     try {
       const code = encodeRoom(extra);
       if (!code) return;
-      await navigator.clipboard.writeText(`${window.location.origin}${roomLink(code, net)}`);
+      const n = roomNamesQuery();
+      const hasNames = n.split(",").some((s) => s !== "");
+      await navigator.clipboard.writeText(
+        `${window.location.origin}${roomLink(code, net, hasNames ? n : undefined)}`,
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -1072,7 +1135,7 @@ export function ChartRoom({
           <span className="num">{lastClose !== null ? formatPrice(lastClose, decimals) : " "}</span>
         </h1>
         <p className="text-[14px] text-muted">
-          {market?.name ?? ""} perpetual on Perpl
+          {market ? subtitleForMarket(market.name) : ""}
           {view === "frens"
             ? room.state === "ready" && ` · ${friends.length} of ${room.data.checked} traders in the room hold it`
             : live.state === "ready" && ` · ${friends.length} live traders opened in the last ${live.data.hours}h`}
@@ -1123,6 +1186,7 @@ export function ChartRoom({
           network={net}
           priceDecimals={decimals}
           lotDecimals={market?.lotDecimals ?? 0}
+          names={nameByAddr}
           onSuggestion={handleSuggestion}
           ghostPrice={ghostPrice}
           onAcceptedChange={setGhostAccepted}
@@ -1203,6 +1267,7 @@ export function ChartRoom({
                   if (!f) return null;
                   const dim = active !== null && active !== m.account;
                   const raised = hover === m.account || active === m.account;
+                  const rec = recFor(m.account);
                   return (
                     <div
                       key={`face-${m.account}`}
@@ -1219,10 +1284,10 @@ export function ChartRoom({
                         onBlur={() => setHover(null)}
                         onClick={() => setActive(active === m.account ? null : m.account)}
                         aria-pressed={active === m.account}
-                        aria-label={`${shortName(f.account)} ${f.side} entry ${formatPrice(f.entryPrice, decimals)}`}
+                        aria-label={`${display(f.account)} ${f.side} entry ${formatPrice(f.entryPrice, decimals)}`}
                         className="pointer-events-auto block rounded-full"
                       >
-                        <Face address={f.account} side={f.side} dim={dim} />
+                        <Face address={f.account} side={f.side} dim={dim} dot={(rec?.accepted ?? 0) > 0} />
                       </button>
                     </div>
                   );
@@ -1240,6 +1305,7 @@ export function ChartRoom({
               if (!f || o.mode === "candle" || o.avatarX === null) return null;
               const arrow = o.mode === "top" ? "↑" : "↓";
               const dim = active !== null && active !== o.account;
+              const rec = recFor(o.account);
               return (
                 <div
                   key={`edge-${o.account}`}
@@ -1257,10 +1323,10 @@ export function ChartRoom({
                       onBlur={() => setHover(null)}
                       onClick={() => setActive(active === o.account ? null : o.account)}
                       aria-pressed={active === o.account}
-                      aria-label={`${shortName(f.account)} entry ${formatPrice(f.entryPrice, decimals)} ${o.mode === "top" ? "above" : "below"} the visible range`}
+                      aria-label={`${display(f.account)} entry ${formatPrice(f.entryPrice, decimals)} ${o.mode === "top" ? "above" : "below"} the visible range`}
                       className="pointer-events-auto block rounded-full"
                     >
-                      <Face address={f.account} side={f.side} dim={dim} />
+                      <Face address={f.account} side={f.side} dim={dim} dot={(rec?.accepted ?? 0) > 0} />
                     </button>
                   </div>
                 </div>
@@ -1319,11 +1385,11 @@ export function ChartRoom({
               data-drag-kind="ghost"
               disabled={ghostAccepted !== null}
               onKeyDown={onGhostKeyDown}
-              aria-label={`Suggested take-profit at ${formatPrice(ghostPrice, decimals)} from ${shortName(incoming.from)}. Drag to counter, arrow keys nudge by one tick. Escape resets.`}
+              aria-label={`Suggested take-profit at ${formatPrice(ghostPrice, decimals)} from ${display(incoming.from)}. Drag to counter, arrow keys nudge by one tick. Escape resets.`}
               className="marker-anim absolute left-2 z-10 block cursor-ns-resize rounded-full disabled:cursor-default"
               style={{ transform: `translateY(${ghostY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
             >
-              <Face address={incoming.from} side={incoming.side} />
+              <Face address={incoming.from} side={incoming.side} dot={(recFor(incoming.from)?.accepted ?? 0) > 0} />
             </button>
           )}
           {incoming && ghostPrice !== null && ghostY !== null && (
@@ -1372,7 +1438,7 @@ export function ChartRoom({
           {copyFriend && market && (
             <div
               role="dialog"
-              aria-label={`Copy ${shortName(copyFriend.account)}`}
+              aria-label={`Copy ${display(copyFriend.account)}`}
               data-nodrag
               className="absolute right-2 top-2 z-20 w-[min(280px,calc(100%-16px))] rounded-[10px] border border-edge bg-raised p-3 text-[13px]"
               onKeyDown={(e) => {
@@ -1381,7 +1447,7 @@ export function ChartRoom({
             >
               <div className="mb-2 flex items-start justify-between gap-2">
                 <p className="font-[family-name:var(--font-display)] text-[14px] font-bold">
-                  Copy <span style={{ color: ring(copyFriend) }}>{shortName(copyFriend.account)}</span>{" "}
+                  Copy <span style={{ color: ring(copyFriend) }}>{display(copyFriend.account)}</span>{" "}
                   <span className="text-muted">{copyFriend.side === "long" ? "LONG" : "SHORT"} {market.name}</span>
                 </p>
                 <button onClick={() => setCopyFor(null)} aria-label="Close copy dialog" className="px-2 py-1 text-[12px] text-muted hover:text-ink">Close</button>
@@ -1450,9 +1516,9 @@ export function ChartRoom({
               onMouseLeave={() => setHover(null)}
             >
               <div className="flex items-center gap-2.5">
-                <Face address={selected.account} side={selected.side} />
+                <Face address={selected.account} side={selected.side} dot={(selectedRec?.accepted ?? 0) > 0} />
                 <div className="min-w-0">
-                  <p className="num text-[13px] font-medium leading-tight">{shortName(selected.account)}</p>
+                  <p className="num text-[13px] font-medium leading-tight">{display(selected.account)}</p>
                   <span
                     className="num mt-1 inline-block rounded border px-1.5 py-px text-[10px] font-medium"
                     style={{ color: ring(selected), borderColor: ring(selected) }}
@@ -1471,6 +1537,9 @@ export function ChartRoom({
                 <dt className="text-muted">Size</dt><dd className="text-right">{selected.size}</dd>
                 <dt className="text-muted">Entry</dt><dd className="text-right">{formatPrice(selected.entryPrice, decimals)}</dd>
               </dl>
+              {selectedLine && (
+                <p className="num mt-1.5 text-[12px] text-muted">{selectedLine}</p>
+              )}
               <div className="mt-2.5 flex gap-2">
                 <button
                   type="button"
@@ -1541,8 +1610,10 @@ export function ChartRoom({
           )}
           <ol className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
             {friends.map((f) => {
-              const chip = chipFor(f, decimals);
+              const chip = chipFor(f, decimals, display(f.account));
               const on = active === f.account;
+              const rec = recFor(f.account);
+              const line = rec ? callLine(rec.accepted, rec.hit) : null;
               return (
                 <li key={f.account} className="min-w-[210px] lg:min-w-0">
                   <button
@@ -1551,7 +1622,7 @@ export function ChartRoom({
                     className="num flex w-full items-center gap-2.5 rounded-[10px] border bg-panel p-2.5 text-left text-[13px] hover:bg-raised"
                     style={{ borderColor: on ? CHART.accent : CHART.edge }}
                   >
-                    <Face address={f.account} side={f.side} />
+                    <Face address={f.account} side={f.side} dot={(rec?.accepted ?? 0) > 0} />
                     <span className="min-w-0">
                       <span className="block font-medium">{chip.label}</span>
                       <span
@@ -1560,6 +1631,7 @@ export function ChartRoom({
                       >
                         {chip.side}
                       </span>
+                      {line && <span className="mt-0.5 block text-[11px] text-muted">{line}</span>}
                     </span>
                     <span className="ml-auto" style={{ color: chip.inProfit ? CHART.up : CHART.down }}>{chip.pnl}</span>
                   </button>
@@ -1575,7 +1647,7 @@ export function ChartRoom({
             {selected && tp !== null && sl !== null && (
               <>
                 <p className="text-[13px] text-muted">
-                  For {shortName(selected.account)}, {selected.side === "long" ? "Long" : "Short"} in at{" "}
+                  For {display(selected.account)}, {selected.side === "long" ? "Long" : "Short"} in at{" "}
                   <span className="num">{formatPrice(selected.entryPrice, decimals)}</span>. Drag the lines on the
                   chart, or focus one below and use arrow keys. Escape resets.
                 </p>
@@ -1651,6 +1723,16 @@ export function ChartRoom({
                 placeholder="0x…"
                 spellCheck={false}
                 className="num min-w-0 flex-1 rounded-[6px] border border-edge bg-panel px-2.5 py-2 text-[12px]"
+              />
+              <input
+                id="fren-name"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                placeholder="name"
+                spellCheck={false}
+                maxLength={24}
+                aria-label="Nickname for this fren"
+                className="w-24 rounded-[6px] border border-edge bg-panel px-2.5 py-2 text-[12px]"
               />
               <button className="rounded-[6px] bg-accent px-3 text-[13px] font-medium text-page active:scale-[0.97]">Add</button>
               <button

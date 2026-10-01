@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ChartRoom } from "@/app/ChartRoom";
 import { parseNet } from "@/lib/network";
+import { parseNamesParam } from "@/lib/names";
 import { decodeRoom } from "@/lib/roomlink";
 
 type Params = { room: string };
@@ -30,10 +31,12 @@ export default async function RoomPage({
   searchParams,
 }: {
   params: Promise<Params>;
-  searchParams: Promise<{ net?: string }>;
+  searchParams: Promise<{ net?: string; n?: string }>;
 }) {
   const { room } = await params;
-  const { net } = await searchParams;
+  const { net, n } = await searchParams;
   const initialAccounts = decodeRoom(room);
-  return <ChartRoom initialAccounts={initialAccounts} initialView="frens" initialNet={parseNet(net)} />;
+  // Nicknames ride in ?n=, one slot per room address in the same order.
+  const initialNames = parseNamesParam(n);
+  return <ChartRoom initialAccounts={initialAccounts} initialNames={initialNames} initialView="frens" initialNet={parseNet(net)} />;
 }
