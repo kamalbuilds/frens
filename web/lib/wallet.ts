@@ -15,7 +15,7 @@
 // before signing, sending to that network's Exchange.
 import { createWalletClient, custom, http, toHex, type Address, type Chain, type EIP1193Provider, type Hex, type LocalAccount } from "viem";
 import { monad, monadTestnet } from "viem/chains";
-import { NETWORKS, type Network } from "./perpl";
+import { NETWORKS, publicClient, type Network } from "./perpl";
 
 // viem's chain definitions must stay aligned with perpl.ts or an order could
 // be signed for the wrong chain. This fails loudly at import instead.
@@ -123,11 +123,19 @@ export async function connect(network: Network = "testnet"): Promise<Address> {
 // while its own prompt is open. The order is a plain swap in that prompt and
 // the copier can see and refuse it. Returns a hash the caller must still wait
 // on for a receipt before claiming the position was opened.
+// Perpl batches estimated against the pre-block state ran out of gas once
+// earlier transactions in the same block changed the book (testnet tx
+// 0xf57665e0, gasUsed == gasLimit). Orders go out with 1.5x the estimate.
+export function padGas(estimate: bigint): bigint {
+  return (estimate * 3n) / 2n;
+}
+
 export async function sendExecOrder(exchange: Address, data: Hex, network: Network = "testnet"): Promise<Hex> {
   const account = await connect(network);
   const eth = injectedProvider();
   const client = createWalletClient({ account, chain: chainFor(network), transport: custom(eth) });
-  return client.sendTransaction({ account, to: exchange, data });
+  const estimate = BigInt(await eth.request({ method: "eth_estimateGas", params: [{ from: account, to: exchange, data }] }));
+  return client.sendTransaction({ account, to: exchange, data, gas: padGas(estimate) });
 }
 
 // Passkey sibling of sendExecOrder: same execOrder calldata, but signed by a
@@ -143,5 +151,5 @@ export async function sendExecOrderWith(
   network: Network = "testnet",
 ): Promise<Hex> {
   const client = createWalletClient({ account, chain: chainFor(network), transport: http(NETWORKS[network].rpc) });
-  return client.sendTransaction({ account, to: exchange, data });
+  return client.sendTransaction({ account, to: exchange, data, gas: padGas(await publicClient(network).estimateGas({ account: account.address, to: exchange, data })) });
 }
