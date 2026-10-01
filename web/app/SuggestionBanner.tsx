@@ -1,16 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Address } from "viem";
+import type { Address, Hex } from "viem";
 import type { Friend } from "@/lib/chart";
 import { nameForAddress, type NamesByAddress } from "@/lib/names";
-import { decodeSuggestion, encodeCloseOrder, encodeSuggestion, sizeToLots, toCloseOrder, type Suggestion } from "@/lib/suggest";
+import {
+  ACCEPT_BATCH_SUPPORTED,
+  buildAcceptOrders,
+  decodeSuggestion,
+  encodeAcceptBatch,
+  encodeCloseOrder,
+  encodeSuggestion,
+  sizeToLots,
+  toCloseOrder,
+  TWO_SIGNATURE_NOTICE,
+  type CloseOrderDesc,
+  type Suggestion,
+} from "@/lib/suggest";
+import { findRestingCloses, type RestingClose } from "@/lib/resting";
 import { buildCounterSuggestion } from "@/lib/ghost";
 import type { Position } from "@/lib/readPosition";
-import { NETWORKS, type Network } from "@/lib/perpl";
+import { NETWORKS, publicClient, type Network } from "@/lib/perpl";
 import { explorerTxUrl } from "@/lib/network";
 import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
-import { acceptOwnerCheck, evaluateSuggestion } from "@/lib/acceptance";
+import { acceptOwnerCheck, evaluateSuggestion, replacementNotice } from "@/lib/acceptance";
 import { PasskeyWallet } from "./PasskeyWallet";
 import type { LocalAccount } from "viem";
 
@@ -96,6 +109,8 @@ export function SuggestionBanner({
   const [counterCopied, setCounterCopied] = useState(false);
   const [passkey, setPasskey] = useState<LocalAccount | null>(null);
   const [passkeyFunded, setPasskeyFunded] = useState(false);
+  const [resting, setResting] = useState<RestingClose[] | null>(null);
+  const [twoSigs, setTwoSigs] = useState(false);
 
   useEffect(() => {
     setRaw(readRawParam());
@@ -145,8 +160,30 @@ export function SuggestionBanner({
   useEffect(() => {
     setAccept({ kind: "idle" });
     setCounterCopied(false);
+    setResting(null);
+    setTwoSigs(false);
     onAcceptedRef.current?.(null);
   }, [validSuggestion?.owner, validSuggestion?.price, validSuggestion?.market, validSuggestion?.from]);
+
+  // Read the owner's resting closes for the banner line. Best effort: a
+  // failed read leaves no replacing notice and Accept re-reads anyway.
+  useEffect(() => {
+    if (!suggestion) return;
+    let live = true;
+    setResting(null);
+    findRestingCloses(network, publicClient(network), suggestion.owner, marketId)
+      .then((all) => {
+        if (!live || !suggestion) return;
+        const want = suggestion.side === "long" ? "close-long" : "close-short";
+        setResting(all.filter((r) => r.side === want));
+      })
+      .catch(() => {
+        if (live) setResting([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [suggestion?.owner, suggestion?.market, suggestion?.side, marketId, network]);
 
   function pass() {
     setDismissed(true);
@@ -157,23 +194,80 @@ export function SuggestionBanner({
     onSuggestionRef.current?.(null);
   }
 
-  // Order id of the close order built by buildCloseOrderData, read back by the
+  // Order id of the close order built by buildCloseOrder, read back by the
   // accept wrappers below so both wallet paths report the same receipt.
   const lastCloseOrderId = useRef("");
 
-  function buildCloseOrderData(): `0x${string}` {
+  function buildCloseOrder(): CloseOrderDesc {
     if (!suggestion || !ownerFriend) throw new Error("that suggestion is no longer open");
     const fullSizeLots = sizeToLots(ownerFriend.size, lotDecimals);
     if (fullSizeLots <= 0n) {
       throw new Error("The owner position is under one whole lot, so there is nothing to close.");
     }
-    const order = toCloseOrder(
+    return toCloseOrder(
       { ...suggestion, sizeLots: undefined },
       { priceDecimals: BigInt(priceDecimals), lotDecimals: BigInt(lotDecimals) },
       { fullSizeLots },
     );
-    lastCloseOrderId.current = order.orderDescId.toString();
-    return encodeCloseOrder(order);
+  }
+
+  function matchingSide(r: RestingClose): boolean {
+    if (!suggestion) return false;
+    return suggestion.side === "long" ? r.side === "close-long" : r.side === "close-short";
+  }
+
+  // Shared Accept body: cancel the owner's resting closes for this position
+  // and place the new close. With the batch entrypoint this is one signature
+  // ([CANCEL..., close] via execOrders); without it the cancels go first and
+  // the banner says so. The send callback is the only wallet-specific part.
+  async function acceptWith(send: (data: Hex) => Promise<string>) {
+    if (!suggestion || !ownerFriend) return;
+    setAccept({ kind: "sending" });
+    setTwoSigs(false);
+    const close = buildCloseOrder();
+    let restingNow: RestingClose[] = [];
+    try {
+      restingNow = (await findRestingCloses(network, publicClient(network), suggestion.owner, marketId)).filter(matchingSide);
+    } catch {
+      restingNow = [];
+    }
+    const orders = buildAcceptOrders(
+      close,
+      restingNow.map((r) => r.orderId),
+    );
+    try {
+      if (orders.length === 1) {
+        const hash = await send(encodeCloseOrder(orders[0] as CloseOrderDesc));
+        const orderId = (orders[0] as CloseOrderDesc).orderDescId.toString();
+        lastCloseOrderId.current = orderId;
+        setResting(restingNow);
+        setAccept({ kind: "ok", hash, orderId });
+        onAcceptedRef.current?.({ orderId, hash });
+        return;
+      }
+      if (ACCEPT_BATCH_SUPPORTED) {
+        const hash = await send(encodeAcceptBatch(orders, true));
+        const orderId = (orders[orders.length - 1] as CloseOrderDesc).orderDescId.toString();
+        lastCloseOrderId.current = orderId;
+        setResting(restingNow);
+        setAccept({ kind: "ok", hash, orderId });
+        onAcceptedRef.current?.({ orderId, hash });
+        return;
+      }
+      for (const cancel of orders.slice(0, -1)) {
+        await send(encodeCloseOrder(cancel));
+      }
+      const last = orders[orders.length - 1] as CloseOrderDesc;
+      const hash = await send(encodeCloseOrder(last));
+      const orderId = last.orderDescId.toString();
+      lastCloseOrderId.current = orderId;
+      setResting(restingNow);
+      setTwoSigs(true);
+      setAccept({ kind: "ok", hash, orderId });
+      onAcceptedRef.current?.({ orderId, hash });
+    } catch (e) {
+      setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   async function doAccept() {
@@ -186,11 +280,7 @@ export function SuggestionBanner({
         setAccept({ kind: "error", message: gate.reason });
         return;
       }
-      const data = buildCloseOrderData();
-      const hash = await sendExecOrder(NETWORKS[network].exchange, data, network);
-      const orderId = lastCloseOrderId.current;
-      setAccept({ kind: "ok", hash, orderId });
-      onAcceptedRef.current?.({ orderId, hash });
+      await acceptWith((data) => sendExecOrder(NETWORKS[network].exchange, data, network));
     } catch (e) {
       setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
     }
@@ -208,11 +298,8 @@ export function SuggestionBanner({
         setAccept({ kind: "error", message: gate.reason });
         return;
       }
-      const data = buildCloseOrderData();
-      const hash = await sendExecOrderWith(passkey, NETWORKS[network].exchange, data, network);
-      const orderId = lastCloseOrderId.current;
-      setAccept({ kind: "ok", hash, orderId });
-      onAcceptedRef.current?.({ orderId, hash });
+      const key = passkey;
+      await acceptWith((data) => sendExecOrderWith(key, NETWORKS[network].exchange, data, network));
     } catch (e) {
       setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
     }
@@ -311,12 +398,22 @@ export function SuggestionBanner({
     ghostPrice > 0 &&
     ghostPrice !== suggestion.price;
   const accepted = accept.kind === "ok";
+  const replacing = (resting ?? []).filter((r) =>
+    suggestion.side === "long" ? r.side === "close-long" : r.side === "close-short",
+  );
 
   return (
     <div className="rounded-[10px] border border-edge bg-panel px-3 py-2.5" role="status" aria-label={`Suggestion from ${nameFor(suggestion.from)}`}>
       <p className="num text-[13px]">
         {evaluated.text} <span className="text-muted">PnL from the room position.</span>
       </p>
+      {replacing.length > 0 && !accepted && (
+        <p className="num mt-1 text-[12px] text-muted">
+          {replacementNotice(replacing[0]!.price, priceDecimals)}
+          {replacing.length > 1 ? ` (+${replacing.length - 1} more)` : ""}
+          {!ACCEPT_BATCH_SUPPORTED ? ` · ${TWO_SIGNATURE_NOTICE}` : ""}
+        </p>
+      )}
       <div className="mt-2 flex flex-col gap-2">
         {!accepted && (
           <div className="flex flex-wrap items-center gap-2">
@@ -367,6 +464,7 @@ export function SuggestionBanner({
             <a className="underline" href={explorerTxUrl(network, accept.hash)} target="_blank" rel="noreferrer">
               View on the {network === "mainnet" ? "MonadVision" : "testnet"} explorer
             </a>
+            {twoSigs ? ` · ${TWO_SIGNATURE_NOTICE}` : ""}
           </p>
         )}
         {accept.kind === "error" && <p className="text-[12px] text-loss">{accept.message}</p>}

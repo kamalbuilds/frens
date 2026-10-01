@@ -292,3 +292,74 @@ export function decodeCloseOrder(data: Hex): CloseOrderDesc {
   if (!decoded.args || decoded.args.length !== 1) throw new Error("execOrder calldata has no order argument");
   return decoded.args[0] as CloseOrderDesc;
 }
+
+// The Exchange exposes execOrders (batch) in the checked-in ABI, so a TP
+// replace is one signature: cancels first, then the new close. This stays
+// true until the ABI says otherwise; the banner keeps the two-signature
+// fallback message for a chain that ever loses the batch entrypoint.
+export const ACCEPT_BATCH_SUPPORTED = true;
+
+// Shown only when the batch entrypoint is missing and the owner must sign
+// a cancel and then the new close as two transactions.
+export const TWO_SIGNATURE_NOTICE = "2 signatures: replace your old TP";
+
+// Build one CANCEL desc for a resting order id. Mirrors trade.ts, which
+// cancels with orderType CANCEL plus the target orderId and otherwise default
+// fields (the same 3x leverage field and 1000 BPS buffer it uses everywhere).
+export function toCancelOrder(market: number, orderId: bigint, orderDescId: bigint): CloseOrderDesc {
+  if (!Number.isInteger(market) || market < 0) throw new Error(`bad market ${String(market)}`);
+  if (orderId <= 0n) throw new Error(`cannot cancel order ${orderId.toString()}`);
+  return {
+    orderDescId,
+    perpId: BigInt(market),
+    orderType: CANCEL,
+    orderId,
+    pricePNS: 0n,
+    lotLNS: 0n,
+    expiryBlock: 0n,
+    postOnly: false,
+    fillOrKill: false,
+    immediateOrCancel: false,
+    maxMatches: 0n,
+    leverageHdths: LEVERAGE_HDTHS,
+    lastExecutionBlock: 0n,
+    amountCNS: 0n,
+    maxNegPnlCollatBPS: MAX_NEG_PNL_COLLAT_BPS,
+  };
+}
+
+// Build the Accept transaction body: a lone close when nothing rests, or
+// [CANCEL for each resting orderId, the new close] when the owner already
+// has TP lots locked. Desc ids stay increasing in execution order: cancels
+// take base .. base+n-1 and the close takes base+n, where base is the
+// close's own orderDescId. Callers that need stable ids pass the close in
+// with its final desc id already chosen.
+export function buildAcceptOrders(
+  close: CloseOrderDesc,
+  restingOrderIds: readonly bigint[],
+): CloseOrderDesc[] {
+  const ids = [...new Set(restingOrderIds.map((id) => id.toString()))]
+    .map((s) => BigInt(s))
+    .filter((id) => id > 0n)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  if (ids.length === 0) return [close];
+  const base = close.orderDescId;
+  const market = Number(close.perpId);
+  const cancels = ids.map((id, i) => toCancelOrder(market, id, base + BigInt(i)));
+  return [...cancels, { ...close, orderDescId: base + BigInt(ids.length) }];
+}
+
+// Encode [cancels..., close] as one execOrders transaction. revertOnFail is
+// true: a half-applied replace (old TP cancelled, new TP missing) would leave
+// the position with no take-profit and no honest receipt.
+export function encodeAcceptBatch(orders: readonly CloseOrderDesc[], revertOnFail = true): Hex {
+  if (orders.length === 0) throw new Error("cannot encode an empty accept batch");
+  return encodeFunctionData({ abi: exchangeAbi, functionName: "execOrders", args: [orders, revertOnFail] });
+}
+
+export function decodeAcceptBatch(data: Hex): { orders: CloseOrderDesc[]; revertOnFail: boolean } {
+  const decoded = decodeFunctionData({ abi: exchangeAbi, data });
+  if (decoded.functionName !== "execOrders") throw new Error(`expected execOrders calldata, got ${decoded.functionName}`);
+  if (!decoded.args || decoded.args.length !== 2) throw new Error("execOrders calldata is malformed");
+  return { orders: decoded.args[0] as CloseOrderDesc[], revertOnFail: decoded.args[1] as boolean };
+}

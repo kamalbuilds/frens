@@ -95,6 +95,12 @@ export type Acceptance =
   | { status: "stale"; reason: string; suggestion: Suggestion }
   | { status: "valid"; suggestion: Suggestion; kind: SuggestionKind; text: string };
 
+// Notice shown when Accept replaces the owner's resting TP: the one line the
+// task requires, with the old price formatted for the market.
+export function replacementNotice(oldPrice: number, priceDecimals: number): string {
+  return `Replaces your TP at ${formatPrice(oldPrice, priceDecimals)}`;
+}
+
 // Gate for the Accept button: only the suggestion owner can place the close
 // order. Comparison is case-insensitive because addresses checksum differently
 // across wallets. Returns ok, or the exact notice the banner should show.
