@@ -97,7 +97,7 @@ describe("callLine", () => {
 
   it("formats accepted and hit counts", () => {
     expect(callLine(2, 1)).toBe("2 calls taken · 1 hit");
-    expect(callLine(1, 0)).toBe("1 calls taken · 0 hit");
+    expect(callLine(1, 0)).toBe("1 call taken");
   });
 });
 

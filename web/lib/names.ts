@@ -91,5 +91,7 @@ export function nameForAddress(byAddress?: NamesByAddress): (addr: string) => st
 /// show no line at all.
 export function callLine(accepted: number, hit: number): string | null {
   if (!Number.isFinite(accepted) || accepted <= 0) return null;
-  return `${accepted} calls taken · ${hit} hit`;
+  // Hits are only shown when counted (HyperSync path); receipt-verified records report accepted calls only.
+  const calls = `${accepted} ${accepted === 1 ? "call" : "calls"} taken`;
+  return Number.isFinite(hit) && hit > 0 ? `${calls} · ${hit} hit` : calls;
 }
