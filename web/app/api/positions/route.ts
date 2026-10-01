@@ -4,6 +4,8 @@ import { blockTime, clientFor } from "@/lib/server";
 import { parseNetParam } from "@/lib/network";
 import room from "@/lib/room.json";
 
+export const maxDuration = 30;
+
 const DEFAULT_ROOM = Array.from(new Set((room.positions as { account: string }[]).map((p) => p.account)));
 
 export async function GET(req: Request) {

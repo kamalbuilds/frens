@@ -6,6 +6,8 @@ import { apiBaseFor, clientFor, markets } from "@/lib/server";
 import { scaleCandle, type RawCandle } from "@/lib/chart";
 import { callHit } from "@/lib/callhit";
 
+export const maxDuration = 30;
+
 type Cached = { at: number; call: VerifiedCall | null };
 
 const cache = new Map<string, Cached>();
