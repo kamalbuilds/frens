@@ -405,8 +405,11 @@ export function SuggestionBanner({
     try {
       const counter = buildCounterSuggestion(suggestion, ghostPrice, Date.now());
       const payload = encodeSuggestion(counter);
-      const path = typeof window !== "undefined" ? window.location.pathname : "/";
-      const url = `${window.location.origin}${path}?s=${payload}&net=${network}`;
+      // Same room, names (n) and receipts (c) as the link it answers; only the call (s) changes.
+      const u = new URL(window.location.href);
+      u.searchParams.set("s", payload);
+      u.searchParams.set("net", network);
+      const url = u.toString();
       await navigator.clipboard.writeText(url);
       setCounterCopied(true);
       setTimeout(() => setCounterCopied(false), 2000);
