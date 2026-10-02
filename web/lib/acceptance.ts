@@ -97,8 +97,8 @@ export type Acceptance =
 
 // Notice shown when Accept replaces the owner's resting TP: the one line the
 // task requires, with the old price formatted for the market.
-export function replacementNotice(oldPrice: number, priceDecimals: number, owner: string): string {
-  return `Replaces ${owner}'s TP at ${formatPrice(oldPrice, priceDecimals)}`;
+export function replacementNotice(oldPrice: number, priceDecimals: number): string {
+  return `Replaces the TP resting at ${formatPrice(oldPrice, priceDecimals)}`;
 }
 
 // A resting close at the call's own price means the owner already took this
