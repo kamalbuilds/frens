@@ -1103,8 +1103,18 @@ export function ChartRoom({
     const t = v.trim();
     if (t === "") setViewerError("");
     else if (!/^0x[0-9a-fA-F]{40}$/.test(t) || /^0x0+$/.test(t)) setViewerError("That is not a usable address.");
-    else setViewerError("");
+    else {
+      setViewerError("");
+      window.localStorage.setItem("frens:caller", t);
+    }
   }
+
+  // A returning caller's public address is remembered, so the next call is drag then copy.
+  useEffect(() => {
+    if (viewerAddress) return;
+    const saved = window.localStorage.getItem("frens:caller");
+    if (saved && /^0x[0-9a-fA-F]{40}$/.test(saved)) setViewer(saved);
+  }, [viewerAddress]);
 
   const viewerOk = /^0x[0-9a-fA-F]{40}$/.test(viewer.trim()) && !/^0x0+$/.test(viewer.trim());
   const suggestPrice = suggestKind === "tp" ? tp : sl;
