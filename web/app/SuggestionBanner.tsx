@@ -238,8 +238,15 @@ export function SuggestionBanner({
   // and place the new close. With the batch entrypoint this is one signature
   // ([CANCEL..., close] via execOrders); without it the cancels go first and
   // the banner says so. The send callback is the only wallet-specific part.
-  async function acceptWith(send: (data: Hex) => Promise<string>) {
+  async function acceptWith(broadcast: (data: Hex) => Promise<string>) {
     if (!suggestion || !ownerFriend) return;
+    // Accepted means mined and successful, not broadcast: a reverted close must not read as taken.
+    const send = async (data: Hex) => {
+      const hash = (await broadcast(data)) as Hex;
+      const r = await publicClient(network).waitForTransactionReceipt({ hash, timeout: 60_000 });
+      if (r.status !== "success") throw new Error(`The order reverted on Perpl (tx ${hash.slice(0, 10)}…).`);
+      return hash;
+    };
     setAccept({ kind: "sending" });
     setTwoSigs(false);
     const close = buildCloseOrder();
