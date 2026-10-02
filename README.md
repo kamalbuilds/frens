@@ -42,6 +42,9 @@ hours, and follow "See a room where a fren's call is waiting", or use the first 
 | The same passkey wallet taking a fren's call from the chart | 0x2d17f22d7081323c6a2e3146091ba51b19cb55ffd9530305801fb7cdd5bbc120 |
 | CallStake deployed (0x0E8CbE0902067a49d98961A1440419AEcAf0C5Bc) | 0xbb66d0dbcd0a760c5b5d017500b95baab4ebfa620f1d538b00d9b30e9a468325 |
 | A stake on cy's call, TP read from bo's resting Perpl order | 0xc6913d2e44066a12a43e57b1edd1dee2d6440c822b648ef6bc5144b8ce1ee861 |
+| That stake paid to cy when Perpl's mark reached the TP (released by the keeper) | 0xddd2eb149c72fa4e1916c07cdfc479dbb68a7f626e72e6c1033444a3220671af |
+| A v2 stake (0.5% minimum distance) paid to cy when the mark reached 87,085.0 | 0x448e48381795d71f9f2e897a23da3763d0e91fd42e666ef553f3c5fabd2ca910 |
+| A copy carrying Perpl builder id 23, read from TakerOrderFilledV2 | 0xf5c94fd1580411907a723155057a50971c555824e8d19a7257fb084fe44afed0 |
 
 Every row is re-checkable: `bun run demo/check-hit.ts <tx>` decodes the caller and checks the hit against
 Perpl's candles; `bun run demo/adoption.ts testnet <hours>` counts orders carrying a frens `orderDescId`.
