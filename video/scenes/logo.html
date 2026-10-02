@@ -4,9 +4,9 @@
 <style>
 svg.mark{position:absolute;left:0;top:0;width:900px;height:900px;overflow:visible}
 .t{position:absolute;opacity:0}
-#word{font:700 150px "SG";letter-spacing:-.04em;left:0;right:0;text-align:center;top:560px}
-#tag{font:500 34px "SG";letter-spacing:-.01em;color:var(--muted);left:0;right:0;text-align:center;top:735px}
-#url{font:500 24px "PM";color:var(--accent);left:0;right:0;text-align:center;top:800px}
+#word{font:700 150px "SG";letter-spacing:-.04em;left:0;right:0;text-align:center;top:572px}
+#tag{font:500 36px "SG";letter-spacing:-.01em;color:var(--muted);left:0;right:0;text-align:center;top:770px}
+#url{font:500 26px "PM";color:var(--accent);left:0;right:0;text-align:center;top:830px}
 #intro{left:760px;top:330px}
 #intro .n{font:700 118px "SG";letter-spacing:-.04em;line-height:1}
 #intro .s{font:500 30px "PM";color:var(--muted);margin-top:22px;line-height:1.5}
@@ -16,7 +16,7 @@ svg.mark{position:absolute;left:0;top:0;width:900px;height:900px;overflow:visibl
 <div class="t" id="word">frens</div>
 <div class="t" id="tag">Trade perps with your frens.</div>
 <div class="t" id="url">frens-eosin.vercel.app</div>
-<div class="t" id="intro"><div class="n">Kamal</div><div class="s"><b>@kamalbuilds</b><br>built frens on Perpl, on Monad<br>Track 03, Social, Attention &amp; Culture</div></div>
+<div class="t" id="intro"><div class="n">Kamal</div><div class="s"><b>@kamalbuilds</b><br>built frens for Perpl traders on Monad<br>Track 03, Social, Attention &amp; Culture</div></div>
 <script src="engine.js"></script>
 <script>
 const mode = cue("mode", "end");
@@ -28,8 +28,8 @@ h += `<g id="face"><circle cx="556" cy="250" r="96" fill="#0A0A0F"/><circle cx="
 h += `<circle id="dot" cx="622" cy="184" r="26" fill="#C8FF3D" stroke="#0A0A0F" stroke-width="10"/>`;
 $("#mk").innerHTML = h;
 const mkEl = $("#mk");
-if (mode === "intro") { mkEl.style.left = "-60px"; mkEl.style.top = "40px"; mkEl.style.width = "800px"; mkEl.style.height = "720px"; }
-else { mkEl.style.left = "320px"; mkEl.style.top = "-90px"; mkEl.style.width = "960px"; mkEl.style.height = "700px"; mkEl.setAttribute("viewBox", "130 160 860 700"); }
+if (mode === "intro") { mkEl.style.left = "60px"; mkEl.style.top = "80px"; mkEl.style.width = "720px"; mkEl.style.height = "636px"; }
+else { mkEl.style.left = "380px"; mkEl.style.top = "20px"; mkEl.style.width = "840px"; mkEl.style.height = "586px"; mkEl.setAttribute("viewBox", "130 110 860 600"); }
 const tl = Array.from($("#tp") ? [$("#tp")] : []);
 window.render = (t) => {
   candles.forEach((c, i) => {

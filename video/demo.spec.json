@@ -1,0 +1,286 @@
+{
+ "out": "frens-demo.mp4",
+ "audio": "vo/out-demo/narration.wav",
+ "work": "asm-demo",
+ "beats": [
+  {
+   "name": "room",
+   "t0": 0,
+   "t1": 12.3,
+   "pieces": [
+    {
+     "src": "work/A-room.mp4",
+     "ss": 0,
+     "se": 12.3,
+     "zoom": {
+      "fx": 0.45,
+      "fy": 0.62,
+      "from": 1,
+      "to": 1.12
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap1.png",
+     "a": 1,
+     "b": 9
+    }
+   ]
+  },
+  {
+   "name": "tap a fren",
+   "t0": 12.3,
+   "t1": 19.3,
+   "pieces": [
+    {
+     "src": "work/F-drag.mp4",
+     "ss": 2,
+     "se": 9,
+     "zoom": {
+      "fx": 0.22,
+      "fy": 0.45,
+      "from": 1,
+      "to": 1.1
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap2.png",
+     "a": 13,
+     "b": 19
+    }
+   ]
+  },
+  {
+   "name": "passkey",
+   "t0": 19.3,
+   "t1": 34.4,
+   "pieces": [
+    {
+     "src": "work/C-passkey.mp4",
+     "ss": 3,
+     "se": 9.5,
+     "speed": 1.3,
+     "zoom": {
+      "fx": 0.82,
+      "fy": 0.42,
+      "from": 1,
+      "to": 1.12
+     }
+    },
+    {
+     "src": "work/C-passkey.mp4",
+     "ss": 15.2,
+     "se": 25.5,
+     "zoom": {
+      "fx": 0.82,
+      "fy": 0.42,
+      "from": 1,
+      "to": 1.12
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap3.png",
+     "a": 25.5,
+     "b": 33.5
+    }
+   ]
+  },
+  {
+   "name": "fund",
+   "t0": 34.4,
+   "t1": 40,
+   "pieces": [
+    {
+     "src": "work/C-passkey.mp4",
+     "ss": 26,
+     "se": 34.5,
+     "speed": 1.5,
+     "zoom": {
+      "fx": 0.82,
+      "fy": 0.5,
+      "from": 1,
+      "to": 1.12
+     }
+    }
+   ]
+  },
+  {
+   "name": "copy",
+   "t0": 40,
+   "t1": 53.6,
+   "pieces": [
+    {
+     "src": "work/C-passkey.mp4",
+     "ss": 36,
+     "se": 49.9,
+     "zoom": {
+      "fx": 0.82,
+      "fy": 0.55,
+      "from": 1,
+      "to": 1.12
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap4.png",
+     "a": 41,
+     "b": 52.8
+    }
+   ]
+  },
+  {
+   "name": "call",
+   "t0": 53.6,
+   "t1": 61,
+   "pieces": [
+    {
+     "src": "work/B-call.mp4",
+     "ss": 3,
+     "se": 8.4,
+     "speed": 0.75,
+     "zoom": {
+      "fx": 0.15,
+      "fy": 0.42,
+      "from": 1,
+      "to": 1.14
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap5.png",
+     "a": 54.4,
+     "b": 60.6
+    }
+   ]
+  },
+  {
+   "name": "accept",
+   "t0": 61,
+   "t1": 73.2,
+   "pieces": [
+    {
+     "src": "work/B-call.mp4",
+     "ss": 8.4,
+     "se": 16.6,
+     "zoom": {
+      "fx": 0.2,
+      "fy": 0.4,
+      "from": 1,
+      "to": 1.1
+     }
+    },
+    {
+     "src": "work/B-call.mp4",
+     "ss": 18,
+     "se": 21.5,
+     "zoom": {
+      "fx": 0.2,
+      "fy": 0.4,
+      "from": 1,
+      "to": 1.1
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap6.png",
+     "a": 62.5,
+     "b": 72.8
+    }
+   ]
+  },
+  {
+   "name": "chain read",
+   "t0": 73.2,
+   "t1": 89,
+   "pieces": [
+    {
+     "src": "work/d-chain.mp4",
+     "ss": 0,
+     "se": 15.8
+    }
+   ]
+  },
+  {
+   "name": "share",
+   "t0": 89,
+   "t1": 93.5,
+   "pieces": [
+    {
+     "src": "work/A-room.mp4",
+     "ss": 0.5,
+     "se": 4.5,
+     "zoom": {
+      "fx": 0.6,
+      "fy": 0.12,
+      "from": 1,
+      "to": 1.06
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/og-overlay.png",
+     "a": 89.4,
+     "b": 93.3
+    }
+   ]
+  },
+  {
+   "name": "live on perpl",
+   "t0": 93.5,
+   "t1": 102.2,
+   "pieces": [
+    {
+     "src": "work/E-live.mp4",
+     "ss": 3.2,
+     "se": 7.6,
+     "speed": 1.5,
+     "zoom": {
+      "fx": 0.85,
+      "fy": 0.5,
+      "from": 1,
+      "to": 1.12
+     }
+    },
+    {
+     "src": "work/E-live.mp4",
+     "ss": 21,
+     "se": 27,
+     "zoom": {
+      "fx": 0.85,
+      "fy": 0.5,
+      "from": 1,
+      "to": 1.12
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap8.png",
+     "a": 94.3,
+     "b": 101.8
+    }
+   ]
+  },
+  {
+   "name": "end",
+   "t0": 102.2,
+   "t1": 108.9,
+   "pieces": [
+    {
+     "src": "work/d-end.mp4",
+     "ss": 0,
+     "se": 6.7
+    }
+   ]
+  }
+ ]
+}

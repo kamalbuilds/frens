@@ -6,18 +6,18 @@ Tap a fren to see their entry and live PnL, with Call exit and Copy one tap away
 
 Now someone new joins. Mia has no wallet.
 She presses Copy on cy's long, and makes a passkey. A name, one tap.
-No extension. No seed phrase.
+No extension to install. No seed phrase to write down.
 
-Her wallet is empty, so we fund it with testnet MON and aUSD.
+Her wallet is empty, so we fund it with testnet MON and testnet aUSD.
 
 She presses copy. Perpl has never seen her, so frens opens her Perpl account right here, at Perpl's minimum deposit of a hundred aUSD, and the copy goes out in the same flow.
 Her wallet. Her size.
 
 Now bo calls her exit.
-A take-profit rides her position as a line, with bo's face on it.
+A take-profit line rides her position, with bo's face on it.
 
 She signs in with her passkey and taps Accept. One signature.
-! It becomes a real resting order on Perpl, with bo's address written into it.
+! It becomes a real close order, resting on Perpl, with bo's address written into it.
 
 We read it back from the chain, not from the app. Receipt, success. And bo's address, inside the order.
 That is the call record. [+300]
@@ -27,4 +27,4 @@ Share the room to X, and it posts with its own card.
 
 Switch to mainnet, and Live on Perpl shows the traders who opened in the last six hours, read straight from Perpl's contract.
 
-! frens. Trade perps with your frens.
+! frens. Trade on Perpl, with your frens.

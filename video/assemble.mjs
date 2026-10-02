@@ -26,7 +26,12 @@ spec.beats.forEach((b, bi) => {
     const speed = p.speed ?? 1;
     const src = path.resolve(path.dirname(process.argv[2]), p.src);
     const inArgs = p.png ? ["-loop", "1", "-t", String(p.hold ?? want), "-i", src] : ["-ss", String(p.ss ?? 0), ...(p.se ? ["-to", String(p.se)] : []), "-i", src];
-    run([...inArgs, "-vf", `setpts=(PTS-STARTPTS)/${speed},${norm}`, ...enc, f]);
+    let zoom = "";
+    if (p.zoom && !p.png) {
+      const n = Math.max(2, Math.round(((p.se - (p.ss ?? 0)) / speed) * FPS)), z0 = p.zoom.from ?? 1, z1 = p.zoom.to ?? 1.1;
+      zoom = `,zoompan=z='${z0}+(${z1}-${z0})*on/${n}':x='(iw-iw/zoom)*${p.zoom.fx ?? 0.5}':y='(ih-ih/zoom)*${p.zoom.fy ?? 0.5}':d=1:s=${W}x${H}:fps=${FPS},format=yuv420p`;
+    }
+    run([...inArgs, "-vf", `setpts=(PTS-STARTPTS)/${speed},${p.vf ? p.vf + "," : ""}${norm}${zoom}`, ...enc, f]);
     pieceFiles.push(f);
   });
   const list = path.join(work, `b${bi}.txt`);
