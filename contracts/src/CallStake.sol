@@ -85,6 +85,9 @@ interface IERC20 {
 contract CallStake {
     uint8 internal constant CLOSE_LONG = 2;
     uint8 internal constant CLOSE_SHORT = 3;
+    /// A stake needs its TP at least this far from Perpl's mark (0.5%), so a payout takes a real price move. Without it
+    /// an owner could stake a TP at the mark to their own second wallet and mint "earned" records for free.
+    uint256 public constant MIN_DISTANCE_BPS = 50;
 
     enum State {
         None,
@@ -117,6 +120,7 @@ contract CallStake {
     error NotAClose();
     error NotYourOrder();
     error ZeroAmount();
+    error TooCloseToMark(uint256 markPNS, uint256 tpPNS);
     error BadExpiry();
     error NotHit(uint256 markPNS, uint256 tpPNS);
     error NotExpired();
@@ -137,7 +141,10 @@ contract CallStake {
         IPerplExchange.OrderV2 memory o = exchange.getOrderV2(perpId, orderId);
         if (o.orderType != CLOSE_LONG && o.orderType != CLOSE_SHORT) revert NotAClose();
         if (o.lotLNS == 0 || exchange.getAccountByAddr(msg.sender).accountId != o.accountId) revert NotYourOrder();
-        uint256 tp = uint256(o.priceONS) + exchange.getPerpetualInfoV2(perpId).basePricePNS;
+        IPerplExchange.PerpetualInfoV2 memory info = exchange.getPerpetualInfoV2(perpId);
+        uint256 tp = uint256(o.priceONS) + info.basePricePNS;
+        uint256 gap = (info.markPNS * MIN_DISTANCE_BPS) / 10_000;
+        if (o.orderType == CLOSE_LONG ? tp < info.markPNS + gap : tp + gap > info.markPNS) revert TooCloseToMark(info.markPNS, tp);
         stakes[id] = Stake(msg.sender, caller, amount, expiry, uint32(perpId), o.orderType == CLOSE_LONG, State.Open, tp);
         if (!token.transferFrom(msg.sender, address(this), amount)) revert TransferFailed();
         emit Staked(id, msg.sender, caller, amount, perpId, orderId, tp, o.orderType == CLOSE_LONG, expiry);

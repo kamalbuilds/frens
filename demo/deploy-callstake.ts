@@ -25,6 +25,8 @@ const [ex, tok] = await Promise.all(
 if (String(ex).toLowerCase() !== net.exchange.toLowerCase() || String(tok).toLowerCase() !== net.collateral.toLowerCase()) throw new Error("constructor args do not read back");
 const out = path.join(here, "../contracts/deployments.json");
 const d = fs.existsSync(out) ? JSON.parse(fs.readFileSync(out, "utf8")) : {};
+// A redeploy keeps the previous contract as legacy: its open stakes still pay out and still show in rooms.
+if (d.testnet?.CallStake) d.testnetLegacy = [...(d.testnetLegacy ?? []), d.testnet];
 d.testnet = { CallStake: r.contractAddress, tx: hash, block: r.blockNumber.toString(), exchange: ex, token: tok };
 fs.writeFileSync(out, JSON.stringify(d, null, 1));
 console.log(JSON.stringify(d.testnet));

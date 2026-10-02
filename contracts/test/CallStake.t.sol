@@ -49,7 +49,7 @@ contract CallStakeTest is Test {
         ex.setAccount(owner, 7);
         ex.setBase(800_000);
         ex.setOrder(7, 2, 50_000, 100); // close-long TP at 850_000 PNS
-        ex.setMark(840_000);
+        ex.setMark(840_000); // 1.19% below the TP, past the 0.5% minimum
         token.mint(owner, 1_000e6);
         vm.prank(owner);
         token.approve(address(cs), type(uint256).max);
@@ -66,6 +66,24 @@ contract CallStakeTest is Test {
         assertEq(o, owner); assertEq(c, caller); assertEq(amt, 5e6); assertTrue(closeLong);
         assertEq(uint8(st), uint8(CallStake.State.Open)); assertEq(tp, 850_000);
         assertEq(token.balanceOf(address(cs)), 5e6);
+    }
+
+    function test_rejectsATpTooCloseToTheMark() public {
+        ex.setMark(846_000); // TP 850_000 is 0.47% above: under the 0.5% minimum
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(CallStake.TooCloseToMark.selector, 846_000, 850_000));
+        cs.stake(id, caller, 5e6, 16, 138, uint64(block.timestamp + 1 days));
+        ex.setMark(845_000); // 0.59%: allowed
+        vm.prank(owner);
+        cs.stake(id, caller, 5e6, 16, 138, uint64(block.timestamp + 1 days));
+    }
+
+    function test_rejectsAShortTpTooCloseToTheMark() public {
+        ex.setOrder(7, 3, 30_000, 100); // close-short TP at 830_000
+        ex.setMark(833_000); // 0.36% above the TP
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(CallStake.TooCloseToMark.selector, 833_000, 830_000));
+        cs.stake(id, caller, 5e6, 16, 138, uint64(block.timestamp + 1 days));
     }
 
     function test_rejectsAnOrderThatIsNotAClose() public {
@@ -118,6 +136,7 @@ contract CallStakeTest is Test {
 
     function test_shortTpHitsAtOrBelow() public {
         ex.setOrder(7, 3, 30_000, 100); // close-short TP at 830_000
+        ex.setMark(840_000); // 1.2% above the TP at stake time
         _stake();
         ex.setMark(830_001);
         vm.expectRevert(abi.encodeWithSelector(CallStake.NotHit.selector, 830_001, 830_000));
@@ -145,6 +164,8 @@ contract CallStakeTest is Test {
         amount = uint96(bound(amount, 1, 1_000e6));
         mark = bound(mark, 0, 2_000_000);
         ex.setOrder(7, closeLong ? 2 : 3, priceONS, 100);
+        uint256 tpAtStake = uint256(priceONS) + 800_000;
+        ex.setMark(closeLong ? (tpAtStake * 9_900) / 10_000 : (tpAtStake * 10_100) / 10_000); // 1% away at stake time
         vm.prank(owner);
         cs.stake(id, caller, amount, 16, 138, uint64(block.timestamp + 1 days));
         uint256 tp = uint256(priceONS) + 800_000;

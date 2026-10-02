@@ -4,9 +4,16 @@ import { encodeFunctionData, erc20Abi, pad, toHex, type Address, type Hex } from
 import callStakeAbi from "./callstake.abi.json";
 import { NETWORKS, type Network } from "./perpl";
 
+// v2 adds the 0.5% minimum TP distance from the mark at stake time. New stakes go to v2; rooms read both, so stakes
+// placed on v1 still show and still pay out.
 export const CALL_STAKE: Partial<Record<Network, Address>> = {
-  testnet: "0x0E8CbE0902067a49d98961A1440419AEcAf0C5Bc",
+  testnet: "0xB83D69657EED4Abd327b3539F24f07556c1A5a36",
 };
+export const CALL_STAKE_READ: Partial<Record<Network, Address[]>> = {
+  testnet: ["0xB83D69657EED4Abd327b3539F24f07556c1A5a36", "0x0E8CbE0902067a49d98961A1440419AEcAf0C5Bc"],
+};
+/// The minimum TP distance from Perpl's mark that CallStake v2 accepts, in basis points (MIN_DISTANCE_BPS on chain).
+export const MIN_STAKE_DISTANCE_BPS = 50;
 export { callStakeAbi };
 
 export type StakeState = "none" | "open" | "paid" | "refunded";
