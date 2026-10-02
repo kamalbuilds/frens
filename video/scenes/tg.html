@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+<style>
+#num{position:absolute;left:0;right:0;top:230px;text-align:center;font:700 300px/1 "SG";letter-spacing:-.05em;opacity:0}
+#lab{position:absolute;left:0;right:0;top:540px;text-align:center;font:500 34px "SG";color:var(--ink);opacity:0}
+#src{position:absolute;left:0;right:0;top:596px;text-align:center;font:400 20px "PM";color:var(--muted);opacity:0}
+.chips{position:absolute;left:0;right:0;top:680px;display:flex;justify-content:center;gap:22px}
+.chip{font:500 26px "PS";border:1px solid var(--edge);background:var(--panel);border-radius:10px;padding:16px 26px;opacity:0;transform:translateY(16px);display:flex;gap:14px;align-items:center}
+.chip svg{width:34px;height:34px;border-radius:50%}
+</style>
+<div id="num">0</div><div id="lab">members in the Perpl Telegram group</div><div id="src">t.me/perplTradeOfficialtg, read 2026-10-02</div>
+<div class="chips"><div class="chip" id="c1">a group chat</div><div class="chip" id="c2">a calls channel</div><div class="chip" id="c3"><span id="fx"></span>a fren who tails them</div></div>
+<script src="faces.js"></script><script src="engine.js"></script>
+<script>
+$("#fx").outerHTML = window.FACES.cy.replace("<svg", '<svg style="width:34px;height:34px"');
+window.render = (t) => {
+  const c1 = cue("c1", 0.4), c2 = cue("c2", 1.9), c3 = cue("c3", 3.4), n0 = cue("num", 6);
+  for (const [i, c] of [[1, c1], [2, c2], [3, c3]]) { const a = eo(seg(t, c, c + 0.4)); const e = $("#c" + i); e.style.opacity = a; e.style.transform = `translateY(${16 * (1 - a)}px)`; }
+  const a = eo(seg(t, n0, n0 + 0.4)); $("#num").style.opacity = a; $("#num").style.transform = `scale(${0.96 + 0.04 * a})`;
+  const v = Math.round(10131 * eo(seg(t, n0, n0 + 1.6)));
+  $("#num").textContent = v.toLocaleString("en-US");
+  $("#lab").style.opacity = eo(seg(t, n0 + 0.5, n0 + 1)); $("#src").style.opacity = eo(seg(t, n0 + 0.8, n0 + 1.3)) * 0.9;
+  const dim = 1 - 0.55 * eo(seg(t, n0 - 0.2, n0 + 0.4));
+  document.querySelector(".chips").style.opacity = dim;
+};
+</script>

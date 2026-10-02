@@ -1,0 +1,9 @@
+@font-face{font-family:"SG";src:url(fonts/sg.woff2);font-weight:500 700}
+@font-face{font-family:"PS";src:url(fonts/plex-sans.woff2);font-weight:400 600}
+@font-face{font-family:"PM";src:url(fonts/mono-400.woff2);font-weight:400}
+@font-face{font-family:"PM";src:url(fonts/mono-500.woff2);font-weight:500}
+:root{--page:#0A0A0F;--panel:#13131A;--raised:#1B1B24;--edge:#26263A;--ink:#ECECF1;--muted:#8B8B9E;--accent:#C8FF3D;--gain:#2BD67B;--loss:#FF6B57}
+*{box-sizing:border-box;margin:0}
+html,body{width:1600px;height:900px;background:var(--page);color:var(--ink);overflow:hidden;font-family:"PS",sans-serif}
+.disp{font-family:"SG",sans-serif;font-weight:700;letter-spacing:-.02em}
+.mono{font-family:"PM",monospace;font-variant-numeric:tabular-nums}

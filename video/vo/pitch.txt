@@ -1,0 +1,28 @@
+! A fren pastes a position into the group chat.
+Another one answers, close at eighty-six k.
+
+Now the trader alt-tabs. Finds the market. Types the price.
+Or forgets.
+
+And nobody remembers whose calls were any good.
+
+Perpl is the busiest app on Monad, and it has no social layer at all.
+
+People are asking for one. [+250]
+Social trading on Monad? That's the alpha leak we need.
+Copy trading means handing your keys to someone's server, and hoping.
+
+I'm Kamal, and I built frens.
+
+Your frens' real Perpl positions, on one live chart.
+A fren drags a take-profit onto your position.
+You see their face riding the line, and you accept it with one signature.
+! It becomes a real resting order on Perpl, with the caller's address written into it.
+
+That address is the point. Every caller gets a public record. Calls taken. Calls that hit.
+Nobody can fake it, because the chain shows it. And nothing moves without the owner's signature.
+
+Traders already trade with people. A group chat, a calls channel, a fren who tails them.
+frens starts where those people already are. The Perpl Telegram, ten thousand traders.
+
+! frens. Trade perps with your frens.

@@ -10,3 +10,6 @@ video/*.mp4
 video/clips/
 video/frames/
 demo/.keeper-cursor
+video/asm-*/
+video/vo/out*/
+video/*.wav
