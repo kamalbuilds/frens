@@ -22,8 +22,11 @@ function shortAddress(address: Address): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+// Mera wraps the browser's WebAuthn error in `cause`; that is the part that says what went wrong.
 function messageOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
+  if (!(e instanceof Error)) return String(e);
+  const cause = (e as { cause?: unknown }).cause;
+  return cause instanceof Error && cause.message && cause.message !== e.message ? `${e.message}: ${cause.message}` : e.message;
 }
 
 // Shared passkey sign-in panel: "Use a passkey" next to the existing browser
@@ -71,27 +74,33 @@ export function PasskeyWallet({
     setBalancesError("");
     onFunded(false);
     const client = publicClient(network);
-    Promise.all([
-      client.getBalance({ address }),
-      client.readContract({
-        address: NETWORKS[network].collateral,
-        abi: erc20BalanceAbi,
-        functionName: "balanceOf",
-        args: [address],
-      }),
-    ])
-      .then(([mon, ausd]) => {
-        if (!live) return;
-        setBalances({ mon, ausd: ausd as bigint });
-        onFunded(mon > 0n);
-      })
-      .catch((e) => {
-        if (!live) return;
-        setBalancesError(`Could not read balances: ${messageOf(e)}`);
-        onFunded(false);
-      });
+    const read = () =>
+      Promise.all([
+        client.getBalance({ address }),
+        client.readContract({
+          address: NETWORKS[network].collateral,
+          abi: erc20BalanceAbi,
+          functionName: "balanceOf",
+          args: [address],
+        }),
+      ])
+        .then(([mon, ausd]) => {
+          if (!live) return;
+          setBalances({ mon, ausd: ausd as bigint });
+          setBalancesError("");
+          onFunded(mon > 0n);
+        })
+        .catch((e) => {
+          if (!live) return;
+          setBalancesError(`Could not read balances: ${messageOf(e)}`);
+          onFunded(false);
+        });
+    void read();
+    // Funds sent after sign-in show up without signing in again.
+    const timer = setInterval(read, 10_000);
     return () => {
       live = false;
+      clearInterval(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, network]);

@@ -32,6 +32,7 @@ import { encodeCallsParam } from "@/lib/receipts";
 import type { PricedCall } from "@/lib/receipts";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
 import { callBoard } from "@/lib/callboard";
+import { ausdBalance, depositCalls, hasPerplAccount, minAccountOpen, toAusdUnits } from "@/lib/onboard";
 import { suggestionDescId } from "@/lib/callbook";
 import { publicClient } from "@/lib/perpl";
 import { ROOM_POST, telegramShareUrl, xPostUrl } from "@/lib/share";
@@ -75,7 +76,12 @@ type Overlay = {
 
 type Ohlc = { o: number; h: number; l: number; c: number; change: number; pct: number; time: number; volume: number };
 
-type CopyResult = { kind: "idle" } | { kind: "sending" } | { kind: "ok"; hash: string } | { kind: "error"; message: string };
+type CopyResult =
+  | { kind: "idle" }
+  | { kind: "sending" }
+  | { kind: "ok"; hash: string }
+  | { kind: "needs-account"; signer: "wallet" | "passkey" }
+  | { kind: "error"; message: string };
 
 /// The chart library parses colours itself and rejects CSS color-mix(), so the
 /// chart gets concrete hex values from the dark system: page #0A0A0F, muted
@@ -1199,11 +1205,48 @@ export function ChartRoom({
     if (r.status !== "success") throw new Error(`The order reverted on Perpl (tx ${hash.slice(0, 10)}…).`);
   }
 
+  // Wallets Perpl has never seen open an exchange account first (approve + createAccount), then copy.
+  const [deposit, setDeposit] = useState("50");
+  const [depositFloor, setDepositFloor] = useState<number | null>(null);
+  async function raiseDepositToFloor() {
+    const floor = Number(await minAccountOpen(publicClient(net), net)) / 1e6;
+    setDepositFloor(floor);
+    setDeposit((d) => (Number(d) >= floor ? d : String(floor)));
+  }
+
+  async function depositThenCopy(signer: "wallet" | "passkey") {
+    setCopyResult({ kind: "sending" });
+    try {
+      const units = toAusdUnits(Number(deposit));
+      const floor = await minAccountOpen(publicClient(net), net);
+      if (units < floor) throw new Error(`Perpl needs at least ${Number(floor) / 1e6} aUSD to open an account.`);
+      const me = signer === "passkey" ? passkey?.address : await connectWallet(net);
+      if (!me) throw new Error("Sign in with the passkey first.");
+      const held = await ausdBalance(publicClient(net), net, me);
+      if (held < units) {
+        throw new Error(`This wallet holds ${(Number(held) / 1e6).toLocaleString("en-US")} aUSD; the deposit needs ${deposit}.`);
+      }
+      for (const call of depositCalls(net, units)) {
+        const hash = signer === "passkey" && passkey ? await sendExecOrderWith(passkey, call.to, call.data, net) : await sendExecOrder(call.to, call.data, net);
+        await settled(hash);
+      }
+    } catch (e) {
+      setCopyResult({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+      return;
+    }
+    await (signer === "passkey" ? doCopyWithPasskey() : doCopy());
+  }
+
   async function doCopy() {
     setCopyResult({ kind: "sending" });
     try {
       const data = copyOrderData();
-      await connectWallet(net);
+      const me = await connectWallet(net);
+      if (!(await hasPerplAccount(publicClient(net), net, me))) {
+        await raiseDepositToFloor();
+        setCopyResult({ kind: "needs-account", signer: "wallet" });
+        return;
+      }
       const hash = await sendExecOrder(EXCHANGE, data, net);
       await settled(hash);
       setCopyResult({ kind: "ok", hash });
@@ -1220,6 +1263,11 @@ export function ChartRoom({
     setCopyResult({ kind: "sending" });
     try {
       const data = copyOrderData();
+      if (!(await hasPerplAccount(publicClient(net), net, passkey.address))) {
+        await raiseDepositToFloor();
+        setCopyResult({ kind: "needs-account", signer: "passkey" });
+        return;
+      }
       const hash = await sendExecOrderWith(passkey, EXCHANGE, data, net);
       await settled(hash);
       setCopyResult({ kind: "ok", hash });
@@ -1945,6 +1993,30 @@ export function ChartRoom({
                 <p className="num mt-2 break-all text-[12px] text-gain">
                   Sent. <a className="underline" href={explorerTxUrl(net, copyResult.hash)} target="_blank" rel="noreferrer">View on the {net === "mainnet" ? "MonadVision" : "testnet"} explorer</a>
                 </p>
+              )}
+              {copyResult.kind === "needs-account" && (
+                <div data-needs-account className="mt-2 flex flex-col gap-2 text-[12px]">
+                  <p className="text-muted">
+                    Perpl has no account for this wallet yet. Deposit aUSD to open one
+                    {depositFloor !== null ? ` (Perpl's minimum is ${depositFloor} aUSD)` : ""}; the copy goes through right after.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      value={deposit}
+                      onChange={(e) => setDeposit(e.target.value)}
+                      inputMode="decimal"
+                      aria-label="Deposit in aUSD"
+                      className="num w-20 rounded-[6px] border border-edge bg-panel px-2 py-1.5"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => depositThenCopy(copyResult.signer)}
+                      className="rounded-[6px] bg-accent px-3 py-1.5 font-medium text-page active:scale-[0.97]"
+                    >
+                      Deposit {deposit} aUSD and copy
+                    </button>
+                  </div>
+                </div>
               )}
               {copyResult.kind === "error" && (
                 <p className="mt-2 text-[12px] text-loss">{copyResult.message}</p>
