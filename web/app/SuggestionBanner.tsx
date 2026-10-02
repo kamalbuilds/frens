@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Address, Hex } from "viem";
 import { formatPrice, type Friend } from "@/lib/chart";
+import { acceptedPost, xPostUrl } from "@/lib/share";
 import { nameForAddress, type NamesByAddress } from "@/lib/names";
 import {
   ACCEPT_BATCH_SUPPORTED,
@@ -519,6 +520,22 @@ export function SuggestionBanner({
             className={`${STRIP_BTN} order-7 w-full border border-edge hover:bg-raised sm:order-none sm:w-auto sm:self-start`}
           >
             {roomCopied ? "Copied" : "Copy room link"}
+          </button>
+        )}
+        {accept.kind === "ok" && roomShareLink && (
+          <button
+            type="button"
+            data-share="x-accepted"
+            onClick={() =>
+              window.open(
+                xPostUrl(acceptedPost(nameFor(suggestion.from), formatPrice(suggestion.price, priceDecimals)), `${window.location.origin}${roomShareLink}`),
+                "_blank",
+                "noopener",
+              )
+            }
+            className={`${STRIP_BTN} order-7 w-full border border-edge hover:bg-raised sm:order-none sm:w-auto sm:self-start`}
+          >
+            Post on X
           </button>
         )}
         {accept.kind === "error" && (

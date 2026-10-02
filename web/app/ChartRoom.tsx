@@ -31,6 +31,7 @@ import { callLine, displayName, encodeKeyedNames, namesForAddresses, sanitizeNam
 import { encodeCallsParam } from "@/lib/receipts";
 import type { PricedCall } from "@/lib/receipts";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
+import { ROOM_POST, telegramShareUrl, xPostUrl } from "@/lib/share";
 import { connect as connectWallet, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
 import { subscribeRoomFeed } from "@/lib/roomfeed";
@@ -1524,6 +1525,26 @@ export function ChartRoom({
               >
                 {copied ? "Copied" : "Copy room link"}
               </button>
+              {roomSharePath && (
+                <>
+                  <button
+                    type="button"
+                    data-share="x"
+                    onClick={() => window.open(xPostUrl(ROOM_POST, `${window.location.origin}${roomSharePath}`), "_blank", "noopener")}
+                    className="hidden shrink-0 rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97] sm:inline-block"
+                  >
+                    Post on X
+                  </button>
+                  <button
+                    type="button"
+                    data-share="telegram"
+                    onClick={() => window.open(telegramShareUrl(ROOM_POST, `${window.location.origin}${roomSharePath}`), "_blank", "noopener")}
+                    className="hidden shrink-0 rounded-[6px] border border-edge px-3 py-1.5 text-[13px] font-medium hover:bg-raised active:scale-[0.97] sm:inline-block"
+                  >
+                    Telegram
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={dismissHint}
