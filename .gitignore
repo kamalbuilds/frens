@@ -4,3 +4,4 @@ node_modules
 !.env.example
 demo/.wallets.json
 .progress/LEDGER.md
+web/out-static/
