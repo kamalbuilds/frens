@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+<style>
+html,body{background:transparent}
+.c{position:absolute;left:110px;bottom:84px;max-width:760px;background:rgba(19,19,26,.94);border:1px solid #26263A;border-radius:12px;padding:20px 28px 22px;box-shadow:0 18px 60px rgba(0,0,0,.5)}
+.c .a{width:42px;height:4px;border-radius:2px;background:var(--accent);margin-bottom:14px}
+.c h1{font:700 38px/1.1 "SG";letter-spacing:-.02em}
+.c p{font:400 21px/1.4 "PS";color:#B6B6C6;margin-top:8px}
+.c.r{left:auto;right:110px}
+.c.t{bottom:auto;top:84px}
+</style>
+<div class="c" id="c"><div class="a"></div><h1 id="h"></h1><p id="p"></p></div>
+<script src="engine.js"></script>
+<script>
+$("#h").textContent = CUES.title || ""; $("#p").textContent = CUES.sub || ""; if (!CUES.sub) $("#p").remove();
+if (CUES.pos) for (const k of CUES.pos.split(" ")) $("#c").classList.add(k);
+window.render = () => {};
