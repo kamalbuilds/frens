@@ -13,7 +13,7 @@ if (!/^0x[0-9a-fA-F]{40}$/.test(to ?? "")) throw new Error("usage: fund.ts <to> 
 const keys: Record<string, Hex> = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), ".wallets.json"), "utf8"));
 const account = privateKeyToAccount(
   from === "deployer"
-    ? ((process.env.DEPLOYER_KEY as Hex | undefined) ?? (() => { throw new Error("DEPLOYER_KEY is not set: place it in .env"); })())
+    ? (((process.env.DEPLOYER_KEY ?? process.env.PRIVATE_KEY) as Hex | undefined) ?? (() => { throw new Error("DEPLOYER_KEY is not set: place it in .env"); })())
     : keys[from]!,
 );
 const net = NETWORKS.testnet;

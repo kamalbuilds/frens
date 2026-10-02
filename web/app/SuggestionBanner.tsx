@@ -370,7 +370,9 @@ export function SuggestionBanner({
     onSuggestionRef.current = onSuggestion;
     onAcceptedRef.current = onAcceptedChange;
     passRef.current = pass;
-    acceptRef.current = passkey && passkeyFunded ? doAcceptWithPasskey : doAccept;
+    // A signed-in passkey is the signer even before its balance has loaded; an unfunded one fails loudly in acceptWith
+    // rather than falling through to an absent browser wallet that does nothing.
+    acceptRef.current = passkey ? doAcceptWithPasskey : doAccept;
   });
 
   // The chart's own ghost-line buttons resolve through the same flow: the
