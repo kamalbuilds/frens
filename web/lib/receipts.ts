@@ -62,6 +62,8 @@ export type VerifiedCall = {
   orderType: number;
   /// The resting close's order id from the OrderPlaced log after it, or null if none was placed.
   orderId: string | null;
+  /// The call's orderDescId (caller in the top 160 bits), decimal string; also its CallStake id.
+  orderDescId: string;
   /// pricePNS from the OrderRequestV2 log, as a decimal string: the raw
   /// on-chain value, unscaled.
   pricePNS: string;
@@ -133,6 +135,7 @@ async function verifyOne(
         market: Number(args.perpId),
         orderType,
         orderId: placedOrderId(logs.slice(i + 1), exchange),
+        orderDescId: args.orderDescId.toString(),
         pricePNS: args.pricePNS.toString(),
         block: Number(receipt.blockNumber),
       };
@@ -219,4 +222,22 @@ export async function priceCalls(
     const d = decimals.get(c.market) ?? null;
     return { ...c, price: d === null ? null : priceInMarketUnits(c.pricePNS, d) };
   });
+}
+
+/// Perpl recycles order ids: once a call's order is filled or cancelled, the same id can hold someone else's order.
+/// The order at `orderId` is still the call's only if it carries the call's type and price and belongs to the
+/// call owner's account, with lots left.
+export function isCallsOrder(
+  o: { accountId: number | bigint; orderType: number; priceONS: number | bigint; lotLNS: number | bigint },
+  call: { orderType: number; pricePNS: string },
+  basePricePNS: bigint,
+  ownerAccountId: bigint,
+): boolean {
+  return (
+    BigInt(o.lotLNS) > 0n &&
+    Number(o.orderType) === call.orderType &&
+    BigInt(o.priceONS) + basePricePNS === BigInt(call.pricePNS) &&
+    ownerAccountId > 0n &&
+    BigInt(o.accountId) === ownerAccountId
+  );
 }

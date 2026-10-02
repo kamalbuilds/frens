@@ -23,6 +23,10 @@ import { buildCounterSuggestion } from "@/lib/ghost";
 import type { Position } from "@/lib/readPosition";
 import { NETWORKS, publicClient, type Network } from "@/lib/perpl";
 import { explorerTxUrl } from "@/lib/network";
+import { CALL_STAKE, stakeCalls } from "@/lib/callstake";
+import { verifyCallReceipts } from "@/lib/receipts";
+
+const STAKE_HOURS = 48;
 import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { acceptOwnerCheck, alreadyTaken, evaluateSuggestion, replacementNotice } from "@/lib/acceptance";
 import { PasskeyWallet } from "./PasskeyWallet";
@@ -297,6 +301,32 @@ export function SuggestionBanner({
     }
   }
 
+  // Backing a taken call with a CallStake (testnet): the same signer that accepted stakes aUSD that pays the caller
+  // only if Perpl's mark reaches the TP before expiry, and returns to the owner otherwise.
+  const acceptedWith = useRef<"wallet" | "passkey">("wallet");
+  const [stakeAmt, setStakeAmt] = useState("2");
+  const [stakeRes, setStakeRes] = useState<{ kind: "idle" | "sending" } | { kind: "ok"; hash: string; expiry: number } | { kind: "error"; message: string }>({ kind: "idle" });
+  async function doStake(acceptHash: string) {
+    setStakeRes({ kind: "sending" });
+    try {
+      const [call] = await verifyCallReceipts(network, [acceptHash], publicClient(network));
+      if (!call || call.orderId === null) throw new Error("The accepted order is not resting on Perpl any more, so there is nothing left to stake on.");
+      const expiry = Math.floor(Date.now() / 1000) + STAKE_HOURS * 3600;
+      let last = "";
+      for (const tx of stakeCalls(network, { ...call, orderId: call.orderId }, Number(stakeAmt), expiry)) {
+        const hash = (acceptedWith.current === "passkey" && passkey
+          ? await sendExecOrderWith(passkey, tx.to, tx.data, network)
+          : await sendExecOrder(tx.to, tx.data, network)) as Hex;
+        const r = await publicClient(network).waitForTransactionReceipt({ hash, timeout: 60_000 });
+        if (r.status !== "success") throw new Error(`The stake reverted (tx ${hash.slice(0, 10)}…).`);
+        last = hash;
+      }
+      setStakeRes({ kind: "ok", hash: last, expiry });
+    } catch (e) {
+      setStakeRes({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
   async function doAccept() {
     if (!suggestion || !ownerFriend) return;
     setAccept({ kind: "sending" });
@@ -307,6 +337,7 @@ export function SuggestionBanner({
         setAccept({ kind: "error", message: gate.reason });
         return;
       }
+      acceptedWith.current = "wallet";
       await acceptWith((data) => sendExecOrder(NETWORKS[network].exchange, data, network));
     } catch (e) {
       setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
@@ -326,6 +357,7 @@ export function SuggestionBanner({
         return;
       }
       const key = passkey;
+      acceptedWith.current = "passkey";
       await acceptWith((data) => sendExecOrderWith(key, NETWORKS[network].exchange, data, network));
     } catch (e) {
       setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
@@ -529,6 +561,38 @@ export function SuggestionBanner({
             </a>
             {twoSigs ? ` · ${TWO_SIGNATURE_NOTICE}` : ""}
           </p>
+        )}
+        {accept.kind === "ok" && CALL_STAKE[network] && (
+          <div data-stake className="order-6 flex w-full flex-wrap items-center gap-2 text-[12px] sm:order-none">
+            {stakeRes.kind === "ok" ? (
+              <p className="num text-gain">
+                {stakeAmt} aUSD staked: paid to {nameFor(suggestion.from)} only if the price reaches {formatPrice(suggestion.price, priceDecimals)} by{" "}
+                {new Date(stakeRes.expiry * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })},
+                back to you otherwise.{" "}
+                <a className="underline" href={explorerTxUrl(network, stakeRes.hash)} target="_blank" rel="noreferrer">tx</a>
+              </p>
+            ) : (
+              <>
+                <span>Back {nameFor(suggestion.from)}&apos;s call: they earn it only if the price gets there.</span>
+                <input
+                  value={stakeAmt}
+                  onChange={(e) => setStakeAmt(e.target.value)}
+                  inputMode="decimal"
+                  aria-label="Stake in aUSD"
+                  className="num w-14 rounded-[6px] border border-edge bg-panel px-2 py-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => doStake(accept.hash)}
+                  disabled={stakeRes.kind === "sending"}
+                  className={`${STRIP_BTN} bg-accent text-page disabled:opacity-40`}
+                >
+                  {stakeRes.kind === "sending" ? "Staking" : `Stake ${stakeAmt} aUSD`}
+                </button>
+                {stakeRes.kind === "error" && <span className="text-loss">{stakeRes.message}</span>}
+              </>
+            )}
+          </div>
         )}
         {accept.kind === "ok" && roomShareLink && (
           <button

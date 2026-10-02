@@ -1,10 +1,11 @@
 import type { Hex } from "viem";
-import { parseCallsParam, priceCalls, verifyCallReceipts, type PricedCall, type VerifiedCall } from "@/lib/receipts";
+import { isCallsOrder, parseCallsParam, priceCalls, verifyCallReceipts, type PricedCall, type VerifiedCall } from "@/lib/receipts";
 import { parseNetParam } from "@/lib/network";
 import { NETWORKS, exchangeAbi } from "@/lib/perpl";
 import { apiBaseFor, clientFor, markets } from "@/lib/server";
 import { scaleCandle, type RawCandle } from "@/lib/chart";
 import { callHit } from "@/lib/callhit";
+import { CALL_STAKE, callStakeAbi, stakeId, stakeView } from "@/lib/callstake";
 
 export const maxDuration = 30;
 
@@ -71,16 +72,28 @@ export async function GET(req: Request) {
   }
 
   // Still on Perpl's book: same order id, same close type, lots left. A filled or cancelled TP reads false.
+  // Still on Perpl's book as THIS call's order: Perpl recycles order ids, so type, price and owner account must
+  // match too (isCallsOrder). A filled, cancelled or recycled id reads false.
+  const bases = new Map<number, Promise<bigint>>();
+  const baseOf = (market: number) => {
+    if (!bases.has(market)) {
+      bases.set(market, client
+        .readContract({ address: NETWORKS[net].exchange, abi: exchangeAbi, functionName: "getPerpetualInfoV2", args: [BigInt(market)] })
+        .then((p) => BigInt((p as { basePricePNS: bigint }).basePricePNS)));
+    }
+    return bases.get(market)!;
+  };
   const restingOf = async (c: PricedCall): Promise<boolean> => {
     if (c.orderId === null) return false;
     try {
-      const o = (await client.readContract({
-        address: NETWORKS[net].exchange,
-        abi: exchangeAbi,
-        functionName: "getOrderV2",
-        args: [BigInt(c.market), BigInt(c.orderId)],
-      })) as { orderType: number; lotLNS: number | bigint };
-      return Number(o.orderType) === c.orderType && BigInt(o.lotLNS) > 0n;
+      const [o, base, acct] = await Promise.all([
+        client.readContract({ address: NETWORKS[net].exchange, abi: exchangeAbi, functionName: "getOrderV2", args: [BigInt(c.market), BigInt(c.orderId)] }),
+        baseOf(c.market),
+        client
+          .readContract({ address: NETWORKS[net].exchange, abi: exchangeAbi, functionName: "getAccountByAddr", args: [c.owner] })
+          .then((a) => BigInt((a as { accountId: bigint }).accountId), () => 0n),
+      ]);
+      return isCallsOrder(o as Parameters<typeof isCallsOrder>[0], c, base, acct);
     } catch {
       return false;
     }
@@ -111,6 +124,17 @@ export async function GET(req: Request) {
       }
     }),
   );
-  const out = await Promise.all(withHits.map(async (c) => ({ ...c, resting: await restingOf(c) })));
+  // The call's stake, if its owner backed it in CallStake (testnet): staked, paid to the caller, or refunded.
+  const stakeOf = async (c: PricedCall) => {
+    const addr = CALL_STAKE[net];
+    if (!addr) return null;
+    try {
+      const v = stakeView((await client.readContract({ address: addr, abi: callStakeAbi, functionName: "stakes", args: [stakeId(c.orderDescId)] })) as unknown[]);
+      return v.state === "none" ? null : v;
+    } catch {
+      return null;
+    }
+  };
+  const out = await Promise.all(withHits.map(async (c) => ({ ...c, resting: await restingOf(c), stake: await stakeOf(c) })));
   return Response.json({ net, calls: out });
 }
