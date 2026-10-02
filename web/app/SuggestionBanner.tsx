@@ -98,7 +98,6 @@ export function SuggestionBanner({
   ghostPrice,
   onAcceptedChange,
   roomShareLink,
-  callHashes,
   acceptRequest,
   chartActions,
   passRequest,
@@ -116,7 +115,6 @@ export function SuggestionBanner({
   /// Room link carrying the ?c= receipts, offered for sharing after Accept.
   roomShareLink?: string | null;
   /// The room's accepted-call receipts (?c=): resting TPs created through frens are found from these.
-  callHashes?: readonly string[];
   acceptRequest?: number;
   /// The chart is drawing this call with its own Accept and Pass: the banner drops its duplicate buttons.
   chartActions?: boolean;
@@ -195,7 +193,7 @@ export function SuggestionBanner({
     if (!suggestion) return;
     let live = true;
     setResting(null);
-    findRestingCloses(network, publicClient(network), suggestion.owner, marketId, { knownTxs: (callHashes ?? []) as `0x${string}`[] })
+    findRestingCloses(network, publicClient(network), suggestion.owner, marketId)
       .then((all) => {
         if (!live || !suggestion) return;
         const want = suggestion.side === "long" ? "close-long" : "close-short";
@@ -244,7 +242,21 @@ export function SuggestionBanner({
   // and place the new close. With the batch entrypoint this is one signature
   // ([CANCEL..., close] via execOrders); without it the cancels go first and
   // the banner says so. The send callback is the only wallet-specific part.
+  const accepting = useRef(false);
   async function acceptWith(broadcast: (data: Hex) => Promise<string>) {
+    if (!suggestion || !ownerFriend) return;
+    // A second Accept while the first is in flight would send the same close twice; the second then reverts on the
+    // locked lots and its error replaces the first one's success.
+    if (accepting.current) return;
+    accepting.current = true;
+    try {
+      await acceptOnce(broadcast);
+    } finally {
+      accepting.current = false;
+    }
+  }
+
+  async function acceptOnce(broadcast: (data: Hex) => Promise<string>) {
     if (!suggestion || !ownerFriend) return;
     // Accepted means mined and successful, not broadcast: a reverted close must not read as taken.
     const send = async (data: Hex) => {
@@ -258,7 +270,7 @@ export function SuggestionBanner({
     const close = buildCloseOrder();
     let restingNow: RestingClose[] = [];
     try {
-      restingNow = (await findRestingCloses(network, publicClient(network), suggestion.owner, marketId, { knownTxs: (callHashes ?? []) as `0x${string}`[] })).filter(matchingSide);
+      restingNow = (await findRestingCloses(network, publicClient(network), suggestion.owner, marketId)).filter(matchingSide);
     } catch {
       restingNow = [];
     }
