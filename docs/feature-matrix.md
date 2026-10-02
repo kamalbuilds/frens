@@ -16,7 +16,7 @@ SCRIPT = proven on chain by a script, not yet through the UI; OPEN = not exercis
 | 9 | Copy a fren (new wallet opens Perpl account) | Copy, deposit, copy | PASS (passkey) | 0x9801c9cb; builder 23 on fill 0xf5c94fd1 (script) |
 | 10 | Stake on a taken call | Accept, then Stake 2 aUSD | PASS (passkey) | stake open read from chain; v2 needs TP 0.5% from mark |
 | 11 | Stake pays the caller on a hit | keeper releases when the mark crosses | PASS | 0xddd2eb14 (v1), 0x448e4838 (v2) |
-| 12 | Stake refunds after expiry | anyone calls refund | OPEN on chain | unit tests only |
+| 12 | Stake refunds after expiry | the keeper refunds it automatically | PASS | refund 0x0ee198f8 (state 3), keeper auto-refunds since 2026-10-02 |
 | 13 | Call record: taken, hit, earned | room hero and cards | PASS | "cy earned 4 aUSD" in the demo room |
 | 14 | Live room feed toast | a fren trades | PASS (earlier) | monadLogs toast within ~1 s |
 | 15 | Share card (og image) for link previews | paste a room link in X/Telegram | PASS | Twitterbot gets room title + 200 PNG |
