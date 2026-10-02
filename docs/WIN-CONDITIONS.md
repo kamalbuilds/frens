@@ -1,6 +1,6 @@
 # WIN-CONDITIONS · frens · Monad Metropolis Track 03
 
-Canonical copy: metropolis/docs/WIN-CONDITIONS.md (xsignals gate PASS 2026-10-02: 2 verified asks, 5 outside users). This file mirrors the frens entry for this repo. Updated 2026-10-02 evening.
+Canonical copy: metropolis/docs/WIN-CONDITIONS.md (xsignals gate PASS 2026-10-02: 2 verified asks, 5 outside users). This file mirrors the frens entry for this repo. Re-affirmed 2026-10-03.
 
 ## Shared across all entries (source: docs/research-v2/judges-and-winners.md)
 
@@ -15,7 +15,7 @@ stake aUSD on a call that pays the caller only if Perpl's mark reaches the TP.
 
 Single entry: frens (friends call the exit on your position, you sign it)
 Verb the brief names: cultural participation that translates into real ownership; "native to how people socialize"; judge Zeel's Track 3 ask "perps + social, directly on the chart ... create their own position directly on top of yours. All with PnLs"
-Our product performs that verb: yes. Accept places a real resting close on Perpl with the caller in orderDescId (web/app/SuggestionBanner.tsx acceptWith); copy places the copier's own order as execOrderV2 with Perpl builder id 23 (web/lib/copy.ts, fill 0xf5c94fd1 reads builderId 23); CallStake pays the caller on a hit (contracts/src/CallStake.sol; paid 0xddd2eb14 and 0x448e4838). Passkey click-through in the browser: copy 0x9801c9cb, accept 0x2d17f22d. No outside user's trade yet.
+Our product performs that verb: yes. Accept places a real resting close on Perpl with the caller in orderDescId (web/app/SuggestionBanner.tsx acceptWith), replacing an older resting TP found through getPerpOrderLocks (web/lib/resting.ts); copy places the copier's own order as execOrderV2 with Perpl builder id 23 (web/lib/copy.ts, fill 0xf5c94fd1 reads builderId 23); CallStake pays the caller on a hit (contracts/src/CallStake.sol; paid 0xddd2eb14 and 0x448e4838). Passkey click-through in the browser: copy 0x9801c9cb, accept 0x2d17f22d. No outside user's trade yet.
 Asset we will own: the room graph of who trades alongside whom on Perpl, and the on-chain record of which calls friends took, which hit, and what each caller earned
 Off-platform buyer: Perpl traders asking for social trading and posting PnL: @_maki29_, @tweetbysobur, @hanabilio, @OxPaine, @psalmuhear (docs/research-v3/users/signals.md); none contacted yet (Kamal sends outreach once the build is complete). Perpl issued frens builder id 23 on 2026-10-02
 Metric plan: 3 outside traders taking or staking a call in a real room on testnet, then copies per day; counted from chain by demo/adoption.ts (orders carrying a frens orderDescId) and builder-23 fills

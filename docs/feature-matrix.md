@@ -1,4 +1,4 @@
-# frens feature matrix (testnet; updated 2026-10-02 evening)
+# frens feature matrix (testnet; updated 2026-10-03)
 
 Status: PASS = exercised through the real UI on the live deploy with the result read back from chain or the API;
 SCRIPT = proven on chain by a script, not yet through the UI; OPEN = not exercised yet.
@@ -10,7 +10,7 @@ SCRIPT = proven on chain by a script, not yet through the UI; OPEN = not exercis
 | 3 | Make a room, share it | My frens, add address, Copy room link / Post on X / Telegram | PASS | share URLs carry n= and c= (browser check) |
 | 4 | Send a call (drag TP, copy link) | pick a fren, drag the TP line, Copy suggestion link | PASS (paste path) | link appears once caller set; wallet and passkey fill the caller |
 | 5 | Take a call on the chart | open call link, Accept | PASS (passkey) | tx 0xefd895ed, 0x2d17f22d; wallet path OPEN in browser |
-| 6 | Take a call that replaces a TP | Accept when a TP already rests | SCRIPT | 0xeb51040c, 0x76241d17 (demo/accept-call.ts) |
+| 6 | Take a call that replaces a TP | Accept when a TP already rests | PASS (wallet) | banner "Replaces the TP resting at 85,584.0", one signature 0x8b2268ec: order 146 cancelled, order 113 rests at 86,424 (read from getPerpOrderLocks). Fixed 2026-10-03: the old 2,000-block log scan missed any TP older than ~13 min, and a double Accept sent the close twice |
 | 7 | Counter a call | drag the ghost line, Send counter link | PASS | fixed 2026-10-02: counter kept owner/caller swapped and dropped n/c; now same call, new price, names kept |
 | 8 | Pass on a call | Pass | PASS | banner, ?s= and ghost cleared (browser check) |
 | 9 | Copy a fren (new wallet opens Perpl account) | Copy, deposit, copy | PASS (passkey) | 0x9801c9cb; builder 23 on fill 0xf5c94fd1 (script) |
@@ -21,5 +21,5 @@ SCRIPT = proven on chain by a script, not yet through the UI; OPEN = not exercis
 | 14 | Live room feed toast | a fren trades | PASS (earlier) | monadLogs toast within ~1 s |
 | 15 | Share card (og image) for link previews | paste a room link in X/Telegram | PASS | Twitterbot gets room title + 200 PNG |
 | 16 | Phone layout | open on a phone | PASS (390px emulation) | chart from 179px, Accept 36px; real device OPEN |
-| 17 | Stop-loss calls | drag SL, Accept | OPEN (building) | Perpl API trigger orders, builder-bound key |
-| 18 | Browser-wallet signing (MetaMask/Brave) | any Accept/Copy with an extension wallet | OPEN in a real browser | unit-tested against an EIP-1193 provider |
+| 17 | Stop-loss calls | drag SL, Accept | OPEN (client built) | web/lib/perplapi.ts: trigger placed, read back, cancelled, fired on testnet (probe). Browser needs Perpl to whitelist frenstrade.vercel.app and register builder 23 on testnet |
+| 18 | Browser-wallet signing (MetaMask/Brave) | any Accept/Copy with an extension wallet | PASS (injected EIP-1193 wallet) | real UI through window.ethereum: approve + createAccount + copy, accept 0xe73bcecf, replace 0x8b2268ec; an extension's own prompt OPEN |
