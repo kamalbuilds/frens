@@ -5,3 +5,8 @@ node_modules
 demo/.wallets.json
 .progress/LEDGER.md
 web/out-static/
+video/work/
+video/*.mp4
+video/clips/
+video/frames/
+demo/.keeper-cursor
