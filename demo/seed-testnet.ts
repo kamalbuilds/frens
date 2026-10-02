@@ -103,7 +103,7 @@ note(`READ BACK call: TP ${callOnBo.price} on bo's short, resting on Perpl, call
 const callOnDee = { owner: acct.dee.address, market: MARKET, side: "short" as const, price: Math.round(m * 0.96), from: acct.cy.address, createdAt: Date.now() };
 
 // 5. Links for the demo.
-const site = process.env.SITE ?? "https://frenstrade.vercel.app";
+const site = process.env.SITE ?? "https://frens-eosin.vercel.app";
 const room = encodeRoom(NAMES.map((n) => acct[n].address));
 const md = [
   "# Testnet demo room (seeded by demo/seed-testnet.ts)",
