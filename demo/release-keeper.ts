@@ -14,7 +14,8 @@ import { callStakeAbi } from "../web/lib/callstake";
 const here = path.dirname(new URL(import.meta.url).pathname);
 const ids = process.argv.slice(2) as Hex[];
 const net = NETWORKS.testnet;
-const client = publicClient("testnet");
+// Reads go through the private RPC when the host has one (the public one caps at 15 requests/s, shared by every app).
+const client = publicClient("testnet", process.env.MONAD_TESTNET_RPC_URL || undefined);
 const { CallStake } = JSON.parse(fs.readFileSync(path.join(here, "../contracts/deployments.json"), "utf8")).testnet;
 const art = { abi: callStakeAbi as unknown as { type: string; name: string }[] };
 const keyFile = process.env.KEEPER_KEY_FILE;
@@ -52,6 +53,7 @@ console.log(`keeper ${account.address} watching ${watch ? "Staked events" : ids.
 while (watch || open.size) {
   if (watch) await discover().catch((e) => console.log(`discover: ${String(e).slice(0, 100)}`));
   for (const id of [...open]) {
+   try {
     const s = (await client.readContract({ address: CallStake, abi: art.abi, functionName: "stakes", args: [id] })) as unknown[];
     const [, caller, amount, expiry, perpId, closeLong, state, tp] = s as [string, string, bigint, bigint, number, boolean, number, bigint];
     if (state !== 1) { console.log(`${id.slice(0, 12)} state ${state}, done`); open.delete(id); continue; }
@@ -69,6 +71,10 @@ while (watch || open.size) {
     } catch (e) {
       console.log(`${id.slice(0, 12)} release raced the mark: ${String(e).slice(0, 100)}`);
     }
+   } catch (e) {
+    // A failed read (rate limit, node hiccup) skips this poll for this stake; the next poll retries.
+    console.log(`${id.slice(0, 12)} read failed: ${String(e).slice(0, 80)}`);
+   }
   }
   await new Promise((r) => setTimeout(r, poll));
 }
