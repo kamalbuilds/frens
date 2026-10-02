@@ -33,3 +33,4 @@ Accepted live (2026-10-02, demo/accept-call.ts): dee accepted cy's TP at 81,765,
 
 Replace (2026-10-02): bo called a TP on cy, who already had a resting TP (order 140 @ 88,144 from ana). One execOrders batch cancelled 140 and placed the new close: tx 0xeb51040c5bc7cd08695750d237eed7d3cef3a80b0d18e976c19bbcdb5814d2e4, caller bo read back.
 - tx cy's TP 84,819 on ana's long, accepted by ana with 1.5x gas (replaced order 141): 0x7bff515503e590a5fb6831f9dd89051cd6f03448389808f798d2b121bd50eb5a
+- 2026-10-02 sized up for the demo (add-size, 0.01 BTC each; 0.03 reverted on margin): ana 0x90d988f6, bo 0x185bcf8c, cy 0x189c3e5e, dee 0x52c64ce7

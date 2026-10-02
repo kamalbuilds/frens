@@ -46,12 +46,12 @@ describe("clusterFaces", () => {
     expect(clusters[0].members.map((m) => m.account)).toEqual(["0xaaa", "0xbbb"]);
     expect(clusters[0].members[0].dx).toBe(0);
     expect(clusters[0].members[1].dx).toBe(-CLUSTER_OVERLAP_PX);
-    expect(CLUSTER_OVERLAP_PX).toBe(10);
+    expect(CLUSTER_OVERLAP_PX).toBe(24);
   });
   it("groups a run of faces around one anchor", () => {
     const clusters = clusterFaces([pt("0xa", 100, 100), pt("0xb", 108, 100), pt("0xc", 112, 100)]);
     expect(clusters).toHaveLength(1);
-    expect(clusters[0].members.map((m) => m.dx)).toEqual([0, -10, -20]);
+    expect(clusters[0].members.map((m) => m.dx)).toEqual([0, -24, -48]);
   });
   it("starts a new cluster past the anchor radius", () => {
     const clusters = clusterFaces([pt("0xa", 100, 100), pt("0xb", 108, 100), pt("0xc", 130, 100)]);

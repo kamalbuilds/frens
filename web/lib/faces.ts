@@ -3,7 +3,7 @@
 ///
 /// Every fren is a 28px boring-avatars "beam" circle at their entry, ringed
 /// 2px green for long or red for short. Faces whose centres land within 14px
-/// of each other form one cluster: members overlap with a -10px x offset each
+/// of each other form one cluster: members step -24px in x each (4px overlap)
 /// and every face carries a 2px page-colour outline so the stack reads.
 /// A cluster with more than 5 members collapses into a single "+N" circle.
 
@@ -11,7 +11,8 @@ export const FACE_SIZE = 28;
 export const FACE_RING_PX = 2;
 export const FACE_OUTLINE = "#0A0A0F";
 export const CLUSTER_RADIUS_PX = 14;
-export const CLUSTER_OVERLAP_PX = 10;
+/// Step between faces in one cluster: 24px on a 28px face leaves each face readable, overlapping 4px.
+export const CLUSTER_OVERLAP_PX = 24;
 /// More than this many faces in one cluster collapses into a "+N" circle.
 export const CLUSTER_MAX_FACES = 5;
 
