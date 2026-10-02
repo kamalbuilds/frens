@@ -66,13 +66,19 @@ export function suggestionDescId(suggester: Address, createdAtMs: number): bigin
   return (BigInt(suggester) << 96n) | (BigInt(createdAtMs) & LOW_MASK);
 }
 
+// Ids we write carry a ms timestamp from 2025 on in the low 96 bits; anything else is not ours.
+const EARLIEST_MS = 1_735_689_600_000;
+
 // Split an orderDescId back into suggester + createdAt. Returns null for
-// ordinary orders whose top 160 bits are zero.
+// ordinary orders whose top 160 bits are zero, and for ids whose low 96 bits
+// are not a plausible creation time (another program's large descId).
 export function decodeDescId(id: bigint): { suggester: Address; createdAtMs: number } | null {
   const top = id >> 96n;
-  if (top === 0n) return null;
+  if (top === 0n || top >> 160n !== 0n) return null;
+  const ms = Number(id & LOW_MASK);
+  if (ms < EARLIEST_MS || ms > Date.now() + 86_400_000) return null;
   const suggester = getAddress(`0x${top.toString(16).padStart(40, "0")}`);
-  return { suggester, createdAtMs: Number(id & LOW_MASK) };
+  return { suggester, createdAtMs: ms };
 }
 
 export type CallEntry = {
