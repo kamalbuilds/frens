@@ -5,7 +5,7 @@ import { NETWORKS, exchangeAbi } from "@/lib/perpl";
 import { apiBaseFor, clientFor, markets } from "@/lib/server";
 import { scaleCandle, type RawCandle } from "@/lib/chart";
 import { callHit } from "@/lib/callhit";
-import { CALL_STAKE, callStakeAbi, stakeId, stakeView } from "@/lib/callstake";
+import { CALL_STAKE_READ, callStakeAbi, stakeId, stakeView } from "@/lib/callstake";
 
 export const maxDuration = 30;
 
@@ -126,14 +126,15 @@ export async function GET(req: Request) {
   );
   // The call's stake, if its owner backed it in CallStake (testnet): staked, paid to the caller, or refunded.
   const stakeOf = async (c: PricedCall) => {
-    const addr = CALL_STAKE[net];
-    if (!addr) return null;
-    try {
-      const v = stakeView((await client.readContract({ address: addr, abi: callStakeAbi, functionName: "stakes", args: [stakeId(c.orderDescId)] })) as unknown[]);
-      return v.state === "none" ? null : v;
-    } catch {
-      return null;
+    for (const addr of CALL_STAKE_READ[net] ?? []) {
+      try {
+        const v = stakeView((await client.readContract({ address: addr, abi: callStakeAbi, functionName: "stakes", args: [stakeId(c.orderDescId)] })) as unknown[]);
+        if (v.state !== "none") return v;
+      } catch {
+        continue;
+      }
     }
+    return null;
   };
   const out = await Promise.all(withHits.map(async (c) => ({ ...c, resting: await restingOf(c), stake: await stakeOf(c) })));
   return Response.json({ net, calls: out });

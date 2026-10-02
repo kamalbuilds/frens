@@ -1,6 +1,19 @@
 [
  {
   "type": "function",
+  "name": "MIN_DISTANCE_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
   "name": "refund",
   "inputs": [
    {
@@ -233,5 +246,82 @@
    }
   ],
   "anonymous": false
+ },
+ {
+  "type": "error",
+  "name": "BadExpiry",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "Expired",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotAClose",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotExpired",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotHit",
+  "inputs": [
+   {
+    "name": "markPNS",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "tpPNS",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "NotOpen",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotYourOrder",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "StakeExists",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "TooCloseToMark",
+  "inputs": [
+   {
+    "name": "markPNS",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "tpPNS",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "TransferFailed",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "ZeroAmount",
+  "inputs": []
  }
 ]

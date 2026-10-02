@@ -16,7 +16,13 @@ const ids = process.argv.slice(2) as Hex[];
 const net = NETWORKS.testnet;
 // Reads go through the private RPC when the host has one (the public one caps at 15 requests/s, shared by every app).
 const client = publicClient("testnet", process.env.MONAD_TESTNET_RPC_URL || undefined);
-const { CallStake } = JSON.parse(fs.readFileSync(path.join(here, "../contracts/deployments.json"), "utf8")).testnet;
+// CALLSTAKE picks one deployment (current or legacy) so each contract gets its own keeper and cursor.
+const deployments = JSON.parse(fs.readFileSync(path.join(here, "../contracts/deployments.json"), "utf8"));
+const target = process.env.CALLSTAKE
+  ? [deployments.testnet, ...(deployments.testnetLegacy ?? [])].find((d: { CallStake: string }) => d.CallStake.toLowerCase() === process.env.CALLSTAKE!.toLowerCase())
+  : deployments.testnet;
+if (!target) throw new Error(`no deployment for CALLSTAKE=${process.env.CALLSTAKE}`);
+const CallStake = target.CallStake as Hex;
 const art = { abi: callStakeAbi as unknown as { type: string; name: string }[] };
 const keyFile = process.env.KEEPER_KEY_FILE;
 const account = privateKeyToAccount(
@@ -35,7 +41,7 @@ const cursorFile = process.env.KEEPER_CURSOR ?? path.join(here, ".keeper-cursor"
 // An older keeper wrote a bare block number; read that as a cursor with nothing open.
 const rawSaved = fs.existsSync(cursorFile) ? (JSON.parse(fs.readFileSync(cursorFile, "utf8")) as unknown) : null;
 const saved = typeof rawSaved === "number" ? { cursor: String(rawSaved), open: [] as Hex[] } : (rawSaved as { cursor: string; open: Hex[] } | null);
-let cursor = saved ? BigInt(saved.cursor) : BigInt(JSON.parse(fs.readFileSync(path.join(here, "../contracts/deployments.json"), "utf8")).testnet.block);
+let cursor = saved ? BigInt(saved.cursor) : BigInt(target.block);
 for (const id of saved?.open ?? []) open.add(id);
 const save = () => fs.writeFileSync(cursorFile, JSON.stringify({ cursor: cursor.toString(), open: [...open] }));
 const stakedEvent = art.abi.find((x: { type: string; name: string }) => x.type === "event" && x.name === "Staked");
@@ -53,7 +59,7 @@ async function discover() {
     save(); // per page, so a restart mid-scan neither rescans nor loses a stake found earlier in the scan
   }
 }
-console.log(`keeper ${account.address} watching ${watch ? "Staked events" : ids.length + " ids"}, ${open.size} open from the last run`);
+console.log(`keeper ${account.address} on ${CallStake.slice(0, 10)} watching ${watch ? "Staked events" : ids.length + " ids"}, ${open.size} open from the last run`);
 while (watch || open.size) {
   if (watch) await discover().catch((e) => console.log(`discover: ${String(e).slice(0, 100)}`));
   for (const id of [...open]) {
