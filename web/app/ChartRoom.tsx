@@ -31,6 +31,7 @@ import { callLine, displayName, encodeKeyedNames, namesForAddresses, sanitizeNam
 import { encodeCallsParam } from "@/lib/receipts";
 import type { PricedCall } from "@/lib/receipts";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
+import { callBoard } from "@/lib/callboard";
 import { ROOM_POST, telegramShareUrl, xPostUrl } from "@/lib/share";
 import { connect as connectWallet, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
@@ -313,6 +314,7 @@ export function ChartRoom({
     const h = mine.filter((c) => c.hit === true).length;
     return n > 0 ? { accepted: n, hit: h } : null;
   };
+  const board = useMemo(() => callBoard(receiptCalls), [receiptCalls]);
   const accountsKey = useMemo(() => friends.map((f) => f.account.toLowerCase()).sort().join(","), [friends]);
 
   // The open suggestion link owns the ghost line. The banner decodes and
@@ -339,7 +341,7 @@ export function ChartRoom({
   const ghostColour = incoming
     ? ghostAccepted !== null
       ? CHART.accent
-      : hexWithAlpha(ringColorFor(incoming.side), 0.6)
+      : hexWithAlpha(CHART.up, 0.6)
     : CHART.muted;
   const ghostLabel =
     incoming && ghostPrice !== null
@@ -799,36 +801,38 @@ export function ChartRoom({
       setSlY(null);
       return;
     }
-    const colour = ring(selected);
+    // Profit is drawn in gain colour and the stop in loss colour, whatever the position's side.
+    const tpColour = CHART.up;
+    const slColour = CHART.down;
     const tpTitle = `TP ${formatPrice(tp, decimals)} (${formatUsd(pnlAtPrice(tp, selected.entryPrice, selected.size, selected.side))})`;
     const slTitle = `SL ${formatPrice(sl, decimals)} (${formatUsd(pnlAtPrice(sl, selected.entryPrice, selected.size, selected.side))})`;
     if (!tpLine.current) {
       tpLine.current = s.createPriceLine({
         price: tp,
-        color: colour,
+        color: tpColour,
         lineWidth: 2,
         lineStyle: LineStyle.Solid,
         axisLabelVisible: true,
-        axisLabelColor: colour,
+        axisLabelColor: tpColour,
         axisLabelTextColor: CHART.page,
         title: tpTitle,
       });
     } else {
-      tpLine.current.applyOptions({ price: tp, color: colour, axisLabelColor: colour, axisLabelTextColor: CHART.page, title: tpTitle });
+      tpLine.current.applyOptions({ price: tp, color: tpColour, axisLabelColor: tpColour, axisLabelTextColor: CHART.page, title: tpTitle });
     }
     if (!slLine.current) {
       slLine.current = s.createPriceLine({
         price: sl,
-        color: colour,
+        color: slColour,
         lineWidth: 2,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
-        axisLabelColor: colour,
+        axisLabelColor: slColour,
         axisLabelTextColor: CHART.page,
         title: slTitle,
       });
     } else {
-      slLine.current.applyOptions({ price: sl, color: colour, axisLabelColor: colour, axisLabelTextColor: CHART.page, title: slTitle });
+      slLine.current.applyOptions({ price: sl, color: slColour, axisLabelColor: slColour, axisLabelTextColor: CHART.page, title: slTitle });
     }
     setTpY(s.priceToCoordinate(tp));
     setSlY(s.priceToCoordinate(sl));
@@ -1459,6 +1463,24 @@ export function ChartRoom({
             ? room.state === "ready" && ` · ${friends.length} of ${room.data.checked} traders in the room hold it`
             : live.state === "ready" && ` · ${friends.length} live traders opened in the last ${live.data.hours}h`}
         </p>
+        {view === "frens" && board.length > 0 && (
+          <div data-callboard className="flex items-center gap-4 overflow-x-auto pt-1 sm:ml-auto sm:self-center sm:pt-0">
+            <span className="shrink-0 text-[13px] text-muted">Call record</span>
+            {board.slice(0, 3).map((r) => {
+              const f = friends.find((x) => x.account.toLowerCase() === r.caller.toLowerCase());
+              return (
+                <span key={r.caller} className="flex shrink-0 items-center gap-2">
+                  <Face address={r.caller} side={f?.side ?? "long"} size={26} dot={r.hit > 0} />
+                  <span className="text-[15px] font-medium">{display(r.caller)}</span>
+                  <span className="num text-[15px]">
+                    <span className={r.hit > 0 ? "text-accent" : "text-muted"}>{r.hit} hit</span>
+                    <span className="text-muted"> / {r.taken} taken</span>
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* OHLC readout plus the room long/short split, above the chart. The
@@ -1522,7 +1544,7 @@ export function ChartRoom({
               passRequest={passReq}
             />
           </div>
-          {hasInitialRoom && roomCode && !hintDismissed && (
+          {hasInitialRoom && roomCode && !hintDismissed && !incoming && (
             <div className="order-3 mt-2 flex items-center gap-2 rounded-[10px] border border-edge bg-panel px-3 py-2 sm:order-none sm:mb-3 sm:mt-0 sm:flex-wrap sm:gap-3 sm:px-4 sm:py-3">
               <p className="min-w-0 flex-1 truncate text-[13px] sm:min-w-[200px]">
                 Send this link to your frens. When one of them drags a TP onto your position, you&apos;ll see it here.
@@ -1711,7 +1733,7 @@ export function ChartRoom({
           {selected && tp !== null && tpY !== null && (
             <div
               className="marker-anim num pointer-events-none absolute left-8 z-10 rounded-[6px] border border-edge bg-raised px-2 py-1 text-[11px]"
-              style={{ transform: `translateY(${tpY - 13}px)`, top: 0, borderColor: ring(selected), transition: reducedMotion ? "none" : undefined }}
+              style={{ transform: `translateY(${tpY - 13}px)`, top: 0, borderColor: CHART.up, transition: reducedMotion ? "none" : undefined }}
             >
               TP {formatPrice(tp, decimals)} · {formatUsd(pnlAtPrice(tp, selected.entryPrice, selected.size, selected.side))}
             </div>
@@ -1719,7 +1741,7 @@ export function ChartRoom({
           {selected && sl !== null && slY !== null && (
             <div
               className="marker-anim num pointer-events-none absolute left-8 z-10 rounded-[6px] border border-dashed bg-raised px-2 py-1 text-[11px]"
-              style={{ transform: `translateY(${slY - 13}px)`, top: 0, borderColor: ring(selected), transition: reducedMotion ? "none" : undefined }}
+              style={{ transform: `translateY(${slY - 13}px)`, top: 0, borderColor: CHART.down, transition: reducedMotion ? "none" : undefined }}
             >
               SL {formatPrice(sl, decimals)} · {formatUsd(pnlAtPrice(sl, selected.entryPrice, selected.size, selected.side))}
             </div>
@@ -1735,7 +1757,7 @@ export function ChartRoom({
               className="marker-anim absolute left-2 z-10 flex cursor-ns-resize items-center justify-center rounded-full"
               style={{ transform: `translateY(${tpY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
             >
-              <span className="block h-[10px] w-[10px] rounded-full border-2 bg-page" style={{ borderColor: ring(selected) }} />
+              <span className="block h-[10px] w-[10px] rounded-full border-2 bg-page" style={{ borderColor: CHART.up }} />
             </button>
           )}
           {selected && sl !== null && slY !== null && (
@@ -1747,7 +1769,7 @@ export function ChartRoom({
               className="marker-anim absolute left-2 z-10 flex cursor-ns-resize items-center justify-center rounded-full"
               style={{ transform: `translateY(${slY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
             >
-              <span className="block h-[10px] w-[10px] rounded-full border-2 border-dashed bg-page" style={{ borderColor: ring(selected) }} />
+              <span className="block h-[10px] w-[10px] rounded-full border-2 border-dashed bg-page" style={{ borderColor: CHART.down }} />
             </button>
           )}
           {/* Ghost suggestion: the caller's face sits ON the dashed line at
@@ -2049,8 +2071,8 @@ export function ChartRoom({
                         aria-label={`${kind === "tp" ? "Take profit" : "Stop loss"} line at ${formatPrice(price, decimals)}, ${formatUsd(pnl)}. Arrow keys nudge by one tick. Escape resets.`}
                         className="num flex-1 rounded-[6px] border px-2.5 py-2 text-left text-[12px] hover:bg-raised"
                         style={{
-                          borderColor: ring(selected),
-                          outline: focusKind === kind ? `2px solid ${ring(selected)}` : undefined,
+                          borderColor: kind === "tp" ? CHART.up : CHART.down,
+                          outline: focusKind === kind ? `2px solid ${kind === "tp" ? CHART.up : CHART.down}` : undefined,
                           background: on ? CHART.raised : undefined,
                         }}
                       >
@@ -2149,7 +2171,7 @@ export function ChartRoom({
         <span className="num">{EXCHANGE.slice(0, 6)}…{EXCHANGE.slice(-4)}</span> on {chainName}
         {view === "live"
           ? live.state === "ready" && <> at block <span className="num">{Number(live.data.block).toLocaleString("en-US")}</span>, last {live.data.hours} hours</>
-          : room.state === "ready" && <> at block <span className="num">{Number(room.data.block).toLocaleString("en-US")}</span></>}. Read-only.
+          : room.state === "ready" && <> at block <span className="num">{Number(room.data.block).toLocaleString("en-US")}</span></>}. Calls and copies are orders you sign from your own wallet.
         Candles from Perpl&apos;s public market data.
       </footer>
     </div>
