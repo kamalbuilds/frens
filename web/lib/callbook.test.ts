@@ -146,6 +146,13 @@ describe("suggestionDescId", () => {
     expect(decodeDescId(BigInt(CREATED_AT))).toBeNull();
   });
 
+  it("rejects a large id whose low 96 bits are not a plausible ms timestamp", () => {
+    // A random 256-bit id (another bot's descId) has a nonzero top and garbage below.
+    expect(decodeDescId(0xa3f19c2e7b5d4e8f00112233445566778899aabbccddeeff0011223344556677n)).toBeNull();
+    expect(decodeDescId((BigInt(FRIEND) << 96n) | 5n)).toBeNull();
+    expect(decodeDescId(suggestionDescId(FRIEND, Date.now() + 7 * 86_400_000))).toBeNull();
+  });
+
   it("uses the live OrderRequestV2 / OrderPlaced / MakerOrderFilled topic0s", () => {
     expect(ORDER_REQUEST_V2_TOPIC0).toBe(toEventSelector(eventAbi("OrderRequestV2")));
     expect(ORDER_PLACED_TOPIC0).toBe(toEventSelector(eventAbi("OrderPlaced")));
