@@ -69,7 +69,16 @@ while (watch || open.size) {
     if (state !== 1) { console.log(`${id.slice(0, 12)} state ${state}, done`); open.delete(id); save(); continue; }
     const info = (await client.readContract({ address: net.exchange, abi: exchangeAbi, functionName: "getPerpetualInfoV2", args: [BigInt(perpId)] })) as { markPNS: bigint };
     const crossed = closeLong ? info.markPNS >= tp : info.markPNS <= tp;
-    if (Date.now() / 1000 >= Number(expiry)) { console.log(`${id.slice(0, 12)} expired; refund is open to anyone`); open.delete(id); save(); continue; }
+    if (Date.now() / 1000 >= Number(expiry)) {
+      // Unhit and expired: return the stake to its owner (refund is open to anyone; the keeper pays the gas).
+      const data = encodeFunctionData({ abi: art.abi, functionName: "refund", args: [id] });
+      const gas = padGas(await client.estimateGas({ account: account.address, to: CallStake, data }));
+      const hash = await w.sendTransaction({ to: CallStake, data, gas });
+      const r = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
+      console.log(JSON.stringify({ id, refunded: hash, status: r.status, at: new Date().toISOString() }));
+      if (r.status === "success") { open.delete(id); save(); }
+      continue;
+    }
     if (!crossed) continue;
     const data = encodeFunctionData({ abi: art.abi, functionName: "release", args: [id] });
     try {
