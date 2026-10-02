@@ -22,6 +22,14 @@ function shortAddress(address: Address): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+// The browser says NotAllowedError both when the user cancels and when this site has no passkey on the device.
+function signInMessage(e: unknown): string {
+  const m = messageOf(e);
+  return /NotAllowed|not allowed|timed out|no credentials/i.test(m)
+    ? "No frens passkey on this device yet, or the prompt was closed. Create one below."
+    : m;
+}
+
 // Mera wraps the browser's WebAuthn error in `cause`; that is the part that says what went wrong.
 function messageOf(e: unknown): string {
   if (!(e instanceof Error)) return String(e);
@@ -113,7 +121,7 @@ export function PasskeyWallet({
       setShowCreate(false);
       onAccount(next);
     } catch (e) {
-      setError(messageOf(e));
+      setError(signInMessage(e));
     } finally {
       setBusy("idle");
     }
@@ -165,22 +173,20 @@ export function PasskeyWallet({
             >
               {busy === "signing" ? "Waiting for passkey" : "Use a passkey"}
             </button>
-            <p className="text-[12px] text-muted">Works in Chrome and Safari.</p>
-            {error && (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-[12px] text-loss">{error}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError("");
-                    setShowCreate(true);
-                  }}
-                  className="self-start text-[12px] font-medium text-accent underline underline-offset-2"
-                >
-                  New here? Create a passkey instead
-                </button>
-              </div>
-            )}
+            {error && <p className="text-[12px] text-loss">{error}</p>}
+            <p className="text-[12px] text-muted">
+              Works in Chrome and Safari.{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setShowCreate(true);
+                }}
+                className="font-medium text-accent underline underline-offset-2"
+              >
+                New here? Create a passkey
+              </button>
+            </p>
           </>
         ) : (
           <form onSubmit={doCreate} className="flex flex-col gap-1.5">

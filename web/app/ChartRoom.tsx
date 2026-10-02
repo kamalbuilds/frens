@@ -292,6 +292,8 @@ export function ChartRoom({
   const slLine = useRef<IPriceLine | null>(null);
   const sugLine = useRef<IPriceLine | null>(null);
   const takenLines = useRef<IPriceLine[]>([]);
+  const roomKey = useRef("");
+  const liveKey = useRef("");
   const dragging = useRef<SuggestKind | "ghost" | null>(null);
 
   const market = markets.state === "ready" ? markets.data.find((m) => m.id === marketId) : undefined;
@@ -332,13 +334,15 @@ export function ChartRoom({
   // The open suggestion link owns the ghost line. The banner decodes and
   // validates; the chart draws and drags. A fresh suggestion resets the
   // dragged price and the accepted receipt.
+  // The accepted call survives the room refresh after Accept, which can briefly report no valid suggestion and then
+  // the same one again; only a different call clears it.
+  const acceptedCall = useRef<string | null>(null);
+  const callKey = (s: Suggestion) => `${s.owner}|${s.market}|${s.price}|${s.from}|${s.createdAt}`.toLowerCase();
   function handleSuggestion(s: Suggestion | null) {
     setIncoming(s);
-    if (s) {
-      setGhostPrice(s.price);
-      setGhostAccepted(null);
-    } else {
-      setGhostPrice(null);
+    setGhostPrice(s ? s.price : null);
+    if (s && callKey(s) !== acceptedCall.current) {
+      acceptedCall.current = null;
       setGhostAccepted(null);
     }
   }
@@ -464,23 +468,35 @@ export function ChartRoom({
   // feedTick refreshes it when the room feed sees member activity.
   useEffect(() => {
     if (view !== "frens" || !marketKnown) return;
-    setRoom({ state: "loading" });
+    // A live-feed refresh (same room, market and network) keeps the list on screen until the new one lands;
+    // only a different room blanks it. A failed background refresh keeps the last good list too.
+    const key = `${marketId}|${extra.join(",")}|${net}`;
+    const background = roomKey.current === key;
+    roomKey.current = key;
+    if (!background) setRoom({ state: "loading" });
     const q = extra.length ? `&accounts=${extra.join(",")}` : "";
     fetch(`/api/positions?market=${marketId}${q}&net=${net}`)
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
-      .then(({ ok, body }) => setRoom(ok ? { state: "ready", data: body } : { state: "error", message: body.error }))
-      .catch((e) => setRoom({ state: "error", message: String(e) }));
+      .then(({ ok, body }) =>
+        setRoom((prev) => (ok ? { state: "ready", data: body } : background && prev.state === "ready" ? prev : { state: "error", message: body.error })),
+      )
+      .catch((e) => setRoom((prev) => (background && prev.state === "ready" ? prev : { state: "error", message: String(e) })));
   }, [marketId, extra, view, net, marketKnown, feedTick]);
 
   // Recent Perpl openers per market and network: the default Live on Perpl view, so faces
   // land on the candles at their entry time. feedTick refreshes it on room feed events.
   useEffect(() => {
     if (view !== "live" || !marketKnown) return;
-    setLive({ state: "loading" });
+    const key = `${marketId}|${net}`;
+    const background = liveKey.current === key;
+    liveKey.current = key;
+    if (!background) setLive({ state: "loading" });
     fetch(`/api/live?market=${marketId}&hours=6&net=${net}`)
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
-      .then(({ ok, body }) => setLive(ok ? { state: "ready", data: body } : { state: "error", message: body.error }))
-      .catch((e) => setLive({ state: "error", message: String(e) }));
+      .then(({ ok, body }) =>
+        setLive((prev) => (ok ? { state: "ready", data: body } : background && prev.state === "ready" ? prev : { state: "error", message: body.error })),
+      )
+      .catch((e) => setLive((prev) => (background && prev.state === "ready" ? prev : { state: "error", message: String(e) })));
   }, [marketId, view, net, marketKnown, feedTick]);
 
   // Accepted-call record per fren, read from the callbook API when it runs
@@ -558,6 +574,7 @@ export function ChartRoom({
   }
 
   function handleAcceptedChange(info: { orderId: string; hash: string } | null) {
+    acceptedCall.current = info && incoming ? callKey(incoming) : null;
     setGhostAccepted(info);
     if (info?.hash) appendCallHash(info.hash);
   }

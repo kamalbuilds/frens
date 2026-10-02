@@ -31,9 +31,11 @@ const poll = Number(process.env.POLL_MS ?? 5000);
 const open = new Set(ids);
 const watch = ids.length === 0;
 const cursorFile = process.env.KEEPER_CURSOR ?? path.join(here, ".keeper-cursor");
-let cursor = fs.existsSync(cursorFile)
-  ? BigInt(fs.readFileSync(cursorFile, "utf8").trim())
-  : BigInt(JSON.parse(fs.readFileSync(path.join(here, "../contracts/deployments.json"), "utf8")).testnet.block);
+// The cursor file holds the next block to scan AND the stakes still open, so a restart resumes both.
+const saved = fs.existsSync(cursorFile) ? (JSON.parse(fs.readFileSync(cursorFile, "utf8")) as { cursor: string; open: Hex[] }) : null;
+let cursor = saved ? BigInt(saved.cursor) : BigInt(JSON.parse(fs.readFileSync(path.join(here, "../contracts/deployments.json"), "utf8")).testnet.block);
+for (const id of saved?.open ?? []) open.add(id);
+const save = () => fs.writeFileSync(cursorFile, JSON.stringify({ cursor: cursor.toString(), open: [...open] }));
 const stakedEvent = art.abi.find((x: { type: string; name: string }) => x.type === "event" && x.name === "Staked");
 async function discover() {
   const head = await client.getBlockNumber();
@@ -46,20 +48,20 @@ async function discover() {
       open.add(id);
     }
     cursor = to + 1n;
+    save(); // per page, so a restart mid-scan neither rescans nor loses a stake found earlier in the scan
   }
-  fs.writeFileSync(cursorFile, cursor.toString());
 }
-console.log(`keeper ${account.address} watching ${watch ? "Staked events" : ids.length + " ids"}`);
+console.log(`keeper ${account.address} watching ${watch ? "Staked events" : ids.length + " ids"}, ${open.size} open from the last run`);
 while (watch || open.size) {
   if (watch) await discover().catch((e) => console.log(`discover: ${String(e).slice(0, 100)}`));
   for (const id of [...open]) {
    try {
     const s = (await client.readContract({ address: CallStake, abi: art.abi, functionName: "stakes", args: [id] })) as unknown[];
     const [, caller, amount, expiry, perpId, closeLong, state, tp] = s as [string, string, bigint, bigint, number, boolean, number, bigint];
-    if (state !== 1) { console.log(`${id.slice(0, 12)} state ${state}, done`); open.delete(id); continue; }
+    if (state !== 1) { console.log(`${id.slice(0, 12)} state ${state}, done`); open.delete(id); save(); continue; }
     const info = (await client.readContract({ address: net.exchange, abi: exchangeAbi, functionName: "getPerpetualInfoV2", args: [BigInt(perpId)] })) as { markPNS: bigint };
     const crossed = closeLong ? info.markPNS >= tp : info.markPNS <= tp;
-    if (Date.now() / 1000 >= Number(expiry)) { console.log(`${id.slice(0, 12)} expired; refund is open to anyone`); open.delete(id); continue; }
+    if (Date.now() / 1000 >= Number(expiry)) { console.log(`${id.slice(0, 12)} expired; refund is open to anyone`); open.delete(id); save(); continue; }
     if (!crossed) continue;
     const data = encodeFunctionData({ abi: art.abi, functionName: "release", args: [id] });
     try {
@@ -67,7 +69,7 @@ while (watch || open.size) {
       const hash = await w.sendTransaction({ to: CallStake, data, gas });
       const r = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
       console.log(JSON.stringify({ id, released: hash, status: r.status, caller, amount: String(amount), markPNS: String(info.markPNS), tpPNS: String(tp), at: new Date().toISOString() }));
-      if (r.status === "success") open.delete(id);
+      if (r.status === "success") { open.delete(id); save(); }
     } catch (e) {
       console.log(`${id.slice(0, 12)} release raced the mark: ${String(e).slice(0, 100)}`);
     }
