@@ -45,13 +45,15 @@ export function buildCounterSuggestion(original: Suggestion, price: number, now?
   if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
     throw new RangeError(`cannot counter at a non-positive price: ${String(price)}`);
   }
+  // A counter is the same call at a new price: still on the owner's position, still credited to the original caller.
+  // Swapping owner and caller would turn it into a TP on the caller's own position, which they could then "accept".
   return {
-    owner: original.from as Address,
+    owner: original.owner as Address,
     market: original.market,
     side: original.side,
     price,
     sizeLots: original.sizeLots,
-    from: original.owner as Address,
+    from: original.from as Address,
     createdAt: now ?? Date.now(),
   };
 }

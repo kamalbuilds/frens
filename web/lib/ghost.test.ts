@@ -20,11 +20,11 @@ function suggestion(over: Partial<Suggestion> = {}): Suggestion {
 }
 
 describe("buildCounterSuggestion", () => {
-  it("swaps owner/from and keeps market/side", () => {
+  it("keeps the owner and the caller: a counter is the same call at a new price", () => {
     const original = suggestion({ market: 3, side: "short", price: 80000 });
     const counter = buildCounterSuggestion(original, 81000, 1758638500000);
-    expect(counter.owner).toBe(original.from);
-    expect(counter.from).toBe(original.owner);
+    expect(counter.owner).toBe(original.owner);
+    expect(counter.from).toBe(original.from);
     expect(counter.market).toBe(3);
     expect(counter.side).toBe("short");
     expect(counter.price).toBe(81000);
