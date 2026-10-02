@@ -81,6 +81,7 @@ async function stopRec() {
   frames.forEach((fr, i) => { const d = (i + 1 < frames.length ? frames[i + 1].ts : end) - fr.ts; list += `file '${fr.f.split("/").pop()}'\nduration ${Math.max(d, 0.001).toFixed(4)}\n`; });
   list += `file '${frames[frames.length - 1].f.split("/").pop()}'\n`;
   fs.writeFileSync(`${dir}/frames.txt`, list);
+  if (process.env.NOCURSOR && frames.length / (end - t0) < 20) console.error(`WARNING ${name}: only ${(frames.length / (end - t0)).toFixed(1)} fps captured`);
   const m = {}; for (const [k, v] of Object.entries(marks)) m[k] = +(v - t0).toFixed(2);
   const odd = frames.filter((x) => x.dw !== W || x.dh !== H || x.ps !== 1 || x.ot !== 0).length;
   fs.writeFileSync(`${dir}/marks.json`, JSON.stringify({ duration: +(end - t0).toFixed(2), frames: frames.length, oddFrames: odd, marks: m }, null, 1));

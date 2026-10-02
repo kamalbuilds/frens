@@ -10,7 +10,13 @@ window.$ = (s) => document.querySelector(s);
 window.CUES = JSON.parse(decodeURIComponent((location.hash || "#%7B%7D").slice(1)));
 window.cue = (k, d = 0) => (CUES[k] ?? d);
 function loop() {
-  if (T0 !== null && window.render) window.render((performance.now() - T0) / 1000);
+  if (T0 !== null && window.render) {
+    const t = (performance.now() - T0) / 1000;
+    window.render(t);
+    // slow push-in so a scene that waits on a spoken word never reads as a still
+    const d = CUES.drift ?? 0.04;
+    if (d) { document.body.style.transformOrigin = "50% 50%"; document.body.style.transform = "scale(" + (1 + d * Math.min(1, t / (CUES.dur ?? 12))) + ")"; }
+  }
   requestAnimationFrame(loop);
 }
 loop();
