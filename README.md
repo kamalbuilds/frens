@@ -2,7 +2,7 @@
 
 Your frens' Perpl perps on one live chart. Call their exit; they take it with one signature.
 
-**Live:** https://frens-eosin.vercel.app (Monad testnet by default, Testnet and Mainnet switch at the top right)
+**Live:** https://frenstrade.vercel.app (Monad testnet by default, Testnet and Mainnet switch at the top right)
 
 **Demo room with a call waiting:** open the live site, pick a testnet market nobody traded in the last six
 hours, and follow "See a room where a fren's call is waiting", or use the first link in `demo/ROOMS.md`.

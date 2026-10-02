@@ -8,7 +8,7 @@ Hi Perpl team,
 
 We're building frens for Monad Metropolis: your friends' real Perpl positions as faces on one live chart. A friend drags a take-profit onto your position and sends it, you take it with one signature as a real resting close on Perpl, and the caller's address rides in the order's orderDescId, so every caller's record (calls taken, hits) is
 read from chain. One-tap copy places the copier's own order, tagged with the fren they copied.
-Live on testnet: https://frens-eosin.vercel.app
+Live on testnet: https://frenstrade.vercel.app
 
 Verified on your testnet Exchange (0x1964...80cc), all through our UI or our scripts:
 - a call taken and filled (a hit): tx 0x7bff5155..., caller read back from orderDescId
@@ -34,6 +34,6 @@ Two technical questions:
 - Does `execOrderV2` with a builder extension accept attribution on orders a wallet signs directly, without an
   API key? The dex-sdk `prepare_v2` suggests yes.
 - Stop-losses only exist as API trigger orders. Is an origin whitelist for programmatic key enrollment
-  (`/v1/api-key/payload` + `/enroll`) still the route, and would you whitelist https://frens-eosin.vercel.app?
+  (`/v1/api-key/payload` + `/enroll`) still the route, and would you whitelist https://frenstrade.vercel.app?
 
 Thanks!
