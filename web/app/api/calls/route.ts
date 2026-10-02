@@ -136,6 +136,14 @@ export async function GET(req: Request) {
     }
     return null;
   };
-  const out = await Promise.all(withHits.map(async (c) => ({ ...c, resting: await restingOf(c), stake: await stakeOf(c) })));
+  // The badge follows settlement: a staked call is a hit once its stake has paid; an unstaked one needs the candles
+  // to have crossed AND the order to have left the book. A candle high is a trade print and can spike past Perpl's
+  // mark while the TP still rests unfilled (seen on 0x07989294), so candles alone over-count.
+  const out = await Promise.all(
+    withHits.map(async (c) => {
+      const [resting, stake] = await Promise.all([restingOf(c), stakeOf(c)]);
+      return { ...c, hit: stake ? stake.state === "paid" : c.hit && !resting, resting, stake };
+    }),
+  );
   return Response.json({ net, calls: out });
 }
