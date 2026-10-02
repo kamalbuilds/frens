@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#0A0A0F"/>
+  <g transform="translate(512 512) scale(1.07) translate(-542 -430)">
+  <!-- the call: a fren's take-profit line, dashed lime, running right from the face -->
+  <line x1="590" y1="250" x2="900" y2="250" stroke="#C8FF3D" stroke-width="12" stroke-dasharray="34 22" stroke-linecap="round"/>
+  <rect x="868" y="226" width="56" height="48" rx="10" fill="#C8FF3D"/>
+  <!-- candles -->
+  <line x1="196" y1="470" x2="196" y2="700" stroke="#FF6B57" stroke-width="10" stroke-linecap="round"/>
+  <rect x="160" y="520" width="72" height="140" rx="10" fill="#FF6B57"/>
+  <line x1="316" y1="440" x2="316" y2="690" stroke="#2BD67B" stroke-width="10" stroke-linecap="round"/>
+  <rect x="280" y="480" width="72" height="170" rx="10" fill="#2BD67B"/>
+  <line x1="436" y1="420" x2="436" y2="610" stroke="#FF6B57" stroke-width="10" stroke-linecap="round"/>
+  <rect x="400" y="450" width="72" height="120" rx="10" fill="#FF6B57"/>
+  <line x1="556" y1="330" x2="556" y2="690" stroke="#2BD67B" stroke-width="10" stroke-linecap="round"/>
+  <rect x="520" y="370" width="72" height="290" rx="10" fill="#2BD67B"/>
+  <!-- the fren: a face pinned on the candle where they entered, ringed green for long -->
+  <circle cx="556" cy="250" r="96" fill="#0A0A0F"/>
+  <circle cx="556" cy="250" r="84" fill="#B98CFF" stroke="#2BD67B" stroke-width="14"/>
+  <path d="M488 220 Q556 150 626 214 L626 250 Q560 205 488 252 Z" fill="#8A5CF0" opacity="0.55"/>
+  <circle cx="528" cy="246" r="11" fill="#0A0A0F"/>
+  <circle cx="586" cy="246" r="11" fill="#0A0A0F"/>
+  <path d="M526 282 Q556 308 588 282" fill="none" stroke="#0A0A0F" stroke-width="10" stroke-linecap="round"/>
+  <!-- call taken: the lime dot frens puts on a caller's face -->
+  <circle cx="622" cy="184" r="26" fill="#C8FF3D" stroke="#0A0A0F" stroke-width="10"/>
+
+  </g>
+</svg>
