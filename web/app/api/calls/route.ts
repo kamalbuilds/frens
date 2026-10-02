@@ -1,7 +1,7 @@
 import type { Hex } from "viem";
 import { parseCallsParam, priceCalls, verifyCallReceipts, type PricedCall, type VerifiedCall } from "@/lib/receipts";
 import { parseNetParam } from "@/lib/network";
-import { NETWORKS } from "@/lib/perpl";
+import { NETWORKS, exchangeAbi } from "@/lib/perpl";
 import { apiBaseFor, clientFor, markets } from "@/lib/server";
 import { scaleCandle, type RawCandle } from "@/lib/chart";
 import { callHit } from "@/lib/callhit";
@@ -70,7 +70,23 @@ export async function GET(req: Request) {
     decimals = new Map();
   }
 
-  const out = await Promise.all(
+  // Still on Perpl's book: same order id, same close type, lots left. A filled or cancelled TP reads false.
+  const restingOf = async (c: PricedCall): Promise<boolean> => {
+    if (c.orderId === null) return false;
+    try {
+      const o = (await client.readContract({
+        address: NETWORKS[net].exchange,
+        abi: exchangeAbi,
+        functionName: "getOrderV2",
+        args: [BigInt(c.market), BigInt(c.orderId)],
+      })) as { orderType: number; lotLNS: number | bigint };
+      return Number(o.orderType) === c.orderType && BigInt(o.lotLNS) > 0n;
+    } catch {
+      return false;
+    }
+  };
+
+  const withHits = await Promise.all(
     calls.map(async (c) => {
       const key = keyFor(net, c.hash);
       if (hitCache.get(key)) return { ...c, hit: true };
@@ -95,5 +111,6 @@ export async function GET(req: Request) {
       }
     }),
   );
+  const out = await Promise.all(withHits.map(async (c) => ({ ...c, resting: await restingOf(c) })));
   return Response.json({ net, calls: out });
 }
