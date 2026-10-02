@@ -446,7 +446,7 @@ export function SuggestionBanner({
       <p className="num truncate text-[12px] sm:text-[13px] sm:whitespace-normal">
         {evaluated.text} <span className="hidden text-muted sm:inline">PnL from the room position.</span>
       </p>
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:mt-2 sm:flex-col sm:items-stretch sm:gap-2">
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:mt-2 sm:gap-2">
         {!accepted && (
           <div className="order-1 flex shrink-0 flex-wrap items-center gap-1.5 sm:order-none sm:gap-2">
             <button
