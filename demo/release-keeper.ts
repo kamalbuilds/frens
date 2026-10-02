@@ -32,7 +32,9 @@ const open = new Set(ids);
 const watch = ids.length === 0;
 const cursorFile = process.env.KEEPER_CURSOR ?? path.join(here, ".keeper-cursor");
 // The cursor file holds the next block to scan AND the stakes still open, so a restart resumes both.
-const saved = fs.existsSync(cursorFile) ? (JSON.parse(fs.readFileSync(cursorFile, "utf8")) as { cursor: string; open: Hex[] }) : null;
+// An older keeper wrote a bare block number; read that as a cursor with nothing open.
+const rawSaved = fs.existsSync(cursorFile) ? (JSON.parse(fs.readFileSync(cursorFile, "utf8")) as unknown) : null;
+const saved = typeof rawSaved === "number" ? { cursor: String(rawSaved), open: [] as Hex[] } : (rawSaved as { cursor: string; open: Hex[] } | null);
 let cursor = saved ? BigInt(saved.cursor) : BigInt(JSON.parse(fs.readFileSync(path.join(here, "../contracts/deployments.json"), "utf8")).testnet.block);
 for (const id of saved?.open ?? []) open.add(id);
 const save = () => fs.writeFileSync(cursorFile, JSON.stringify({ cursor: cursor.toString(), open: [...open] }));
