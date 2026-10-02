@@ -1486,7 +1486,7 @@ export function ChartRoom({
     try {
       window.localStorage.setItem(`frens:room-hint:${roomCode}`, "1");
     } catch {
-      // The banner still hides for this visit even when storage is blocked.
+      // The banner hides for this visit either way; storage makes it stick.
     }
     setHintDismissed(true);
   }
