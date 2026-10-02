@@ -1657,7 +1657,6 @@ export function ChartRoom({
               ghostPrice={ghostPrice}
               onAcceptedChange={handleAcceptedChange}
               roomShareLink={roomSharePath}
-              callHashes={callHashes}
               acceptRequest={acceptReq}
               chartActions={ghostY !== null && ghostAccepted === null}
               passRequest={passReq}

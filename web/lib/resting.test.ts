@@ -2,8 +2,7 @@
 // accepting a friend's TP must cancel the old close and place the new one in
 // a single execOrders batch. No network: the chain is a mocked client.
 import { describe, expect, it } from "bun:test";
-import { encodeAbiParameters, toEventSelector, type Abi, type AbiEvent, type Address, type Hex, type PublicClient } from "viem";
-import officialAbiJson from "./exchange-official.abi.json";
+import { type Address, type PublicClient } from "viem";
 import {
   ACCEPT_BATCH_SUPPORTED,
   buildAcceptOrders,
@@ -33,20 +32,6 @@ const BASE_PNS = 690000n;
 const PRICE_ONS = 42293;
 const PRICE_PNS = BASE_PNS + BigInt(PRICE_ONS);
 
-const official = officialAbiJson as Abi;
-
-function eventInputs(name: string) {
-  const e = official.find((x) => x.type === "event" && x.name === name);
-  if (!e || e.type !== "event") throw new Error(`event ${name} missing`);
-  return (e as AbiEvent & { inputs: Parameters<typeof encodeAbiParameters>[0] }).inputs;
-}
-
-function topic0(name: string): Hex {
-  const e = official.find((x) => x.type === "event" && x.name === name);
-  if (!e || e.type !== "event") throw new Error(`event ${name} missing`);
-  return toEventSelector(e as AbiEvent);
-}
-
 function suggestion(): Suggestion {
   return { owner: OWNER, market: MARKET, side: "long", price: 73229.3, sizeLots: undefined, from: FRIEND, createdAt: CREATED_AT };
 }
@@ -55,64 +40,25 @@ function closeForLots(lots: bigint) {
   return toCloseOrder(suggestion(), META, { fullSizeLots: lots });
 }
 
-// Minimal mocked chain: account 7 owns one resting CloseLong (order 41,
-// 179 lots) on market 16. Logs are real ABI-encoded OrderRequestV2 +
-// OrderPlaced rows sharing one transaction hash, so findRestingCloses
-// exercises its decode/join/read-back path with no network.
-function mockClient(): PublicClient {
-  const tx = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Hex;
-  const v2data = encodeAbiParameters(eventInputs("OrderRequestV2"), [
-    16n,
-    7n,
-    1n,
-    0n,
-    2,
-    732293n,
-    179n,
-    0n,
-    true,
-    false,
-    false,
-    0n,
-    300n,
-    0n,
-    0n,
-    1000n,
-    0n,
-    "0x" as Hex,
-  ]);
-  const placedData = encodeAbiParameters(eventInputs("OrderPlaced"), [41n, 179n, 0n, 0n, 0n]);
-  const v2topics = [topic0("OrderRequestV2")];
-  const placedTopics = [topic0("OrderPlaced")];
+// Minimal mocked chain: account 7 has three locks on market 16. Lock
+// (1<<20)|41 is its resting CloseLong (order 41, 179 lots); (1<<20)|42 is an
+// open order, not a close; (1<<20)|43 is a close lock whose order id Perpl has
+// since recycled to another account. Only order 41 may come back.
+function mockClient(locks: readonly { orderLockId: number; orderType: number }[] = [
+  { orderLockId: (1 << 20) | 41, orderType: 2 },
+  { orderLockId: (1 << 20) | 42, orderType: 0 },
+  { orderLockId: (1 << 20) | 43, orderType: 2 },
+]): PublicClient {
   return {
-    getBlockNumber: async () => 5000n,
-    getTransactionReceipt: async ({ hash }: { hash: Hex }) => {
-      if (hash !== tx) throw new Error("unknown tx");
-      return {
-        status: "success",
-        blockNumber: 4900n,
-        logs: [
-          { topics: v2topics, data: v2data },
-          { topics: placedTopics, data: placedData },
-        ],
-      };
-    },
-    getLogs: async (args: { event?: { name?: string } }) => {
-      const name = (args.event as { name?: string } | undefined)?.name;
-      if (name === "OrderRequestV2") {
-        return [{ topics: v2topics, data: v2data, blockNumber: 4900n, transactionHash: tx }];
-      }
-      if (name === "OrderPlaced") {
-        return [{ topics: placedTopics, data: placedData, blockNumber: 4900n, transactionHash: tx }];
-      }
-      return [];
-    },
     readContract: async (args: { functionName?: string; args?: readonly unknown[] }) => {
       if (args.functionName === "getAccountByAddr") return { accountId: 7n };
       if (args.functionName === "getPerpetualInfoV2") return { basePricePNS: BASE_PNS, priceDecimals: 1n };
+      if (args.functionName === "getPerpOrderLocks") return locks;
       if (args.functionName === "getOrderV2") {
         const id = (args.args as readonly bigint[])[1];
         if (id === 41n) return { accountId: 7, orderType: 2, lotLNS: 179, priceONS: PRICE_ONS };
+        if (id === 42n) return { accountId: 7, orderType: 0, lotLNS: 50, priceONS: PRICE_ONS };
+        if (id === 43n) return { accountId: 9, orderType: 2, lotLNS: 179, priceONS: PRICE_ONS };
         return { accountId: 0, orderType: 2, lotLNS: 0, priceONS: 0 };
       }
       throw new Error(`unexpected ${String(args.functionName)}`);
@@ -170,14 +116,18 @@ describe("accept batch", () => {
 });
 
 describe("findRestingCloses", () => {
-  it("reads the owner's resting close with lots and price", async () => {
-    const out = await findRestingCloses("testnet", mockClient(), OWNER, MARKET, { scan: true });
+  it("reads the owner's resting close from its order locks, with lots and price", async () => {
+    const out = await findRestingCloses("testnet", mockClient(), OWNER, MARKET);
     expect(out).toHaveLength(1);
     expect(out[0]!.orderId).toBe(41n);
     expect(out[0]!.side).toBe("close-long");
     expect(out[0]!.lots).toBe(179n);
     expect(out[0]!.pricePNS).toBe(PRICE_PNS);
     expect(out[0]!.price).toBeCloseTo(73229.3, 5);
+  });
+
+  it("returns [] when the owner has no locks", async () => {
+    expect(await findRestingCloses("testnet", mockClient([]), OWNER, MARKET)).toEqual([]);
   });
 
   it("returns [] when the address has no account", async () => {
@@ -187,18 +137,6 @@ describe("findRestingCloses", () => {
       if (args.functionName === "getAccountByAddr") return { accountId: 0n };
       return (read as (a: never) => Promise<unknown>)({ functionName: args.functionName, args: [] } as never);
     };
-    expect(await findRestingCloses("testnet", client, OWNER, MARKET, { scan: true })).toEqual([]);
-  });
-});
-
-describe("findRestingCloses from known accept receipts", () => {
-  it("finds a resting close from the room's receipts without any log scan", async () => {
-    const tx = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Hex;
-    const out = await findRestingCloses("testnet", mockClient(), OWNER, MARKET, { knownTxs: [tx] });
-    expect(out).toHaveLength(1);
-    expect(out[0]!.orderId).toBe(41n);
-  });
-  it("finds nothing when no receipts are known and scanning is off", async () => {
-    expect(await findRestingCloses("testnet", mockClient(), OWNER, MARKET)).toEqual([]);
+    expect(await findRestingCloses("testnet", client, OWNER, MARKET)).toEqual([]);
   });
 });

@@ -5,30 +5,28 @@
 // reads the owner's open closes first (this module), then replaces them in
 // one batch (suggest.ts buildAcceptOrders) so the owner signs once.
 //
-// Strategy: the owner's accountId comes from getAccountByAddr, the market's
-// basePricePNS and priceDecimals from getPerpetualInfoV2, candidate order ids
-// from OrderRequestV2 (plus V1) logs in the last 2,000 blocks joined to the
-// OrderPlaced log in the same transaction for the real orderId (the V2 log
-// carries orderId 0, proven in callbook.ts), and each candidate is read back
-// with getOrderV2. Only orders still owned by the account with close type
-// and nonzero lots are returned. Resting prices are stored on chain as an
-// offset (ONS) from the base price (proven in src/trade.ts), so
-// pricePNS = priceONS + basePricePNS.
+// Perpl keeps every account's locked orders per market on chain:
+// getPerpOrderLocks(accountId, perpId) lists them, and the low 20 bits of each
+// orderLockId are the orderId (testnet: account 778 lock 1048721 is order 145,
+// 760 lock 1048717 is order 141). Each candidate is read back with getOrderV2
+// and kept only while the account still owns it as a close with lots left, so
+// a recycled id never counts. Resting prices are stored on chain as an offset
+// (ONS) from the base price (proven in src/trade.ts), so
+// pricePNS = priceONS + basePricePNS. Plain eth_calls: works from the browser
+// on the public RPC, and finds a TP however long ago it was placed.
 //
 // Never throws: a lookup failure returns [], and the caller falls back to
-// the old single-close path rather than blocking Accept.
-import { decodeEventLog, type AbiEvent, type Address, type Hex, type PublicClient } from "viem";
-import officialAbiJson from "./exchange-official.abi.json";
+// the single-close path rather than blocking Accept.
+import { parseAbi, type Address, type PublicClient } from "viem";
 import { CLOSE_LONG, CLOSE_SHORT } from "./suggest";
 import { NETWORKS, exchangeAbi, type Network } from "./perpl";
 
-const officialAbi = officialAbiJson as readonly AbiEvent[];
+const locksAbi = parseAbi([
+  "struct OrderLock { uint32 orderLockId; uint32 nextOrderLockId; uint32 prevOrderLockId; uint8 orderType; uint40 lotLNS; uint80 amountCNS; }",
+  "function getPerpOrderLocks(uint256 accountId, uint256 perpId) view returns (OrderLock[] perpOrderLocks)",
+]);
 
-function eventAbi(name: string): AbiEvent {
-  const found = officialAbi.find((e) => e.type === "event" && e.name === name);
-  if (!found) throw new Error(`official Exchange ABI has no event ${name}`);
-  return found;
-}
+const ORDER_ID_BITS = 0xfffffn;
 
 export type RestingClose = {
   orderId: bigint;
@@ -38,27 +36,11 @@ export type RestingClose = {
   price: number;
 };
 
-// How far back the log scan goes. Matches the RPC fallback window in
-// callbook.ts: Perpl logs are unindexed, so a wider window means downloading
-// every order on the venue.
-export const RESTING_LOOKBACK_BLOCKS = 2000n;
-
-type AnyLog = {
-  topics: Hex[];
-  data: Hex;
-  blockNumber: bigint;
-  transactionHash: Hex;
-};
-
 export async function findRestingCloses(
   network: Network,
   client: PublicClient,
   account: Address,
   market: number,
-  // Accept transactions already known (the room link's c= receipts): their OrderPlaced ids are checked
-  // directly, with no log scan. The scan below needs >100-block eth_getLogs, which the public RPC a browser
-  // uses refuses, so it only runs when `scan` is set (server side, private RPC).
-  opts: { knownTxs?: readonly Hex[]; scan?: boolean } = {},
 ): Promise<RestingClose[]> {
   try {
     const exchange = NETWORKS[network].exchange;
@@ -73,9 +55,6 @@ export async function findRestingCloses(
     const accountId = BigInt(acc.accountId);
     if (accountId === 0n) return [];
 
-    const latest = await client.getBlockNumber();
-    const fromBlock = latest > RESTING_LOOKBACK_BLOCKS ? latest - RESTING_LOOKBACK_BLOCKS : 0n;
-
     const perp = (await client.readContract({
       address: exchange,
       abi: exchangeAbi,
@@ -85,76 +64,17 @@ export async function findRestingCloses(
     const basePricePNS = BigInt(perp.basePricePNS);
     const priceDecimals = Number(perp.priceDecimals);
 
-    const reqV2 = eventAbi("OrderRequestV2");
-    const reqV1 = eventAbi("OrderRequest");
-    const placedEv = eventAbi("OrderPlaced");
-
-    const fromReceipts: AnyLog[] = [];
-    for (const hash of opts.knownTxs ?? []) {
-      try {
-        const r = await client.getTransactionReceipt({ hash });
-        if (r.status !== "success") continue;
-        for (const l of r.logs) fromReceipts.push({ topics: l.topics as Hex[], data: l.data, blockNumber: r.blockNumber, transactionHash: hash });
-      } catch {
-        continue;
-      }
-    }
-    const [v2logs, v1logs, placedLogs] = opts.scan
-      ? ((await Promise.all([
-          client.getLogs({ address: exchange, event: reqV2, fromBlock, toBlock: latest }),
-          client.getLogs({ address: exchange, event: reqV1, fromBlock, toBlock: latest }),
-          client.getLogs({ address: exchange, event: placedEv, fromBlock, toBlock: latest }),
-        ])) as unknown as AnyLog[][])
-      : [fromReceipts, [], fromReceipts];
-
-    const orderIdByTx = new Map<string, bigint>();
-    for (const log of placedLogs ?? []) {
-      try {
-        const ev = decodeEventLog({ abi: officialAbi, data: log.data, topics: log.topics as [Hex, ...Hex[]] });
-        if (ev.eventName !== "OrderPlaced") continue;
-        const args = ev.args as unknown as { orderId: bigint };
-        orderIdByTx.set(log.transactionHash.toLowerCase(), BigInt(args.orderId));
-      } catch {
-        continue;
-      }
-    }
-
-    const candidates: bigint[] = [];
-    const consider = (log: AnyLog) => {
-      try {
-        const ev = decodeEventLog({ abi: officialAbi, data: log.data, topics: log.topics as [Hex, ...Hex[]] });
-        if (ev.eventName !== "OrderRequestV2" && ev.eventName !== "OrderRequest") return;
-        const args = ev.args as unknown as {
-          perpId: bigint;
-          accountId: bigint;
-          orderId: bigint;
-          orderType: number;
-        };
-        if (BigInt(args.perpId) !== perpId) return;
-        if (BigInt(args.accountId) !== accountId) return;
-        const t = Number(args.orderType);
-        if (t !== CLOSE_LONG && t !== CLOSE_SHORT) return;
-        const rawId = BigInt(args.orderId);
-        if (rawId !== 0n) {
-          candidates.push(rawId);
-          return;
-        }
-        const resolved = orderIdByTx.get(log.transactionHash.toLowerCase());
-        if (resolved !== undefined && resolved !== 0n) candidates.push(resolved);
-      } catch {
-        return;
-      }
-    };
-    for (const log of [...(v2logs ?? []), ...(v1logs ?? [])]) consider(log);
-
-    const seen = new Set<string>();
-    const ids: bigint[] = [];
-    for (const id of candidates) {
-      const k = id.toString();
-      if (seen.has(k) || id === 0n) continue;
-      seen.add(k);
-      ids.push(id);
-    }
+    const locks = (await client.readContract({
+      address: exchange,
+      abi: locksAbi,
+      functionName: "getPerpOrderLocks",
+      args: [accountId, perpId],
+    })) as readonly { orderLockId: number; orderType: number }[];
+    const ids = [
+      ...new Set(
+        locks.filter((l) => l.orderType === CLOSE_LONG || l.orderType === CLOSE_SHORT).map((l) => BigInt(l.orderLockId) & ORDER_ID_BITS),
+      ),
+    ].filter((id) => id !== 0n);
     const out: RestingClose[] = [];
     for (const id of ids) {
       try {
