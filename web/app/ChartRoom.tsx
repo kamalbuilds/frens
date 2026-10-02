@@ -1309,6 +1309,12 @@ export function ChartRoom({
     return encodeKeyedNames(sorted, (a) => nameByAddr.get(a));
   }
 
+  // Phones get the OS share sheet (Telegram, X, WhatsApp) instead of the clipboard.
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => {
+    setCanShare(typeof navigator.share === "function" && window.matchMedia("(pointer: coarse)").matches);
+  }, []);
+
   async function copyRoomLink() {
     try {
       const code = encodeRoom(extra);
@@ -1316,9 +1322,12 @@ export function ChartRoom({
       const n = roomNamesQuery();
       const hasNames = n.split(",").some((s) => s !== "");
       const c = encodeCallsParam(callHashes);
-      await navigator.clipboard.writeText(
-        `${window.location.origin}${roomLink(code, net, hasNames ? n : undefined, c || undefined)}`,
-      );
+      const url = `${window.location.origin}${roomLink(code, net, hasNames ? n : undefined, c || undefined)}`;
+      if (canShare) {
+        await navigator.share({ title: "frens", text: ROOM_POST, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -1523,7 +1532,7 @@ export function ChartRoom({
                 onClick={copyRoomLink}
                 className="min-h-[44px] shrink-0 rounded-[6px] bg-accent px-3 py-1.5 text-[13px] font-medium text-page active:scale-[0.97] sm:min-h-0"
               >
-                {copied ? "Copied" : "Copy room link"}
+                {copied ? "Copied" : canShare ? "Share room" : "Copy room link"}
               </button>
               {roomSharePath && (
                 <>
