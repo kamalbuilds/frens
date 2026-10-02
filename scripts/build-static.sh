@@ -24,7 +24,10 @@ const nextConfig: NextConfig = { output: "export", images: { unoptimized: true }
 export default nextConfig;
 TS
 (cd "$TMP" && bunx next build > "$TMP.log" 2>&1) || { tail -30 "$TMP.log"; exit 1; }
+# Keep the Vercel project link across rebuilds, or the next deploy creates a new project named after the dir.
+LINK=$(mktemp -d); [ -d "$HERE/web/out-static/.vercel" ] && cp -R "$HERE/web/out-static/.vercel" "$LINK/"
 rm -rf "$HERE/web/out-static" && cp -R "$TMP/out" "$HERE/web/out-static"
+[ -d "$LINK/.vercel" ] && cp -R "$LINK/.vercel" "$HERE/web/out-static/"; rm -rf "$LINK"
 BOTS='.*(Twitterbot|TelegramBot|facebookexternalhit|Discordbot|Slackbot|LinkedInBot|WhatsApp|Applebot).*'
 cat > "$HERE/web/out-static/vercel.json" <<JSON
 {
