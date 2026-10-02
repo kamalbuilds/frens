@@ -32,6 +32,8 @@ import { encodeCallsParam } from "@/lib/receipts";
 import type { PricedCall } from "@/lib/receipts";
 import { ghostLabelText, hexWithAlpha } from "@/lib/ghost";
 import { callBoard } from "@/lib/callboard";
+import { suggestionDescId } from "@/lib/callbook";
+import { publicClient } from "@/lib/perpl";
 import { ROOM_POST, telegramShareUrl, xPostUrl } from "@/lib/share";
 import { connect as connectWallet, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
@@ -1185,9 +1187,16 @@ export function ChartRoom({
     const order = toCopyOrder(
       { market: marketId, side: copyFriend.side },
       { priceDecimals: BigInt(market.priceDecimals), lotDecimals: BigInt(market.lotDecimals) },
-      { size, markPrice: copyFriend.markPrice, maxSlippageBps: slip, orderDescId: BigInt(Date.now()) },
+      // The copied fren goes in the top bits, so the copy is attributable on chain like a call.
+      { size, markPrice: copyFriend.markPrice, maxSlippageBps: slip, orderDescId: suggestionDescId(copyFriend.account as Address, Date.now()) },
     );
     return encodeCopyOrder(order);
+  }
+
+  // A broadcast hash is not a trade: wait for the receipt and surface a revert as an error.
+  async function settled(hash: `0x${string}`) {
+    const r = await publicClient(net).waitForTransactionReceipt({ hash, timeout: 60_000 });
+    if (r.status !== "success") throw new Error(`The order reverted on Perpl (tx ${hash.slice(0, 10)}…).`);
   }
 
   async function doCopy() {
@@ -1196,6 +1205,7 @@ export function ChartRoom({
       const data = copyOrderData();
       await connectWallet(net);
       const hash = await sendExecOrder(EXCHANGE, data, net);
+      await settled(hash);
       setCopyResult({ kind: "ok", hash });
     } catch (e) {
       setCopyResult({ kind: "error", message: e instanceof Error ? e.message : String(e) });
@@ -1211,6 +1221,7 @@ export function ChartRoom({
     try {
       const data = copyOrderData();
       const hash = await sendExecOrderWith(passkey, EXCHANGE, data, net);
+      await settled(hash);
       setCopyResult({ kind: "ok", hash });
     } catch (e) {
       setCopyResult({ kind: "error", message: e instanceof Error ? e.message : String(e) });
