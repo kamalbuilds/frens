@@ -19,9 +19,14 @@ A take-profit line rides her position, with bo's face on it.
 She signs in with her passkey and taps Accept. One signature.
 ! It becomes a real close order, resting on Perpl, with bo's address written into it.
 
+Now she backs the call. Stake two aUSD.
+The stake pays bo only if Perpl's mark reaches the take-profit before it expires. Otherwise it comes back to her.
+The take-profit is read from the real Perpl order, and it has to sit half a percent from the mark.
+In the room, staked calls say so. Two aUSD staked.
+
 We read it back from the chain, not from the app. Receipt, success. And bo's address, inside the order.
 That is the call record. [+300]
-bo's calls taken tick to two. A hit means price reached the call after she took it.
+bo's calls taken tick to two.
 
 Share the room to X, and it posts with its own card.
 

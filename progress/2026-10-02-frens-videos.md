@@ -5,3 +5,14 @@ Done: three cuts in products/chartroom/video/ (gitignored mp4): frens-demo.mp4 (
 Pipeline (all in video/): rec.mjs (CDP screencast of one pinned tab, cursor overlay, marks), scenes/*.html (time-driven motion scenes: chat problem, quotes, call-record card, Telegram count, logo), card.mjs (transparent caption PNGs), assemble.mjs (beats cut to the narration timeline, push-in zoom on static footage, fade-in captions, AAC mux), vo/ (narration scripts and the patched Whisper-checked generator).
 
 Real transactions in the footage (Monad testnet): passkey wallet 0x540DD292BAD1109Fe1D4f335504ee4d98c831277 opened its Perpl account and copied cy's long (long 0.001 @ 86,376.1, block 67,531,587); bo's call accepted from the chart, tx 0xe01ef0191606c833060462282db99a7b88bbd55f3e023f7790002a36bffdedf2, block 67,520,174, status 1, caller bo read from orderDescId.
+
+## Re-record attempt, stopped by Kamal's instruction (2026-10-02 evening)
+Reason to re-record: the three cuts show rail lines ("cy: TP 88,144.0 from ana", "ana: TP 88,159 from bo", "dee: TP 81,765 from cy" with "resting on Perpl") for orders that were cancelled and whose ids Perpl recycled. Fixed in the app (type, price and owner must match). The mp4s in video/ still contain those frames and must not be uploaded.
+
+Passkey wallets created in the re-record attempts (virtual authenticator, keys gone, all hold under 5 aUSD and about 0.06 MON):
+- 0x4b8677e4AD1520D6a5a375e6E53C179bC5fA9Bf7 (copied cy, never accepted)
+- 0xa4D17d4b0c2fAb45dDd7670e11D7e03bded52145 (copied cy, bo's call accepted by hand, tx 0xf4af3343c4a1f7da7a843d99e05e4d0c9ef06251e05dc3a137e8972c15aa99cd, not staked)
+- 0xA49cbCD83475D63712194025bc7902B1aC1dc7d8 (copied cy, take aborted before Accept)
+Earlier wallets: see the ledger entry above (0x540DD292..., 0x5Ea2F3A8..., 0xB3917AF9..., 0x0570AA03..., 0xeDb56eaD..., 0xf2C3C5Fa...).
+
+Findings for the next take: the Accept click fires the wallet path (silent no-op) if it lands before the passkey balance has loaded; rec.mjs steps now wait for `MON \d` and `aUSD \d` before Accept. Agora aUSD faucet claim(address) 0x544c7cf9 works: `bun run video/claim-ausd.ts <to> [from]`. New narration lines for the stake beat are already in video/vo/demo.txt (stake pays the caller only if Perpl's mark reaches the TP before expiry, refund otherwise, TP read from the real Perpl order, 0.5% minimum distance; no payout claim).
