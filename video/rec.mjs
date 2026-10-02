@@ -140,6 +140,20 @@ try {
         await sleep(200); await mouse("mouseReleased", x1, y1); mx = x1; my = y1; log.push({ dragSel: s.dragSel });
       }
     }
+    if (s.typeInto) {
+      let okv = false;
+      for (let tries = 0; tries < 4 && !okv; tries++) {
+        const r = await rectOf(`document.querySelector(${JSON.stringify(s.typeInto)})`);
+        if (!r) { await sleep(600); continue; }
+        const p = JSON.parse(r); await clickAt(p.x, p.y); await sleep(300);
+        await ev(`(()=>{const e=document.querySelector(${JSON.stringify(s.typeInto)});e.focus();e.select&&e.select();return 1})()`);
+        for (const ch of s.text) { await send("Input.insertText", { text: ch }); await sleep(110); }
+        await sleep(250);
+        okv = (await ev(`document.querySelector(${JSON.stringify(s.typeInto)}).value`)) === s.text;
+      }
+      log.push({ typeInto: s.typeInto, ok: okv });
+      if (!okv && !s.soft) throw new Error("typeInto failed: " + s.typeInto);
+    }
     if (s.hoverSel) { const r = await rectOf(`document.querySelector(${JSON.stringify(s.hoverSel)})`); if (r) { const p = JSON.parse(r); await glide(p.x, p.y); log.push({ hoverSel: s.hoverSel }); } else if (!s.soft) throw new Error("no el: " + s.hoverSel); }
     if (s.move) await glide(s.move[0], s.move[1], s.ms ?? 700);
     if (s.type) { const t = sub(s.type); if (s.slow) { for (const ch of t) { await send("Input.insertText", { text: ch }); await sleep(110); } } else await send("Input.insertText", { text: t }); }
