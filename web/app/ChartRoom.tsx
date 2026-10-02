@@ -280,6 +280,7 @@ export function ChartRoom({
   const tpLine = useRef<IPriceLine | null>(null);
   const slLine = useRef<IPriceLine | null>(null);
   const sugLine = useRef<IPriceLine | null>(null);
+  const takenLines = useRef<IPriceLine[]>([]);
   const dragging = useRef<SuggestKind | "ghost" | null>(null);
 
   const market = markets.state === "ready" ? markets.data.find((m) => m.id === marketId) : undefined;
@@ -305,7 +306,7 @@ export function ChartRoom({
   // Trustless call receipts from the room link (?c=): each hash verified
   // against its own transaction receipt, no log scanning.
   const [callHashes, setCallHashes] = useState<string[]>(() => initialCalls ?? []);
-  const [receiptCalls, setReceiptCalls] = useState<(PricedCall & { hit?: boolean })[]>([]);
+  const [receiptCalls, setReceiptCalls] = useState<(PricedCall & { hit?: boolean; resting?: boolean })[]>([]);
   const recFor = (addr: string) => {
     const hyper = callRecords[`${net}:${addr.toLowerCase()}`] ?? null;
     if (hyper) return hyper;
@@ -518,7 +519,7 @@ export function ChartRoom({
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => {
         if (cancelled || !ok || !Array.isArray(body.calls)) return;
-        setReceiptCalls(body.calls as (PricedCall & { hit?: boolean })[]);
+        setReceiptCalls(body.calls as (PricedCall & { hit?: boolean; resting?: boolean })[]);
       })
       .catch(() => {
         // A missing record hides the line; the card still shows the position.
@@ -1215,6 +1216,32 @@ export function ChartRoom({
       setCopyResult({ kind: "error", message: e instanceof Error ? e.message : String(e) });
     }
   }
+
+  // Calls taken in this room and still resting on Perpl, read back from chain: the end state of a call,
+  // drawn for everyone who opens the link. The open suggestion's own ghost line is not drawn twice.
+  useEffect(() => {
+    const s = series.current;
+    if (!s) return;
+    for (const l of takenLines.current) s.removePriceLine(l);
+    takenLines.current = [];
+    for (const c of receiptCalls) {
+      if (!c.resting || c.price === null || c.market !== marketId) continue;
+      if (incoming && Math.abs(incoming.price - c.price) < 10 ** -decimals / 2) continue;
+      takenLines.current.push(
+        s.createPriceLine({
+          price: c.price,
+          color: hexWithAlpha(CHART.up, 0.75),
+          lineWidth: 1,
+          lineStyle: LineStyle.Solid,
+          axisLabelVisible: true,
+          axisLabelColor: hexWithAlpha(CHART.up, 0.75),
+          axisLabelTextColor: CHART.page,
+          title: `${display(c.caller)}'s call · resting on Perpl`,
+        }),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receiptCalls, marketId, incoming, decimals, nameByAddr, candles]);
 
   // Feed candles, volume bars and friend lines into the chart.
   useEffect(() => {
@@ -2028,6 +2055,9 @@ export function ChartRoom({
               const on = active === f.account;
               const rec = recFor(f.account);
               const line = rec ? callLine(rec.accepted, rec.hit) : null;
+              const restingCall = receiptCalls.find(
+                (c) => c.resting && c.price !== null && c.market === marketId && c.owner.toLowerCase() === f.account.toLowerCase(),
+              );
               return (
                 <li key={f.account} className="min-w-[210px] lg:min-w-0">
                   <button
@@ -2046,6 +2076,11 @@ export function ChartRoom({
                         {chip.side}
                       </span>
                       {line && <span className="mt-0.5 block text-[11px] text-muted">{line}</span>}
+                      {restingCall && (
+                        <span data-resting-call className="mt-0.5 block text-[11px] text-gain">
+                          TP {formatPrice(restingCall.price as number, decimals)} from {display(restingCall.caller)} · resting on Perpl
+                        </span>
+                      )}
                     </span>
                     <span className="ml-auto" style={{ color: chip.inProfit ? CHART.up : CHART.down }}>{chip.pnl}</span>
                   </button>

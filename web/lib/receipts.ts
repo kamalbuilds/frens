@@ -14,7 +14,7 @@ import {
   type PublicClient,
 } from "viem";
 import officialAbi from "./exchange-official.abi.json";
-import { decodeDescId, ORDER_REQUEST_V2_TOPIC0 } from "./callbook";
+import { decodeDescId, ORDER_PLACED_TOPIC0, ORDER_REQUEST_V2_TOPIC0 } from "./callbook";
 import { CLOSE_LONG, CLOSE_SHORT } from "./suggest";
 import { NETWORKS, type Network } from "./perpl";
 import { readPerpMeta } from "./readPosition";
@@ -60,6 +60,8 @@ export type VerifiedCall = {
   market: number;
   /// On-chain order type from the OrderRequestV2 log.
   orderType: number;
+  /// The resting close's order id from the OrderPlaced log after it, or null if none was placed.
+  orderId: string | null;
   /// pricePNS from the OrderRequestV2 log, as a decimal string: the raw
   /// on-chain value, unscaled.
   pricePNS: string;
@@ -107,7 +109,7 @@ async function verifyOne(
   if (!receipt || receipt.status !== "success") return null;
   const exchange = NETWORKS[net].exchange.toLowerCase();
   const logs = (receipt.logs ?? []) as readonly ReceiptLikeLog[];
-  for (const log of logs) {
+  for (const [i, log] of logs.entries()) {
     try {
       if (String(log.address ?? "").toLowerCase() !== exchange) continue;
       const topics = log.topics as readonly Hex[] as [Hex, ...Hex[]];
@@ -130,11 +132,27 @@ async function verifyOne(
         owner: getAddress(receipt.from),
         market: Number(args.perpId),
         orderType,
+        orderId: placedOrderId(logs.slice(i + 1), exchange),
         pricePNS: args.pricePNS.toString(),
         block: Number(receipt.blockNumber),
       };
     } catch {
       continue;
+    }
+  }
+  return null;
+}
+
+// The close's resting order id: OrderRequestV2 carries 0, the next OrderPlaced from the Exchange carries it.
+function placedOrderId(after: readonly ReceiptLikeLog[], exchange: string): string | null {
+  for (const log of after) {
+    if (String(log.address ?? "").toLowerCase() !== exchange) continue;
+    if ((log.topics?.[0] ?? "").toLowerCase() !== ORDER_PLACED_TOPIC0.toLowerCase()) continue;
+    try {
+      const ev = decodeEventLog({ abi: exchangeOfficialAbi, data: log.data, topics: log.topics as [Hex, ...Hex[]] });
+      return (ev.args as unknown as { orderId: bigint }).orderId.toString();
+    } catch {
+      return null;
     }
   }
   return null;

@@ -161,7 +161,7 @@ describe("verifyCallReceipts", () => {
   it("keeps the call and drops the self order, the failed tx and the empty receipt", async () => {
     const out = await verifyCallReceipts("testnet", [H1, H2, H3, H4], fakeClient(byHash));
     expect(out).toEqual([
-      { hash: H1, caller: getAddress(FRIEND), owner: OWNER, market: 16, orderType: 2, pricePNS: "732293", block: 100 },
+      { hash: H1, caller: getAddress(FRIEND), owner: OWNER, market: 16, orderType: 2, orderId: null, pricePNS: "732293", block: 100 },
     ] satisfies VerifiedCall[]);
   });
 
@@ -180,6 +180,28 @@ describe("verifyCallReceipts", () => {
     };
     const out = await verifyCallReceipts("testnet", [H1], fakeClient(replace));
     expect(out.map((c) => [c.orderType, c.pricePNS])).toEqual([[2, "732293"]]);
+  });
+
+  it("reads the resting order id from the OrderPlaced after the close, not the cancel's", async () => {
+    const cancel = v2Log(mine, 0n, 4);
+    const placed = {
+      topics: [toEventSelector(eventAbi("OrderPlaced"))] as Hex[],
+      data: encodeAbiParameters(eventInputs("OrderPlaced"), [138n, 250n, 0n, -100000n, 427985927n]),
+    };
+    const rc = {
+      [H1.toLowerCase()]: {
+        status: "success" as const,
+        from: OWNER,
+        blockNumber: 100n,
+        logs: [
+          { address: EXCHANGE, topics: cancel.topics, data: cancel.data },
+          { address: EXCHANGE, topics: call.topics, data: call.data },
+          { address: EXCHANGE, topics: placed.topics, data: placed.data },
+        ],
+      },
+    };
+    const out = await verifyCallReceipts("testnet", [H1], fakeClient(rc));
+    expect(out.map((c) => c.orderId)).toEqual(["138"]);
   });
 
   it("reads the caller out of the receipt log, not the log scanner", () => {
@@ -262,7 +284,7 @@ describe("priceCalls", () => {
   }
 
   function call(market: number, pricePNS: string, hash: Hex): VerifiedCall {
-    return { hash, caller: FRIEND, owner: OWNER, market, orderType: 2, pricePNS, block: 1 };
+    return { hash, caller: FRIEND, owner: OWNER, market, orderType: 2, orderId: null, pricePNS, block: 1 };
   }
 
   it("prices each call in its own market's units", async () => {
