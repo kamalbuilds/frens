@@ -1237,8 +1237,9 @@ export function ChartRoom({
         // Friend entries never move the price scale: the candles plus the
         // selected TP/SL own the range, entries outside it pin to the edge.
         const l = c.addSeries(LineSeries, {
-          color: dim ? `${colour}40` : colour,
-          lineWidth: active && !dim ? 3 : 2,
+          // Hairlines at rest: entries a few dollars apart must not stack into one band.
+          color: dim ? `${colour}30` : active ? colour : `${colour}80`,
+          lineWidth: active && !dim ? 2 : 1,
           priceLineVisible: false,
           lastValueVisible: false,
           crosshairMarkerVisible: false,
@@ -1474,7 +1475,7 @@ export function ChartRoom({
             : live.state === "ready" && ` · ${friends.length} live traders opened in the last ${live.data.hours}h`}
         </p>
         {view === "frens" && board.length > 0 && (
-          <div data-callboard className="flex items-center gap-4 overflow-x-auto pt-1 sm:ml-auto sm:self-center sm:pt-0">
+          <div data-callboard className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 sm:ml-auto sm:flex-nowrap sm:self-center sm:pt-0">
             <span className="shrink-0 text-[13px] text-muted">Call record</span>
             {board.slice(0, 3).map((r) => {
               const f = friends.find((x) => x.account.toLowerCase() === r.caller.toLowerCase());
@@ -1551,6 +1552,7 @@ export function ChartRoom({
               roomShareLink={roomSharePath}
               callHashes={callHashes}
               acceptRequest={acceptReq}
+              chartActions={ghostY !== null && ghostAccepted === null}
               passRequest={passReq}
             />
           </div>
@@ -2138,14 +2140,14 @@ export function ChartRoom({
           {view === "frens" && (
           <form onSubmit={addTrader} className="mt-auto flex flex-col gap-2 border-t border-edge pt-4">
             <label htmlFor="add" className="text-[13px] font-medium">Add a fren by address</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <input
                 id="add"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="0x…"
                 spellCheck={false}
-                className="num min-w-0 flex-1 rounded-[6px] border border-edge bg-panel px-2.5 py-2 text-[12px]"
+                className="num min-w-0 basis-full rounded-[6px] border border-edge bg-panel px-2.5 py-2 text-[12px]"
               />
               <input
                 id="fren-name"
@@ -2155,7 +2157,7 @@ export function ChartRoom({
                 spellCheck={false}
                 maxLength={24}
                 aria-label="Nickname for this fren"
-                className="w-24 rounded-[6px] border border-edge bg-panel px-2.5 py-2 text-[12px]"
+                className="min-w-0 flex-1 rounded-[6px] border border-edge bg-panel px-2.5 py-2 text-[12px]"
               />
               <button className="rounded-[6px] bg-accent px-3 text-[13px] font-medium text-page active:scale-[0.97]">Add</button>
               <button
