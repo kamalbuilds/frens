@@ -30,12 +30,14 @@ export async function generateMetadata({
     encodeNamesParam(parseNamesParam(n)),
     encodeCallsParam(parseCallsParam(c)),
   );
-  // Absolute card URL from the host that served the link (Vercel or the Funnel), never localhost.
+  // Absolute card URL: the public front (FRONT_ORIGIN, the static Vercel site that proxies /api here) when
+  // set, else the host that served the link. Never localhost, never the proxy's upstream host.
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host");
   const proto = h.get("x-forwarded-proto") ?? "https";
+  const front = process.env.FRONT_ORIGIN;
   return {
-    metadataBase: host ? new URL(`${proto}://${host}`) : undefined,
+    metadataBase: front ? new URL(front) : host ? new URL(`${proto}://${host}`) : undefined,
     title,
     description: "Every trader in the room, pinned at their entry price on one live Perpl chart.",
     openGraph: { title, description: "Your frens' Perpl positions on one chart. Call their exits, copy their trades.", images: [card] },
