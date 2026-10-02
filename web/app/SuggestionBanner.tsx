@@ -173,7 +173,9 @@ export function SuggestionBanner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [validSuggestion?.owner, validSuggestion?.price, validSuggestion?.market, validSuggestion?.from]);
 
-  // A fresh suggestion link resets the accept and counter state.
+  // A fresh suggestion link resets the accept and counter state. Keyed on the link's payload, not on the
+  // suggestion being valid: after Accept the room refreshes and the suggestion can briefly re-validate,
+  // which must not wipe the "Accepted" receipt the acceptor is looking at.
   useEffect(() => {
     setAccept({ kind: "idle" });
     setCounterCopied(false);
@@ -181,7 +183,7 @@ export function SuggestionBanner({
     setResting(null);
     setTwoSigs(false);
     onAcceptedRef.current?.(null);
-  }, [validSuggestion?.owner, validSuggestion?.price, validSuggestion?.market, validSuggestion?.from]);
+  }, [raw]);
 
   // Read the owner's resting closes for the banner line. Best effort: a
   // failed read leaves no replacing notice and Accept re-reads anyway.
@@ -521,7 +523,7 @@ export function SuggestionBanner({
         )}
         {accept.kind === "ok" && (
           <p className="num order-6 w-full shrink-0 break-all text-[12px] text-gain sm:order-none sm:w-auto sm:mt-2">
-            Accepted · order {accept.orderId}{" "}
+            Accepted · your TP is resting on Perpl ·{" "}
             <a className="underline" href={explorerTxUrl(network, accept.hash)} target="_blank" rel="noreferrer">
               View on the {network === "mainnet" ? "MonadVision" : "testnet"} explorer
             </a>
