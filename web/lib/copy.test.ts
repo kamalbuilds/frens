@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { decodeFunctionData } from "viem";
-import { encodeCopyOrder, toCopyOrder, type CopyOrderDesc, type FriendTrade } from "./copy";
+import { decodeAbiParameters, decodeFunctionData, type Abi, type Hex } from "viem";
+import { COPY_BUILDER_FEE_PER_100K, encodeCopyOrder, toCopyOrder, type CopyOrderDesc, type FriendTrade } from "./copy";
+import officialAbi from "./exchange-official.abi.json";
 import { exchangeAbi } from "./perpl";
 import { encodeCloseOrder, sizeToLots } from "./suggest";
 
@@ -188,35 +189,34 @@ describe("toCopyOrder", () => {
 
 describe("encodeCopyOrder", () => {
   const wire = (order: CopyOrderDesc) => {
-    const decoded = decodeFunctionData({ abi: exchangeAbi, data: encodeCopyOrder(order) });
-    expect(decoded.functionName).toBe("execOrder");
-    return decoded.args?.[0] as CopyOrderDesc;
+    const decoded = decodeFunctionData({ abi: officialAbi as Abi, data: encodeCopyOrder(order) });
+    expect(decoded.functionName).toBe("execOrderV2");
+    return { order: decoded.args?.[0] as CopyOrderDesc, extension: decoded.args?.[1] as Hex };
   };
 
   it("round trips through viem decodeFunctionData to the same struct", () => {
     for (const side of ["long", "short"] as const) {
       const order = toCopyOrder({ market: 16, side }, META, opts());
-      expect(wire(order)).toEqual(order);
+      expect(wire(order).order).toEqual(order);
     }
   });
 
   it("carries the taker flags and open order type on the wire, not just in the struct", () => {
-    const long = wire(toCopyOrder(FRIEND_LONG, META, opts()));
+    const long = wire(toCopyOrder(FRIEND_LONG, META, opts())).order;
     expect(long.orderType).toBe(WIRE_OPEN_LONG);
     expect(long.immediateOrCancel).toBe(true);
     expect(long.postOnly).toBe(false);
     expect(long.pricePNS).toBe(714000n);
     expect(long.lotLNS).toBe(179n);
-    const short = wire(toCopyOrder({ market: 16, side: "short" }, META, opts()));
+    const short = wire(toCopyOrder({ market: 16, side: "short" }, META, opts())).order;
     expect(short.orderType).toBe(WIRE_OPEN_SHORT);
     expect(short.pricePNS).toBe(686000n);
   });
 
-  it("is byte for byte the calldata a close order sends", () => {
-    // The copier signs these bytes, so an open and a close of the same struct
-    // must serialize identically: the Exchange reads the direction out of the
-    // order type in the struct, not out of the selector.
-    const order = toCopyOrder(FRIEND_LONG, META, opts());
-    expect(encodeCopyOrder(order)).toBe(encodeCloseOrder(order));
+  it("carries frens' builder attribution (id 23) at the configured fee", () => {
+    const { extension } = wire(toCopyOrder(FRIEND_LONG, META, opts()));
+    const [version, payload] = decodeAbiParameters([{ type: "uint16" }, { type: "bytes" }], extension);
+    expect(version).toBe(1);
+    expect(decodeAbiParameters([{ type: "uint256" }, { type: "uint256" }], payload)).toEqual([23n, BigInt(COPY_BUILDER_FEE_PER_100K)]);
   });
 });
