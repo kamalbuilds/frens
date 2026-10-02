@@ -96,6 +96,7 @@ export function SuggestionBanner({
   roomShareLink,
   callHashes,
   acceptRequest,
+  chartActions,
   passRequest,
 }: {
   friends: Friend[];
@@ -113,6 +114,8 @@ export function SuggestionBanner({
   /// The room's accepted-call receipts (?c=): resting TPs created through frens are found from these.
   callHashes?: readonly string[];
   acceptRequest?: number;
+  /// The chart is drawing this call with its own Accept and Pass: the banner drops its duplicate buttons.
+  chartActions?: boolean;
   passRequest?: number;
 }) {
   const [raw, setRaw] = useState<string | null>(null);
@@ -326,7 +329,7 @@ export function SuggestionBanner({
     onSuggestionRef.current = onSuggestion;
     onAcceptedRef.current = onAcceptedChange;
     passRef.current = pass;
-    acceptRef.current = doAccept;
+    acceptRef.current = passkey && passkeyFunded ? doAcceptWithPasskey : doAccept;
   });
 
   // The chart's own ghost-line buttons resolve through the same flow: the
@@ -447,7 +450,10 @@ export function SuggestionBanner({
         {evaluated.text} <span className="hidden text-muted sm:inline">PnL from the room position.</span>
       </p>
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:mt-2 sm:gap-2">
-        {!accepted && (
+        {!accepted && chartActions && (
+          <p className="order-1 text-[12px] text-muted sm:order-none sm:text-[13px]">Accept or pass on the chart.</p>
+        )}
+        {!accepted && !chartActions && (
           <div className="order-1 flex shrink-0 flex-wrap items-center gap-1.5 sm:order-none sm:gap-2">
             <button
               type="button"
@@ -478,13 +484,15 @@ export function SuggestionBanner({
             {counterCopied ? "Copied" : "Send counter link"}
           </button>
         )}
-        <button
-          type="button"
-          onClick={pass}
-          className={`${STRIP_BTN} order-3 border border-edge hover:bg-raised sm:order-none`}
-        >
-          Pass
-        </button>
+        {!chartActions && (
+          <button
+            type="button"
+            onClick={pass}
+            className={`${STRIP_BTN} order-3 border border-edge hover:bg-raised sm:order-none`}
+          >
+            Pass
+          </button>
+        )}
         {replacing.length > 0 && !accepted && (
           <p className="num order-4 basis-full text-[12px] text-muted sm:order-none sm:basis-auto sm:mt-1">
             {replacementNotice(replacing[0]!.price, priceDecimals)}

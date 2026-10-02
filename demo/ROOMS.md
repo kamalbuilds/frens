@@ -1,7 +1,7 @@
 # Testnet demo room (seeded by demo/seed-testnet.ts)
 
-Demo link, call waiting (bo calls a TP 4% below mark on dee's short; replaces cy's taken TP on Accept):
-https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet&n=b379:ana,9142:bo,4eb6:cy,073f:dee&c=0xc1581071d22d3192a27911a53191b083f166d6b99f4ce2aae95b8d1d1dd751a8,0x850e07e613a53298c1b65df48a477dd2e714b40d00a58e1c4fa68f43388bd2f0,0x4503ba27421f4da209534fc63faf6d1452029e6ac4a031e4b135ea4717a71ad3,0x3627b758d3c5d09f0b444aec37e2aba76227c210f0893ca4834a4b397b651585,0x7bff515503e590a5fb6831f9dd89051cd6f03448389808f798d2b121bd50eb5a&s=WyIweDA3M2Y0NzVhMDBlYzU0MTcyZjM4ODY0YjEyYjMyZTdmNDgxNjA3ZTkiLDE2LCJzaG9ydCIsODE1NDIsbnVsbCwiMHg5MTQyN2E1ZGUxNjdFMkZjNzY5M0NlNEYwZjA3ODRBNTY5NWI2MjQ0IiwxNzkwOTA3NjI3MTQzXQ
+Demo link, call waiting (bo calls a TP 1.5% below mark on dee's short; replaces cy's taken TP on Accept):
+https://frenstrade.vercel.app/r/Bz9HWgDsVBcvOIZLErMuf0gWB-lOtmTx6bfIEt37xBGDJv4-I7fc7ZFCel3hZ-L8dpPOTw8HhKVpW2JEs3kPfrpr2HVxS77X4_nzA4cfDMw?net=testnet&n=b379:ana,9142:bo,4eb6:cy,073f:dee&c=0xc1581071d22d3192a27911a53191b083f166d6b99f4ce2aae95b8d1d1dd751a8,0x850e07e613a53298c1b65df48a477dd2e714b40d00a58e1c4fa68f43388bd2f0,0x4503ba27421f4da209534fc63faf6d1452029e6ac4a031e4b135ea4717a71ad3,0x3627b758d3c5d09f0b444aec37e2aba76227c210f0893ca4834a4b397b651585,0x7bff515503e590a5fb6831f9dd89051cd6f03448389808f798d2b121bd50eb5a&s=WyIweDA3M2Y0NzVhMDBlYzU0MTcyZjM4ODY0YjEyYjMyZTdmNDgxNjA3ZTkiLDE2LCJzaG9ydCIsODM1OTYsbnVsbCwiMHg5MTQyN2E1ZGUxNjdFMkZjNzY5M0NlNEYwZjA3ODRBNTY5NWI2MjQ0IiwxNzkwOTA4MjY5OTQ1XQ
 
 
 Seeded 2026-10-01T18:39:45.371Z. Perpl testnet, market 16 (BTC). Mark at seeding: 85171.8.
