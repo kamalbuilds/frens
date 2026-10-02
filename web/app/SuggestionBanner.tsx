@@ -504,7 +504,7 @@ export function SuggestionBanner({
         )}
         {replacing.length > 0 && !accepted && (
           <p className="num order-4 basis-full text-[12px] text-muted sm:order-none sm:basis-auto sm:mt-1">
-            {replacementNotice(replacing[0]!.price, priceDecimals)}
+            {replacementNotice(replacing[0]!.price, priceDecimals, nameFor(suggestion.owner))}
             {replacing.length > 1 ? ` (+${replacing.length - 1} more)` : ""}
             {!ACCEPT_BATCH_SUPPORTED ? ` · ${TWO_SIGNATURE_NOTICE}` : ""}
           </p>

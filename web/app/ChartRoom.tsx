@@ -1897,7 +1897,11 @@ export function ChartRoom({
           {incoming && ghostPrice !== null && ghostY !== null && (
             <div
               className="absolute left-12 z-10 flex gap-1.5"
-              style={{ transform: `translateY(${ghostY + 18}px)`, top: 0 }}
+              // Below the line by default; above it when below would land on the volume strip (bottom 14%).
+              style={{
+                transform: `translateY(${ghostY + 18 + 44 > (box.current?.clientHeight ?? Infinity) * 0.86 ? ghostY - 54 : ghostY + 18}px)`,
+                top: 0,
+              }}
             >
               {ghostAccepted === null && (
                 <button
@@ -1905,7 +1909,7 @@ export function ChartRoom({
                   data-nodrag
                   onClick={() => setAcceptReq((r) => r + 1)}
                   aria-label={`Accept the suggestion at ${formatPrice(ghostPrice, decimals)}`}
-                  className="rounded-[6px] bg-accent px-2.5 py-1 text-[12px] font-medium text-page active:scale-[0.97]"
+                  className="min-h-[36px] rounded-[6px] bg-accent px-3.5 py-1 text-[13px] font-medium text-page active:scale-[0.97] sm:min-h-0 sm:px-2.5 sm:text-[12px]"
                 >
                   Accept
                 </button>
@@ -1915,7 +1919,7 @@ export function ChartRoom({
                 data-nodrag
                 onClick={() => setPassReq((r) => r + 1)}
                 aria-label="Pass on this suggestion"
-                className="rounded-[6px] border border-edge bg-panel px-2.5 py-1 text-[12px] font-medium hover:bg-raised active:scale-[0.97]"
+                className="min-h-[36px] rounded-[6px] border border-edge bg-panel px-3.5 py-1 text-[13px] font-medium hover:bg-raised active:scale-[0.97] sm:min-h-0 sm:px-2.5 sm:text-[12px]"
               >
                 Pass
               </button>

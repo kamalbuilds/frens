@@ -165,7 +165,7 @@ describe("accept batch", () => {
   });
 
   it("banner replacing line names the old TP price", () => {
-    expect(replacementNotice(72000, 1)).toBe("Replaces your TP at 72,000.0");
+    expect(replacementNotice(72000, 1, "dee")).toBe("Replaces dee's TP at 72,000.0");
   });
 });
 
