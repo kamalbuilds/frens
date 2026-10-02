@@ -18,6 +18,24 @@ const from = latest - BigInt(Math.round(hours * 12_000));
 const ranges: [bigint, bigint][] = [];
 for (let b = from; b <= latest; b += CHUNK) ranges.push([b, b + CHUNK - 1n > latest ? latest : b + CHUNK - 1n]);
 
+type RawLog = { data: Hex; topics: [Hex]; transactionHash: Hex; blockNumber: Hex };
+
+// A busy 1,000-block range can exceed viem's 10 MB response cap: halve it until it fits.
+async function getLogs(a: bigint, z: bigint): Promise<RawLog[]> {
+  for (let i = 0; ; i++) {
+    try {
+      return (await client.request({ method: "eth_getLogs", params: [{ address: exchange, topics: [ORDER_REQUEST_V2_TOPIC0], fromBlock: `0x${a.toString(16)}`, toBlock: `0x${z.toString(16)}` }] })) as RawLog[];
+    } catch (e) {
+      if (String(e).includes("ResponseBodyTooLarge") && z > a) {
+        const mid = (a + z) / 2n;
+        return [...(await getLogs(a, mid)), ...(await getLogs(mid + 1n, z))];
+      }
+      if (i === 4) { failed++; console.error(`range ${a}-${z} failed: ${String(e).slice(0, 120)}`); return []; }
+      await new Promise((r) => setTimeout(r, 500 * 2 ** i));
+    }
+  }
+}
+
 type Row = { kind: "call" | "copy"; tag: string; account: bigint; tx: Hex; block: bigint };
 const rows: Row[] = [];
 let largeIds = 0;
@@ -27,17 +45,8 @@ await Promise.all(
   Array.from({ length: 8 }, async () => {
     while (next < ranges.length) {
       const [a, z] = ranges[next++]!;
-      let logs;
-      for (let i = 0; ; i++) {
-        try {
-          logs = await client.request({ method: "eth_getLogs", params: [{ address: exchange, topics: [ORDER_REQUEST_V2_TOPIC0], fromBlock: `0x${a.toString(16)}`, toBlock: `0x${z.toString(16)}` }] });
-          break;
-        } catch (e) {
-          if (i === 4) { failed++; console.error(`range ${a}-${z} failed: ${String(e).slice(0, 120)}`); break; }
-          await new Promise((r) => setTimeout(r, 500 * 2 ** i));
-        }
-      }
-      for (const l of (logs ?? []) as { data: Hex; topics: [Hex]; transactionHash: Hex; blockNumber: Hex }[]) {
+      const logs = await getLogs(a, z);
+      for (const l of logs) {
         const ev = decodeEventLog({ abi: officialAbi as AbiEvent[], data: l.data, topics: l.topics });
         const { orderDescId, orderType, accountId } = ev.args as unknown as { orderDescId: bigint; orderType: number; accountId: bigint };
         if (orderDescId >> 96n !== 0n) largeIds++;
