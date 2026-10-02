@@ -317,7 +317,7 @@ export function ChartRoom({
   // Trustless call receipts from the room link (?c=): each hash verified
   // against its own transaction receipt, no log scanning.
   const [callHashes, setCallHashes] = useState<string[]>(() => initialCalls ?? []);
-  const [receiptCalls, setReceiptCalls] = useState<(PricedCall & { hit?: boolean; resting?: boolean })[]>([]);
+  const [receiptCalls, setReceiptCalls] = useState<(PricedCall & { hit?: boolean; resting?: boolean; stake?: { state: string; amount: number } | null })[]>([]);
   const recFor = (addr: string) => {
     const hyper = callRecords[`${net}:${addr.toLowerCase()}`] ?? null;
     if (hyper) return hyper;
@@ -530,7 +530,7 @@ export function ChartRoom({
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => {
         if (cancelled || !ok || !Array.isArray(body.calls)) return;
-        setReceiptCalls(body.calls as (PricedCall & { hit?: boolean; resting?: boolean })[]);
+        setReceiptCalls(body.calls as (PricedCall & { hit?: boolean; resting?: boolean; stake?: { state: string; amount: number } | null })[]);
       })
       .catch(() => {
         // A missing record hides the line; the card still shows the position.
@@ -1575,6 +1575,7 @@ export function ChartRoom({
                   <span className="num text-[15px]">
                     <span className={r.hit > 0 ? "text-accent" : "text-muted"}>{r.hit} hit</span>
                     <span className="text-muted"> / {r.taken} taken</span>
+                    {r.earned > 0 && <span data-earned className="text-gain"> · earned {r.earned} aUSD</span>}
                   </span>
                 </span>
               );
@@ -2176,6 +2177,7 @@ export function ChartRoom({
                       {restingCall && (
                         <span data-resting-call className="mt-0.5 block text-[11px] text-gain">
                           TP {formatPrice(restingCall.price as number, decimals)} from {display(restingCall.caller)} · resting on Perpl
+                          {restingCall.stake?.state === "open" ? ` · ${restingCall.stake.amount} aUSD staked` : ""}
                         </span>
                       )}
                     </span>

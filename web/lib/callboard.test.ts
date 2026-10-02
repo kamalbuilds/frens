@@ -14,11 +14,19 @@ describe("callBoard", () => {
       { caller: CY, hit: true },
       { caller: BO },
     ]);
-    expect(rows.map((r) => [r.caller, r.taken, r.hit])).toEqual([
-      [CY, 2, 1],
-      [ANA, 2, 0],
-      [BO, 1, 0],
+    expect(rows.map((r) => [r.caller, r.taken, r.hit, r.earned])).toEqual([
+      [CY, 2, 1, 0],
+      [ANA, 2, 0, 0],
+      [BO, 1, 0, 0],
     ]);
+  });
+  it("counts only paid stakes as earned, not open or refunded ones", () => {
+    const rows = callBoard([
+      { caller: CY, hit: true, stake: { state: "paid", amount: 2 } },
+      { caller: CY, hit: false, stake: { state: "open", amount: 5 } },
+      { caller: CY, hit: false, stake: { state: "refunded", amount: 3 } },
+    ]);
+    expect(rows[0]!.earned).toBe(2);
   });
   it("is empty for a room with no verified calls", () => {
     expect(callBoard([])).toEqual([]);

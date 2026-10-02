@@ -14,6 +14,7 @@ import { NETWORKS } from "./perpl";
 import { roomLink } from "./network";
 import {
   encodeCallsParam,
+  isCallsOrder,
   parseCallsParam,
   priceCalls,
   priceInMarketUnits,
@@ -161,7 +162,7 @@ describe("verifyCallReceipts", () => {
   it("keeps the call and drops the self order, the failed tx and the empty receipt", async () => {
     const out = await verifyCallReceipts("testnet", [H1, H2, H3, H4], fakeClient(byHash));
     expect(out).toEqual([
-      { hash: H1, caller: getAddress(FRIEND), owner: OWNER, market: 16, orderType: 2, orderId: null, pricePNS: "732293", block: 100 },
+      { hash: H1, caller: getAddress(FRIEND), owner: OWNER, market: 16, orderType: 2, orderId: null, orderDescId: mine.toString(), pricePNS: "732293", block: 100 },
     ] satisfies VerifiedCall[]);
   });
 
@@ -284,7 +285,7 @@ describe("priceCalls", () => {
   }
 
   function call(market: number, pricePNS: string, hash: Hex): VerifiedCall {
-    return { hash, caller: FRIEND, owner: OWNER, market, orderType: 2, orderId: null, pricePNS, block: 1 };
+    return { hash, caller: FRIEND, owner: OWNER, market, orderType: 2, orderId: null, orderDescId: "0", pricePNS, block: 1 };
   }
 
   it("prices each call in its own market's units", async () => {
@@ -321,5 +322,22 @@ describe("priceCalls", () => {
     const reads: number[] = [];
     expect(await priceCalls([], metaClient({}, reads), freshExchange())).toEqual([]);
     expect(reads).toEqual([]);
+  });
+});
+
+describe("isCallsOrder", () => {
+  const call = { orderType: 3, pricePNS: "861170" };
+  const mine = { accountId: 748, orderType: 3, priceONS: 61170, lotLNS: 1200 };
+  it("is the call's order when type, price, owner and lots all match", () => {
+    expect(isCallsOrder(mine, call, 800_000n, 748n)).toBe(true);
+  });
+  it("is not when the id was recycled for someone else's order", () => {
+    expect(isCallsOrder({ ...mine, accountId: 751 }, call, 800_000n, 748n)).toBe(false);
+    expect(isCallsOrder({ ...mine, priceONS: 81765 }, call, 800_000n, 748n)).toBe(false);
+    expect(isCallsOrder({ ...mine, orderType: 2 }, call, 800_000n, 748n)).toBe(false);
+  });
+  it("is not when filled, or when the owner has no account", () => {
+    expect(isCallsOrder({ ...mine, lotLNS: 0 }, call, 800_000n, 748n)).toBe(false);
+    expect(isCallsOrder(mine, call, 800_000n, 0n)).toBe(false);
   });
 });
