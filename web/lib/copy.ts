@@ -8,9 +8,10 @@
 // mark reverts with TakerOrderSettlementFailed.
 //
 // Nothing here is custodial and no key is involved: toCopyOrder only builds the
-// struct, encodeCopyOrder turns it into execOrder calldata, and wallet.ts hands
+// struct, encodeCopyOrder turns it into execOrderV2 calldata with frens' builder attribution, and wallet.ts hands
 // that calldata to the copier's own EIP-1193 wallet to sign. The order stays
 // visible and refusable in the wallet's own confirmation UI.
+import { builderExtension, encodeOrderV2, FRENS_BUILDER_ID } from "./builder";
 import type { Hex } from "viem";
 import type { PerpMeta } from "./readPosition";
 import {
@@ -151,10 +152,10 @@ export function toCopyOrder(
   };
 }
 
-// execOrder calldata is the same call for an open and a close order: the
-// Exchange reads the direction out of the order type inside the struct. The
-// copier signs these bytes in their own wallet, so they must be byte for byte
-// what a close order sends.
+// A copy goes out as execOrderV2 carrying frens' builder attribution (Perpl builder id 23, proven on chain by
+// spike/builder-probe.ts). COPY_BUILDER_FEE_PER_100K is the fee frens charges on the size a copy opens: 0 until Kamal
+// sets one (max 1,000 = 1%). The copier signs these bytes in their own wallet.
+export const COPY_BUILDER_FEE_PER_100K = 0;
 export function encodeCopyOrder(order: CopyOrderDesc): Hex {
-  return encodeCloseOrder(order);
+  return encodeOrderV2(order, builderExtension(FRENS_BUILDER_ID, COPY_BUILDER_FEE_PER_100K));
 }
