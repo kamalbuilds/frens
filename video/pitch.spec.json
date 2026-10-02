@@ -1,0 +1,208 @@
+{
+ "out": "frens-pitch.mp4",
+ "audio": "vo/out-pitch/narration.wav",
+ "work": "asm-pitch",
+ "beats": [
+  {
+   "name": "problem",
+   "t0": 0,
+   "t1": 18.3,
+   "pieces": [
+    {
+     "src": "work/p-problem.mp4",
+     "ss": 0,
+     "se": 18.3
+    }
+   ]
+  },
+  {
+   "name": "perpl",
+   "t0": 18.3,
+   "t1": 23.9,
+   "pieces": [
+    {
+     "src": "work/E-live.mp4",
+     "ss": 21.2,
+     "se": 26.8,
+     "zoom": {
+      "fx": 0.85,
+      "fy": 0.5,
+      "from": 1,
+      "to": 1.12
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap9.png",
+     "a": 18.9,
+     "b": 23.6
+    }
+   ]
+  },
+  {
+   "name": "quotes",
+   "t0": 23.9,
+   "t1": 34.4,
+   "pieces": [
+    {
+     "src": "work/p-quotes.mp4",
+     "ss": 0,
+     "se": 10.5
+    }
+   ]
+  },
+  {
+   "name": "intro",
+   "t0": 34.4,
+   "t1": 37.9,
+   "pieces": [
+    {
+     "src": "work/p-intro.mp4",
+     "ss": 0,
+     "se": 3.5
+    }
+   ]
+  },
+  {
+   "name": "faces",
+   "t0": 37.9,
+   "t1": 41.8,
+   "pieces": [
+    {
+     "src": "work/A-room.mp4",
+     "ss": 0,
+     "se": 3.9,
+     "zoom": {
+      "fx": 0.45,
+      "fy": 0.62,
+      "from": 1,
+      "to": 1.1
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap1.png",
+     "a": 38.2,
+     "b": 41.6
+    }
+   ]
+  },
+  {
+   "name": "drag",
+   "t0": 41.8,
+   "t1": 45.6,
+   "pieces": [
+    {
+     "src": "work/F-drag.mp4",
+     "ss": 4.6,
+     "se": 8.4,
+     "zoom": {
+      "fx": 0.22,
+      "fy": 0.6,
+      "from": 1,
+      "to": 1.08
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap10.png",
+     "a": 42.2,
+     "b": 45.4
+    }
+   ]
+  },
+  {
+   "name": "accept",
+   "t0": 45.6,
+   "t1": 50.6,
+   "pieces": [
+    {
+     "src": "work/B-call.mp4",
+     "ss": 3,
+     "se": 6,
+     "zoom": {
+      "fx": 0.2,
+      "fy": 0.4,
+      "from": 1,
+      "to": 1.1
+     }
+    },
+    {
+     "src": "work/B-call.mp4",
+     "ss": 12,
+     "se": 14,
+     "zoom": {
+      "fx": 0.2,
+      "fy": 0.4,
+      "from": 1,
+      "to": 1.1
+     }
+    }
+   ],
+   "caps": [
+    {
+     "png": "work/caps/cap6.png",
+     "a": 47.6,
+     "b": 50.4
+    }
+   ]
+  },
+  {
+   "name": "order",
+   "t0": 50.6,
+   "t1": 56.6,
+   "pieces": [
+    {
+     "src": "work/B-call.mp4",
+     "ss": 17.9,
+     "se": 23.1,
+     "zoom": {
+      "fx": 0.35,
+      "fy": 0.55,
+      "from": 1,
+      "to": 1.1
+     }
+    }
+   ]
+  },
+  {
+   "name": "chain",
+   "t0": 56.6,
+   "t1": 70,
+   "pieces": [
+    {
+     "src": "work/p-chain.mp4",
+     "ss": 0,
+     "se": 13.4
+    }
+   ]
+  },
+  {
+   "name": "telegram",
+   "t0": 70,
+   "t1": 82.9,
+   "pieces": [
+    {
+     "src": "work/p-tg.mp4",
+     "ss": 0,
+     "se": 12.9
+    }
+   ]
+  },
+  {
+   "name": "end",
+   "t0": 82.9,
+   "t1": 89.5,
+   "pieces": [
+    {
+     "src": "work/p-end.mp4",
+     "ss": 0,
+     "se": 6.6
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,100 @@
+{
+ "out": "frens-ad.mp4",
+ "audio": "vo/out-ad/narration.wav",
+ "work": "asm-ad",
+ "beats": [
+  {
+   "name": "hook",
+   "t0": 0,
+   "t1": 7.2,
+   "pieces": [
+    {
+     "src": "work/ad-hook.mp4",
+     "ss": 0,
+     "se": 7.2
+    }
+   ]
+  },
+  {
+   "name": "call line",
+   "t0": 7.2,
+   "t1": 10.7,
+   "pieces": [
+    {
+     "src": "work/B-call.mp4",
+     "ss": 3,
+     "se": 6.5,
+     "vf": "crop=1440:810:60:225",
+     "zoom": {
+      "fx": 0.15,
+      "fy": 0.42,
+      "from": 1,
+      "to": 1.08
+     }
+    }
+   ]
+  },
+  {
+   "name": "accept",
+   "t0": 10.7,
+   "t1": 14.9,
+   "pieces": [
+    {
+     "src": "work/B-call.mp4",
+     "ss": 9.6,
+     "se": 13.8,
+     "vf": "crop=1440:810:60:225",
+     "zoom": {
+      "fx": 0.2,
+      "fy": 0.4,
+      "from": 1,
+      "to": 1.1
+     }
+    }
+   ]
+  },
+  {
+   "name": "signature",
+   "t0": 14.9,
+   "t1": 20.8,
+   "pieces": [
+    {
+     "src": "work/B-call.mp4",
+     "ss": 13.9,
+     "se": 16.6,
+     "vf": "crop=1440:810:60:225",
+     "zoom": {
+      "fx": 0.2,
+      "fy": 0.4,
+      "from": 1,
+      "to": 1.08
+     }
+    },
+    {
+     "src": "work/B-call.mp4",
+     "ss": 18,
+     "se": 21.3,
+     "vf": "crop=1440:810:60:225",
+     "zoom": {
+      "fx": 0.2,
+      "fy": 0.4,
+      "from": 1,
+      "to": 1.08
+     }
+    }
+   ]
+  },
+  {
+   "name": "end",
+   "t0": 20.8,
+   "t1": 26.8,
+   "pieces": [
+    {
+     "src": "work/ad-end.mp4",
+     "ss": 0,
+     "se": 6
+    }
+   ]
+  }
+ ]
+}

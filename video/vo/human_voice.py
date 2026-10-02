@@ -37,7 +37,8 @@ PRONOUNCE = {  # spoken form -> written form; Chatterbox mangles these
     "AI": "A.I.",
     "MCP": "M.C.P.",
     "tx": "transaction",
-    "aUSD": "A.U.S.D.",
+    "aUSD": "A U S D",
+    "perps": "perps",
     "PnL": "P.N.L.",
 }
 TURN_WORDS = ("so ", "then ", "but ", "and then ", "now ")
@@ -130,7 +131,7 @@ NUMBERS = {"eighty-six": "86", "eighty six": "86", "ten thousand": "10000", "six
            "three": "3", "four": "4", "five": "5", "ten": "10"}
 
 
-ALIASES = {"frens": "friends", "fren": "friend", "perpl": "purple", "frens.": "friends", "ausd": "a u s d", "pnl": "p n l", "cy": "sy", "bo": "bow", "dee": "d", "mia": "mia"}
+ALIASES = {"pubs": "perps", "purps": "perps", "aust": "a u s d", "frens": "friends", "fren": "friend", "perpl": "purple", "frens.": "friends", "ausd": "a u s d", "pnl": "p n l", "cy": "sy", "bo": "bow", "dee": "d", "mia": "mia"}
 
 
 def words_of(s):

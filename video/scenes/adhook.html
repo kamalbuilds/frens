@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+<style>
+#row{position:absolute;left:200px;top:340px;display:flex;align-items:center;gap:36px}
+#row svg{width:150px;height:150px;border-radius:50%;flex:none}
+#bub{background:var(--raised);border:1px solid var(--edge);border-radius:36px 36px 36px 8px;padding:34px 56px;font:700 132px/1 "SG";letter-spacing:-.04em;white-space:nowrap}
+#who{position:absolute;left:386px;top:300px;font:500 26px "PM";color:var(--muted)}
+#line{position:absolute;left:0;top:419px;height:12px;width:1600px;opacity:0}
+#pill{position:absolute;top:393px;right:60px;font:500 30px "PM";background:var(--accent);color:var(--page);padding:10px 22px;border-radius:10px;opacity:0}
+.car{display:inline-block;width:8px;height:112px;background:var(--ink);vertical-align:-14px;margin-left:6px}
+</style>
+<div id="who">dee</div>
+<div id="row"><div id="f"></div><div id="bub"><span id="tx"></span><span class="car" id="car"></span></div></div>
+<svg id="line" viewBox="0 0 1600 12" preserveAspectRatio="none"><line id="ln" x1="0" y1="6" x2="1600" y2="6" stroke="#C8FF3D" stroke-width="6" stroke-dasharray="26 18" stroke-linecap="round"/></svg>
+<div id="st" style="position:absolute;left:470px;top:566px;font:500 30px PM;color:#8B8B9E;opacity:0"></div>
+<div id="pill">86,000</div>
+<script src="faces.js"></script><script src="engine.js"></script>
+<script>
+$("#f").outerHTML = window.FACES.dee;
+const txt = "close at 86k";
+window.render = (t) => {
+  const ty = seg(t, cue("type", 0.3), cue("type", 0.3) + 1.1);
+  $("#tx").textContent = txt.slice(0, Math.floor(ty * (txt.length + 0.999)));
+  const row = $("#row"), who = $("#who");
+  const l = eio(seg(t, cue("line", 2.6), cue("line", 2.6) + 0.7));
+  row.style.transform = `translate(${-80 * l}px, ${-(1 - 1) * 0}px) scale(${1 - 0.5 * l})`; row.style.transformOrigin = "0 50%";
+  who.style.opacity = 1 - l;
+  $("#car").style.opacity = (Math.floor(t * 2) % 2 === 0 || (ty > 0 && ty < 1)) && l === 0 ? 1 : 0;
+  const ln = $("#line"); ln.style.opacity = l > 0 ? 1 : 0; ln.style.clipPath = `inset(0 ${100 - l * 100}% 0 ${12 * l}%)`;
+  const sts = [[1.8, "sent  11:42"], [3.1, "seen  11:43"], [4.6, "no order placed"]];
+  let cur = ""; for (const [ts, tx] of sts) if (t >= ts) cur = tx;
+  $("#st").textContent = cur; $("#st").style.opacity = cur ? (1 - l) * (cur === "no order placed" ? 1 : 0.9) : 0;
+  $("#st").style.color = cur === "no order placed" ? "#FF6B57" : "#8B8B9E";
+  $("#pill").style.opacity = eo(seg(t, cue("line", 2.6) + 0.55, cue("line", 2.6) + 0.85));
+  $("#ln").style.strokeDashoffset = -t * 60;
+};
+</script>

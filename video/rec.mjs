@@ -56,9 +56,11 @@ const rectOf = (finder) => ev(`(()=>{const el=(${finder});if(!el)return null;el.
 async function clickAt(x, y) { await send("Page.bringToFront"); await applyMetrics(); await glide(x, y); await sleep(120); await mouse("mousePressed", x, y); await sleep(70); await mouse("mouseReleased", x, y); }
 
 let clip = null;
+let healing = false;
 handlers["Page.screencastFrame"] = (p) => {
   send("Page.screencastFrameAck", { sessionId: p.sessionId });
   if (!clip) return;
+  if (p.metadata.deviceWidth !== W || p.metadata.deviceHeight !== H) { if (!healing) { healing = true; applyMetrics().finally(() => setTimeout(() => (healing = false), 300)); } return; }
   const f = `${clip.dir}/f${String(clip.frames.length).padStart(6, "0")}.jpg`;
   fs.writeFileSync(f, Buffer.from(p.data, "base64"));
   clip.frames.push({ f, ts: p.metadata.timestamp, dw: p.metadata.deviceWidth, dh: p.metadata.deviceHeight, ps: p.metadata.pageScaleFactor, ot: p.metadata.offsetTop });
@@ -100,14 +102,16 @@ try {
   if (!process.env.NOCURSOR) await send("Page.addScriptToEvaluateOnNewDocument", { source: CURSOR });
   await send("Page.navigate", { url });
   await sleep(Number(process.env.LOAD_MS ?? 9000));
+  await applyMetrics();
   if (!process.env.NOCURSOR) await ev(CURSOR);
   const log = [];
   for (const s of JSON.parse(fs.readFileSync(stepsFile, "utf8"))) {
     if (s.wait) await sleep(s.wait);
+    if (s.metrics) await applyMetrics();
     if ("rec" in s) { if (s.rec) await startRec(s.rec); else await stopRec(); }
     if (s.mark && clip) clip.marks[s.mark] = Date.now() / 1000;
-    if (s.goto) { await send("Page.navigate", { url: sub(s.goto) }); await sleep(s.load ?? 6000); if (!process.env.NOCURSOR) await ev(CURSOR); }
-    if (s.goto_file) { for (let i = 0; i < 120 && !fs.existsSync(s.goto_file); i++) await sleep(1000); await send("Page.navigate", { url: fs.readFileSync(s.goto_file, "utf8").trim() }); await sleep(s.load ?? 6000); if (!process.env.NOCURSOR) await ev(CURSOR); }
+    if (s.goto) { await send("Page.navigate", { url: sub(s.goto) }); await sleep(s.load ?? 6000); await applyMetrics(); if (!process.env.NOCURSOR) await ev(CURSOR); }
+    if (s.goto_file) { for (let i = 0; i < 120 && !fs.existsSync(s.goto_file); i++) await sleep(1000); await send("Page.navigate", { url: fs.readFileSync(s.goto_file, "utf8").trim() }); await sleep(s.load ?? 6000); await applyMetrics(); if (!process.env.NOCURSOR) await ev(CURSOR); }
     if (s.sh) { const r = execSync(sub(s.sh), { encoding: "utf8", shell: "/bin/zsh", cwd: s.cwd ?? process.cwd(), env: { ...process.env, PATH: `${process.env.HOME}/.bun/bin:${process.env.PATH}` }, timeout: s.timeout ?? 180000 }).trim(); if (s.as) vars[s.as] = r.split("\n").pop(); log.push({ sh: s.sh.slice(0, 50), out: r.slice(-300) }); }
     if (s.eval) { const v = await ev(sub(s.eval)); if (s.as) vars[s.as] = v; log.push({ eval: s.eval.slice(0, 60), value: v }); }
     if (s.waitFor) { let ok = false; const to = Date.now() + (s.timeout ?? 60000); while (Date.now() < to) { if (await ev(s.waitFor)) { ok = true; break; } await sleep(400); } log.push({ waitFor: s.waitFor.slice(0, 70), ok }); if (!ok && !s.soft) throw new Error("waitFor timed out: " + s.waitFor); }
@@ -125,6 +129,16 @@ try {
       if (!ok && !s.soft) throw new Error("click failed: " + s.click);
     }
     if (s.clickSel) { const r = await rectOf(`document.querySelector(${JSON.stringify(s.clickSel)})`); if (!r) { if (!s.soft) throw new Error("no el: " + s.clickSel); } else { const p = JSON.parse(r); await clickAt(p.x, p.y); log.push({ clickSel: s.clickSel }); } }
+    if (s.dragSel || s.dragAt) {
+      const r = s.dragAt ? JSON.stringify({ x: s.dragAt[0], y: s.dragAt[1] }) : await rectOf(`document.querySelector(${JSON.stringify(s.dragSel)})`);
+      if (!r) { if (!s.soft) throw new Error("no grip: " + s.dragSel); } else {
+        const p = JSON.parse(r); await send("Page.bringToFront"); await applyMetrics(); await glide(p.x, p.y, 800); await sleep(250);
+        await mouse("mousePressed", p.x, p.y); await sleep(120);
+        const n = Math.round((s.ms ?? 1400) / 20), y1 = p.y + (s.dy ?? -60), x1 = p.x + (s.dx ?? 0);
+        for (let k = 1; k <= n; k++) { const t = k / n, e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: p.x + (x1 - p.x) * e, y: p.y + (y1 - p.y) * e, button: "left", buttons: 1 }); await sleep(16); }
+        await sleep(200); await mouse("mouseReleased", x1, y1); mx = x1; my = y1; log.push({ dragSel: s.dragSel });
+      }
+    }
     if (s.hoverSel) { const r = await rectOf(`document.querySelector(${JSON.stringify(s.hoverSel)})`); if (r) { const p = JSON.parse(r); await glide(p.x, p.y); log.push({ hoverSel: s.hoverSel }); } else if (!s.soft) throw new Error("no el: " + s.hoverSel); }
     if (s.move) await glide(s.move[0], s.move[1], s.ms ?? 700);
     if (s.type) { const t = sub(s.type); if (s.slow) { for (const ch of t) { await send("Input.insertText", { text: ch }); await sleep(110); } } else await send("Input.insertText", { text: t }); }

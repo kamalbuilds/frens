@@ -2,12 +2,12 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="base.css">
 <style>
-.card{position:absolute;left:230px;top:150px;width:1140px;background:var(--panel);border:1px solid var(--edge);border-radius:14px;padding:44px 52px;opacity:0}
+.card{position:absolute;left:180px;top:130px;width:1240px;background:var(--panel);border:1px solid var(--edge);border-radius:14px;padding:44px 52px;opacity:0}
 .k{font:500 20px "PM";color:var(--muted);letter-spacing:.12em}
 .row{display:flex;gap:30px;align-items:baseline;margin-top:26px;opacity:0}
 .row .l{font:500 20px "PM";color:var(--muted);width:210px;flex:none}
-.row .v{font:500 30px "PM";word-break:break-all}
-.row .v.big{font:700 54px "SG";letter-spacing:-.02em}
+.row .v{font:500 33px "PM";word-break:break-all}
+.row .v.big{font:700 64px "SG";letter-spacing:-.02em}
 .acc{color:var(--accent)}.gain{color:var(--gain)}
 .who{display:flex;gap:18px;align-items:center}.who svg{width:56px;height:56px;border-radius:50%}
 hr{border:0;border-top:1px solid var(--edge);margin:30px 0 0}
@@ -22,11 +22,12 @@ hr{border:0;border-top:1px solid var(--edge);margin:30px 0 0}
 </div>
 <script src="faces.js"></script><script src="engine.js"></script>
 <script>
-const D = Object.assign({ tx: "0x", caller: "bo", addr: "0x91427a5d…6244", tp: "TP 87,643", rec: "bo  0 hit / 2 taken" }, CUES.data || {});
-$("#tx").textContent = D.tx; $("#cl").innerHTML = `<span class="acc">${D.caller}</span> <span style="font:500 24px PM;color:#8B8B9E">${D.addr}</span>`; $("#tp").textContent = D.tp; $("#rec").textContent = D.rec;
+const D = Object.assign({ tx: "0x", caller: "bo", addr: "0x91427a5d…6244", tp: "TP 87,643", rec: "bo  0 hit / 2 taken", rec0: "bo  0 hit / 1 taken" }, CUES.data || {});
+$("#tx").textContent = D.tx; $("#cl").innerHTML = `<span class="acc">${D.caller}</span> <span style="font:500 24px PM;color:#8B8B9E">${D.addr}</span>`; $("#tp").textContent = D.tp; $("#rec").textContent = D.rec0;
 $("#fx").outerHTML = (window.FACES[D.caller] || window.FACES.bo);
 window.render = (t) => {
   const c = eo(seg(t, 0, 0.5)); $("#card").style.opacity = c; $("#card").style.transform = `translateY(${24 * (1 - c)}px)`;
+  const tk = seg(t, cue("tick", 9.5), cue("tick", 9.5) + 0.4); $("#rec").textContent = t < cue("tick", 9.5) ? D.rec0 : D.rec; $("#rec").style.color = tk > 0 && tk < 1 ? "#C8FF3D" : (t >= cue("tick", 9.5) ? "#C8FF3D" : ""); $("#rec").style.transform = `scale(${1 + 0.06 * Math.sin(Math.PI * tk)})`; $("#rec").style.transformOrigin = "0 50%";
   [["r1", "r1"], ["r2", "r2"], ["r3", "r3"], ["r4", "r4"], ["r5", "r5"]].forEach(([id, k], i) => { const s = cue(k, 0.6 + i * 1.1), a = eo(seg(t, s, s + 0.4)); const e = $("#" + id); e.style.opacity = a; e.style.transform = `translateX(${-20 * (1 - a)}px)`; });
 };
 </script>
