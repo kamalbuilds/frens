@@ -16,7 +16,16 @@ builder id and the API origin whitelist are pending on Perpl.
 - The end user signs the EIP-712 enrollment payload (builderId, maxBuilderFeePer100K, and a statement naming the
   builder); frens generates the Ed25519 key pair. Users can revoke the key on their /apikeys page.
 
-## Conflict, reported rather than resolved
+## Resolved on chain, 2026-10-02 18:xx: Arch was right
+
+Perpl issued builder id 23 (CORS enabled for the API too). A wallet-signed execOrderV2 with the envelope from the
+dex-sdk (abi.encode(uint16 1, abi.encode(uint256 builderId, uint256 feePer100K))) placed resting order 124 that reads
+back builderId 23 and builderFeePer100K 50 (tx 0x78f22dc08df837f14f106289eeaa9f8b7ab5a7165e7aadba8322f7e8e76cf189),
+then cancelled (0x0696656491d1f7f0fb74d85a2ecd20fb56d610333db659165e8eae8dfb827c9b). spike/builder-probe.ts re-runs
+it. So direct wallet orders carry attribution AND a fee (up to 1,000 per 100k = 1%, on the size an order opens or
+increases); the API docs page describes only its own WebSocket path. No API key is needed for copies.
+
+## Conflict, reported rather than resolved (superseded by the section above)
 
 Arch answered "yes" to: does execOrderV2 with a builder extension accept attribution on orders a wallet signs
 directly, without an API key. The docs say direct on-chain orders cannot be attributed. Better evidenced for
