@@ -123,7 +123,7 @@ function NetworkToggle({
           key={n}
           onClick={() => onSwitch(n)}
           aria-pressed={n === net}
-          className={`${compact ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-[12px]"} ${
+          className={`${compact ? "min-h-[44px] px-2.5 text-[11px]" : "px-3 py-1.5 text-[12px]"} ${
             n === net ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"
           }`}
         >
@@ -166,7 +166,7 @@ function MarketTabs({
             key={m.id}
             onClick={() => onPick(m.id)}
             aria-pressed={m.id === marketId}
-            className={`num ${compact ? "shrink-0 whitespace-nowrap px-2 py-1 text-[12px]" : "px-3 py-1.5 text-[12px]"} ${
+            className={`num ${compact ? "min-h-[44px] shrink-0 whitespace-nowrap px-2.5 text-[12px]" : "px-3 py-1.5 text-[12px]"} ${
               m.id === marketId ? on : off
             }`}
           >
@@ -201,7 +201,7 @@ function TimeframeTabs({
           aria-pressed={t.res === res}
           className={`num shrink-0 ${
             compact
-              ? `px-2 py-1 text-[11px] ${t.res === res ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"}`
+              ? `min-h-[44px] px-2 text-[11px] ${t.res === res ? "rounded-[6px] bg-raised text-ink" : "text-muted hover:text-ink"}`
               : `px-2.5 py-1.5 text-[12px] ${t.res === res ? "text-accent underline underline-offset-4" : "text-muted hover:text-ink"}`
           }`}
         >
@@ -1581,7 +1581,7 @@ export function ChartRoom({
             : live.state === "ready" && ` · ${friends.length} live traders opened in the last ${live.data.hours}h`}
         </p>
         {view === "frens" && board.length > 0 && (
-          <div data-callboard className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 sm:ml-auto sm:flex-nowrap sm:self-center sm:pt-0">
+          <div data-callboard className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 sm:ml-auto sm:min-w-0 sm:justify-end sm:self-center sm:pt-0">
             <span className="shrink-0 text-[13px] text-muted">Call record</span>
             {board.slice(0, 3).map((r) => {
               const f = friends.find((x) => x.account.toLowerCase() === r.caller.toLowerCase());
@@ -1707,7 +1707,7 @@ export function ChartRoom({
           )}
         <div
           ref={wrap}
-          className="relative order-1 h-[58vh] min-h-[320px] rounded-[10px] border border-edge bg-panel sm:order-none sm:h-[60vh] sm:max-h-[70vh] sm:min-h-[420px]"
+          className="relative order-1 h-[40vh] min-h-[320px] rounded-[10px] border border-edge bg-panel sm:order-none sm:h-[60vh] sm:max-h-[70vh] sm:min-h-[420px]"
           onPointerDown={onChartPointerDown}
           onPointerMove={onChartPointerMove}
           onPointerUp={endChartDrag}
