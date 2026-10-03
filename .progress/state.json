@@ -17,9 +17,9 @@
           "kind": "auto",
           "name": "a fren's live testnet position decodes from chain (any of 4 seeded frens)",
           "cmd": "bun run demo/read-position.ts 0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD 0x073f475a00ec54172f38864b12b32e7f481607e9 0xb3790F7EBa6bd875714bBeD7e3f9F303871F0CCC",
-          "last_run": "2026-10-03T07:42:36+00:00",
+          "last_run": "2026-10-03T09:12:37+00:00",
           "last_exit": 0,
-          "duration_ms": 1423,
+          "duration_ms": 1785,
           "output_tail": "0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD long 0.01 @ 84887"
         }
       ]
@@ -41,9 +41,9 @@
           "kind": "auto",
           "name": "accept-replace tx succeeded on Perpl testnet with OrderRequestV2",
           "cmd": "FOUNDRY_DISABLE_NIGHTLY_WARNING=1 timeout 30 cast receipt --async --rpc-url https://testnet-rpc.monad.xyz 0xeb51040c5bc7cd08695750d237eed7d3cef3a80b0d18e976c19bbcdb5814d2e4 --json | grep -q \"\\\"status\\\":\\\"0x1\\\".*0xb585865280072cb0f2cb5cf0f49f0e0224c09fa012c92c5f33eabf10287b8beb\"",
-          "last_run": "2026-10-03T07:42:37+00:00",
+          "last_run": "2026-10-03T09:12:38+00:00",
           "last_exit": 0,
-          "duration_ms": 735,
+          "duration_ms": 725,
           "output_tail": ""
         }
       ]
@@ -79,9 +79,9 @@
           "kind": "auto",
           "name": "any account's live position decodes from chain",
           "cmd": "bun run demo/read-position.ts 0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD 0x073f475a00ec54172f38864b12b32e7f481607e9 0xb3790F7EBa6bd875714bBeD7e3f9F303871F0CCC",
-          "last_run": "2026-10-03T07:42:38+00:00",
+          "last_run": "2026-10-03T09:12:40+00:00",
           "last_exit": 0,
-          "duration_ms": 1413,
+          "duration_ms": 2116,
           "output_tail": "0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD long 0.01 @ 84887"
         },
         {
@@ -93,19 +93,28 @@
           "kind": "auto",
           "name": "gtm",
           "cmd": "gtm check frens",
-          "last_run": "2026-10-03T07:42:38+00:00",
+          "last_run": "2026-10-03T09:12:40+00:00",
           "last_exit": 0,
-          "duration_ms": 141,
+          "duration_ms": 204,
           "output_tail": "PASS gtm/frens: people 24, X 8, forum 4, blog 4, paper 1, edge 14 (fresh 7, used 4)"
         },
         {
           "kind": "auto",
           "name": "a taken call's TP is read as hit from chain and candles (cy 0x7bff)",
           "cmd": "bun run demo/check-hit.ts 0x7bff515503e590a5fb6831f9dd89051cd6f03448389808f798d2b121bd50eb5a",
-          "last_run": "2026-10-03T07:42:40+00:00",
+          "last_run": "2026-10-03T09:12:42+00:00",
           "last_exit": 0,
-          "duration_ms": 1571,
-          "output_tail": "0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD TP 84819 type 2: hit over 129 bars"
+          "duration_ms": 1969,
+          "output_tail": "0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD TP 84819 type 2: hit over 135 bars"
+        },
+        {
+          "kind": "auto",
+          "name": "the demo room is full: all 4 seeded frens hold a position (room reads 4 of 4)",
+          "cmd": "bun run demo/read-position.ts --all 0xb3790F7EBa6bd875714bBeD7e3f9F303871F0CCC 0x91427a5de167E2Fc7693Ce4F0f0784A5695b6244 0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD 0x073f475a00ec54172f38864b12b32e7f481607e9",
+          "last_run": "2026-10-03T09:12:45+00:00",
+          "last_exit": 0,
+          "duration_ms": 2655,
+          "output_tail": "0xb3790F7EBa6bd875714bBeD7e3f9F303871F0CCC long 0.001 @ 84610.6\n0x91427a5de167E2Fc7693Ce4F0f0784A5695b6244 short 0.001 @ 84590.6\n0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD long 0.01 @ 84887\n0x073f475a00ec54172f38864b12b32e7f481607e9 short 0.002 @ 86501.4"
         }
       ]
     }
@@ -221,7 +230,12 @@
       "ts": "2026-10-03T07:42:40+00:00",
       "checked": 3,
       "failed_criteria": 0
+    },
+    {
+      "ts": "2026-10-03T09:12:45+00:00",
+      "checked": 3,
+      "failed_criteria": 0
     }
   ],
-  "updated": "2026-10-03T07:42:40+00:00"
+  "updated": "2026-10-03T09:12:45+00:00"
 }
