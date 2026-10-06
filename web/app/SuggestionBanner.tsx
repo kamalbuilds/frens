@@ -27,7 +27,9 @@ import { CALL_STAKE, stakeCalls } from "@/lib/callstake";
 import { verifyCallReceipts } from "@/lib/receipts";
 
 const STAKE_HOURS = 48;
-import { connect, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
+import { connect, sendExecOrder, sendExecOrderWith, signTypedDataInjected } from "@/lib/wallet";
+import { placeStopLossFor, type StopLossPlaced } from "@/lib/stoploss";
+import type { TypedDataSigner } from "@/lib/perplapi";
 import { acceptOwnerCheck, alreadyTaken, evaluateSuggestion, replacementNotice } from "@/lib/acceptance";
 import { PasskeyWallet } from "./PasskeyWallet";
 import type { LocalAccount } from "viem";
@@ -130,6 +132,7 @@ export function SuggestionBanner({
   const [passkeyFunded, setPasskeyFunded] = useState(false);
   const [resting, setResting] = useState<RestingClose[] | null>(null);
   const [twoSigs, setTwoSigs] = useState(false);
+  const [stopLoss, setStopLoss] = useState<StopLossPlaced | null>(null);
 
   useEffect(() => {
     setRaw(readRawParam());
@@ -184,6 +187,7 @@ export function SuggestionBanner({
     setRoomCopied(false);
     setResting(null);
     setTwoSigs(false);
+    setStopLoss(null);
     onAcceptedRef.current?.(null);
   }, [raw]);
 
@@ -339,8 +343,47 @@ export function SuggestionBanner({
     }
   }
 
+  // A stop-loss call is a trigger order on Perpl's trading API: the owner signs one enrollment (wallet or passkey) and,
+  // the first time, allows order forwarding on the Exchange. Same owner gate as a take-profit.
+  async function acceptStopLoss(who: "wallet" | "passkey") {
+    if (!suggestion || !ownerFriend) return;
+    if (accepting.current) return;
+    accepting.current = true;
+    setAccept({ kind: "sending" });
+    try {
+      const owner = who === "passkey" && passkey ? passkey.address : await connect(network);
+      const gate = acceptOwnerCheck(owner, suggestion, nameFor);
+      if (!gate.ok) {
+        setAccept({ kind: "error", message: gate.reason });
+        return;
+      }
+      acceptedWith.current = who;
+      const key = passkey;
+      const signTypedData: TypedDataSigner = (td) =>
+        who === "passkey" && key
+          ? key.signTypedData(td as Parameters<LocalAccount["signTypedData"]>[0])
+          : signTypedDataInjected(owner as Address, td as Parameters<typeof signTypedDataInjected>[1], network);
+      const placed = await placeStopLossFor({
+        network,
+        owner: owner as Address,
+        market: marketId,
+        price: suggestion.price,
+        signTypedData,
+        sendForwarding: (to, data) => (who === "passkey" && key ? sendExecOrderWith(key, to, data, network) : sendExecOrder(to, data, network)),
+      });
+      setStopLoss(placed);
+      setAccept({ kind: "ok", hash: placed.forwardingTx ?? "", orderId: String(placed.order.oid) });
+      onAcceptedRef.current?.({ orderId: String(placed.order.oid), hash: "" });
+    } catch (e) {
+      setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      accepting.current = false;
+    }
+  }
+
   async function doAccept() {
     if (!suggestion || !ownerFriend) return;
+    if (suggestion.kind === "sl") return acceptStopLoss("wallet");
     setAccept({ kind: "sending" });
     try {
       const connected = await connect(network);
@@ -361,6 +404,7 @@ export function SuggestionBanner({
   // owner opens the link with the same passkey that holds the position.
   async function doAcceptWithPasskey() {
     if (!suggestion || !ownerFriend || !passkey) return;
+    if (suggestion.kind === "sl") return acceptStopLoss("passkey");
     setAccept({ kind: "sending" });
     try {
       const gate = acceptOwnerCheck(passkey.address, suggestion, nameFor);
@@ -446,7 +490,7 @@ export function SuggestionBanner({
 
   // The owner already took this call: tell the chart so the ghost shows it as accepted.
   const takenOrderId =
-    suggestion && resting && accept.kind !== "ok"
+    suggestion && suggestion.kind !== "sl" && resting && accept.kind !== "ok"
       ? resting.find((r) => alreadyTaken([r], suggestion.price, priceDecimals))?.orderId.toString() ?? null
       : null;
   useEffect(() => {
@@ -496,7 +540,7 @@ export function SuggestionBanner({
     Number.isFinite(ghostPrice) &&
     ghostPrice > 0 &&
     ghostPrice !== suggestion.price;
-  const replacing = (resting ?? []).filter((r) =>
+  const replacing = suggestion.kind === "sl" ? [] : (resting ?? []).filter((r) =>
     suggestion.side === "long" ? r.side === "close-long" : r.side === "close-short",
   );
   const taken = takenOrderId !== null;
@@ -570,7 +614,21 @@ export function SuggestionBanner({
             {nameFor(suggestion.owner)} took this call · TP resting at {formatPrice(suggestion.price, priceDecimals)}
           </p>
         )}
-        {accept.kind === "ok" && (
+        {accept.kind === "ok" && stopLoss && (
+          <p data-stoploss-placed className="num order-6 w-full shrink-0 break-all text-[12px] text-gain sm:order-none sm:w-auto sm:mt-2">
+            Accepted · your stop-loss is resting on Perpl at {formatPrice(stopLoss.trigger, priceDecimals)} (order {stopLoss.order.oid})
+            {stopLoss.builder !== null ? " · builder code 23" : ""}
+            {stopLoss.forwardingTx ? (
+              <>
+                {" · "}
+                <a className="underline" href={explorerTxUrl(network, stopLoss.forwardingTx)} target="_blank" rel="noreferrer">
+                  order forwarding enabled
+                </a>
+              </>
+            ) : null}
+          </p>
+        )}
+        {accept.kind === "ok" && !stopLoss && (
           <p className="num order-6 w-full shrink-0 break-all text-[12px] text-gain sm:order-none sm:w-auto sm:mt-2">
             Accepted · your TP is resting on Perpl ·{" "}
             <a className="underline" href={explorerTxUrl(network, accept.hash)} target="_blank" rel="noreferrer">
@@ -579,7 +637,7 @@ export function SuggestionBanner({
             {twoSigs ? ` · ${TWO_SIGNATURE_NOTICE}` : ""}
           </p>
         )}
-        {accept.kind === "ok" && CALL_STAKE[network] && (
+        {accept.kind === "ok" && !stopLoss && CALL_STAKE[network] && (
           <div data-stake className="order-6 flex w-full flex-wrap items-center gap-2 text-[12px] sm:order-none">
             {stakeRes.kind === "ok" ? (
               <p className="num text-gain">

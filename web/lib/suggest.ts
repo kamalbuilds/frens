@@ -18,6 +18,8 @@ export type Suggestion = {
   sizeLots?: bigint;
   from: Address;
   createdAt: number;
+  /// "sl" is a stop-loss call: a trigger on the stop side of the mark, placed through Perpl's trading API. Absent means a take-profit.
+  kind?: "sl";
 };
 
 // On-chain order types, 0-indexed dex-sdk RequestType. trade.ts proves
@@ -87,9 +89,10 @@ function decodeBase64Url(str: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-// The share payload is a fixed 7 slot JSON array: owner, market, side, price,
-// size lots (decimal string) or null, from, createdAt. A fixed array keeps the
-// link short and the decode strict.
+// The share payload is a fixed JSON array: owner, market, side, price,
+// size lots (decimal string) or null, from, createdAt, plus an 8th slot "sl"
+// only on a stop-loss call, so every take-profit link keeps its 7 slot shape.
+// A fixed array keeps the link short and the decode strict.
 export function encodeSuggestion(s: Suggestion): string {
   const payload = [
     s.owner,
@@ -99,6 +102,7 @@ export function encodeSuggestion(s: Suggestion): string {
     s.sizeLots === undefined ? null : s.sizeLots.toString(),
     s.from,
     s.createdAt,
+    ...(s.kind === "sl" ? ["sl"] : []),
   ];
   return encodeBase64Url(JSON.stringify(payload));
 }
@@ -115,8 +119,9 @@ export function decodeSuggestion(str: string): Suggestion | null {
     // (wrong alphabet, padding, truncated bytes) is not one of our links.
     if (encodeBase64Url(json) !== str) return null;
     const v: unknown = JSON.parse(json);
-    if (!Array.isArray(v) || v.length !== 7) return null;
-    const [owner, market, side, price, sizeLots, from, createdAt] = v;
+    if (!Array.isArray(v) || (v.length !== 7 && v.length !== 8)) return null;
+    const [owner, market, side, price, sizeLots, from, createdAt, kind] = v;
+    if (v.length === 8 && kind !== "sl") return null;
     if (!isAddress(owner)) return null;
     if (!Number.isInteger(market) || (market as number) < 0) return null;
     if (side !== "long" && side !== "short") return null;
@@ -132,6 +137,7 @@ export function decodeSuggestion(str: string): Suggestion | null {
       sizeLots: sizeLots === null ? undefined : BigInt(sizeLots as string),
       from,
       createdAt: createdAt as number,
+      ...(kind === "sl" ? { kind: "sl" as const } : {}),
     };
   } catch {
     return null;
@@ -211,11 +217,18 @@ export function validateSuggestion(
     problems.push(`suggestion is for market ${s.market} but the position is on market ${position.market}`);
   }
   if (s.side !== position.side) {
-    problems.push(`suggestion is for a ${s.side} take-profit but the position is ${position.side}`);
+    problems.push(`suggestion is for a ${s.side} ${s.kind === "sl" ? "stop-loss" : "take-profit"} but the position is ${position.side}`);
   }
   // Judge direction only when the price is usable and the sides agree; a bad
   // price or a side mismatch is already reported above.
-  if (typeof s.price === "number" && Number.isFinite(s.price) && s.price > 0 && s.side === position.side) {
+  if (typeof s.price === "number" && Number.isFinite(s.price) && s.price > 0 && s.side === position.side && s.kind === "sl") {
+    if (s.side === "long" && !(s.price < position.markPrice)) {
+      problems.push(`stop-loss for a long must be below the mark price ${position.markPrice}, got ${s.price}`);
+    }
+    if (s.side === "short" && !(s.price > position.markPrice)) {
+      problems.push(`stop-loss for a short must be above the mark price ${position.markPrice}, got ${s.price}`);
+    }
+  } else if (typeof s.price === "number" && Number.isFinite(s.price) && s.price > 0 && s.side === position.side) {
     if (s.side === "long" && !(s.price > position.markPrice)) {
       problems.push(`take-profit for a long must be above the mark price ${position.markPrice}, got ${s.price}`);
     }

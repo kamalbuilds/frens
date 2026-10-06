@@ -20,6 +20,7 @@ export type SuggestionKind = "TP" | "SL";
 // the suggestion is acceptable is decided by validateSuggestion, which only
 // accepts take-profit direction.
 export function suggestionKind(s: Suggestion, markPrice: number): SuggestionKind {
+  if (s.kind === "sl") return "SL";
   if (s.side === "long") return s.price > markPrice ? "TP" : "SL";
   return s.price < markPrice ? "TP" : "SL";
 }
@@ -60,6 +61,18 @@ function friendlyReason(
     return (
       `This take-profit (${formatPrice(s.price, priceDecimals)}) is above the current price ` +
       `(${formatPrice(position.markPrice, priceDecimals)}), so it would close ${who}'s short right away at the current price instead of waiting for the target.`
+    );
+  }
+  if (/stop-loss for a long must be below/i.test(raw)) {
+    return (
+      `This stop-loss (${formatPrice(s.price, priceDecimals)}) is above the current price ` +
+      `(${formatPrice(position.markPrice, priceDecimals)}), so it would close ${who}'s long right away instead of protecting it.`
+    );
+  }
+  if (/stop-loss for a short must be above/i.test(raw)) {
+    return (
+      `This stop-loss (${formatPrice(s.price, priceDecimals)}) is below the current price ` +
+      `(${formatPrice(position.markPrice, priceDecimals)}), so it would close ${who}'s short right away instead of protecting it.`
     );
   }
   if (/does not match the position account/i.test(raw)) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { DOWN_WASH, FRIEND_HUES, UP_WASH, assignColours, avatarLabel, avatarTime, byPnl, candleChange, chipFor, colourFor, formatPrice, formatUsd, placeAvatar, scaleCandle, sideCounts, stackChips, visiblePriceRange, volumeColorFor, type Friend } from "./chart";
+import { DOWN_WASH, FRIEND_HUES, UP_WASH, assignColours, avatarLabel, avatarTime, byPnl, candleChange, chipFor, colourFor, entryLinePoints, formatPrice, formatUsd, placeAvatar, scaleCandle, sideCounts, stackChips, visiblePriceRange, volumeColorFor, type Friend } from "./chart";
 
 describe("scaleCandle", () => {
   it("divides by the market's price decimals and converts ms to seconds", () => {
@@ -224,5 +224,17 @@ describe("placeAvatar", () => {
     expect(a.mode === "top" || a.mode === "bottom").toBe(true);
     const b = placeAvatar({ entryTime: 500, entryPrice: 84014, ...ctx });
     expect(b.mode === "top" || b.mode === "bottom").toBe(true);
+  });
+});
+
+describe("entryLinePoints", () => {
+  it("draws a hairline from the entry candle to the latest one", () => {
+    expect(entryLinePoints(100, 300, 84000)).toEqual([{ time: 100, value: 84000 }, { time: 300, value: 84000 }]);
+  });
+
+  it("is a single point when the position opened on the latest candle, never two points with one time", () => {
+    const pts = entryLinePoints(300, 300, 84000);
+    expect(pts).toEqual([{ time: 300, value: 84000 }]);
+    expect(new Set(pts.map((p) => p.time)).size).toBe(pts.length);
   });
 });

@@ -327,7 +327,7 @@ export async function placeStopLoss(env: PerplEnv, creds: ApiCreds, p: { market:
     const open = (await getOpenOrders(env, creds)).d.find((o) => o.rq === rq);
     if (!open) await failureFor(env, creds, rq, "stop-loss");
     return open;
-  });
+  }, 90_000); // the gateway lists a trigger once its keeper has processed it; testnet took over 30 s on one run
 }
 
 // Cancels a resting or trigger order and waits until it is gone from the open orders. A trigger order is only found by
