@@ -28,14 +28,13 @@ export function ghostColorFor(side: Side): string {
   return hexWithAlpha(ringColorFor(side), 0.6);
 }
 
-/// Axis pill text for the ghost line: "<FROM> TP <price> <signed PnL>".
-/// PnL comes from pnlAtPrice against the owner's room position, so it matches
-/// the chart's own TP/SL tags. Valid suggestions rest on the take-profit side,
-/// so the pill always reads TP. FROM renders through nameFor so a room
-/// nickname shows instead of the 4-char address.
-export function ghostLabelText(opts: { from: string; price: number; pnl: number; priceDecimals: number; nameFor?: (addr: string) => string }): string {
+/// Axis pill text for the ghost line: "<FROM> TP <price> <signed PnL>", or SL
+/// for a stop-loss call. PnL comes from pnlAtPrice against the owner's room
+/// position, so it matches the chart's own TP/SL tags. FROM renders through
+/// nameFor so a room nickname shows instead of the 4-char address.
+export function ghostLabelText(opts: { from: string; price: number; pnl: number; priceDecimals: number; nameFor?: (addr: string) => string; kind?: "sl" }): string {
   const from = (opts.nameFor ?? shortName)(opts.from);
-  return `${from} · TP ${formatPrice(opts.price, opts.priceDecimals)} · ${formatUsd(opts.pnl)}`;
+  return `${from} · ${opts.kind === "sl" ? "SL" : "TP"} ${formatPrice(opts.price, opts.priceDecimals)} · ${formatUsd(opts.pnl)}`;
 }
 
 /// Build the counter suggestion after the owner drags the ghost line to their
@@ -55,5 +54,6 @@ export function buildCounterSuggestion(original: Suggestion, price: number, now?
     sizeLots: original.sizeLots,
     from: original.from as Address,
     createdAt: now ?? Date.now(),
+    ...(original.kind === "sl" ? { kind: "sl" as const } : {}),
   };
 }

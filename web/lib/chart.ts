@@ -235,3 +235,12 @@ export function placeAvatar(opts: {
   if (above) return { mode: "top", x, y: half };
   return { mode: "bottom", x, y: opts.height - half };
 }
+
+// Points of a friend's entry hairline, from the candle they entered on to the latest candle. The chart library throws
+// "data must be asc ordered by time" on two points with the same time, which is exactly a position opened during the
+// current bar, so that case is one point.
+export function entryLinePoints(startTime: number, endTime: number, price: number): { time: number; value: number }[] {
+  return startTime >= endTime
+    ? [{ time: endTime, value: price }]
+    : [{ time: startTime, value: price }, { time: endTime, value: price }];
+}

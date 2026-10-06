@@ -271,3 +271,30 @@ describe("toCloseOrder", () => {
     expect(back).toEqual(order);
   });
 });
+
+describe("stop-loss calls", () => {
+  const sl = (over: Partial<Suggestion> = {}) => suggestion({ kind: "sl", price: 68000, sizeLots: undefined, ...over });
+
+  it("round trips as an 8 slot link, and a take-profit link stays 7 slots", () => {
+    expect(decodeSuggestion(encodeSuggestion(sl()))).toEqual(sl());
+    expect(decodeSuggestion(encodeSuggestion(suggestion()))?.kind).toBeUndefined();
+    expect(JSON.parse(Buffer.from(encodeSuggestion(suggestion()), "base64url").toString())).toHaveLength(7);
+    expect(JSON.parse(Buffer.from(encodeSuggestion(sl()), "base64url").toString())).toHaveLength(8);
+  });
+
+  it("rejects an 8th slot that is not sl", () => {
+    const bad = Buffer.from(JSON.stringify([OWNER, MARKET, "long", 68000, null, FRIEND, CREATED_AT, "tp"])).toString("base64url");
+    expect(decodeSuggestion(bad)).toBeNull();
+  });
+
+  it("accepts a long stop below mark and a short stop above it", () => {
+    expect(validateSuggestion(sl(), longPosition(), 5)).toEqual([]);
+    expect(validateSuggestion(sl({ side: "short", price: 72000 }), longPosition({ side: "short" }), 5)).toEqual([]);
+  });
+
+  it("rejects a long stop above mark and a short stop below it, which a take-profit would accept", () => {
+    expect(validateSuggestion(sl({ price: 72000 }), longPosition(), 5)[0]).toMatch(/stop-loss for a long must be below/);
+    expect(validateSuggestion(sl({ side: "short", price: 68000 }), longPosition({ side: "short" }), 5)[0]).toMatch(/stop-loss for a short must be above/);
+    expect(validateSuggestion(suggestion({ price: 72000 }), longPosition(), 5)).toEqual([]);
+  });
+});

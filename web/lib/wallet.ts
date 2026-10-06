@@ -153,3 +153,11 @@ export async function sendExecOrderWith(
   const client = createWalletClient({ account, chain: chainFor(network), transport: http(NETWORKS[network].rpc) });
   return client.sendTransaction({ account, to: exchange, data, gas: padGas(await publicClient(network).estimateGas({ account: account.address, to: exchange, data })) });
 }
+
+// EIP-712 signature from the injected wallet, for Perpl's API-key enrollment. The wallet shows the typed data in its
+// own prompt; this never sees a key. Requested only after the chain is selected, like every other signature here.
+export async function signTypedDataInjected(address: Address, typed: Parameters<ReturnType<typeof createWalletClient>["signTypedData"]>[0], network: Network = "testnet"): Promise<Hex> {
+  const eth = injectedProvider();
+  await ensureNetwork(eth, network);
+  return createWalletClient({ account: address, chain: chainFor(network), transport: custom(eth) }).signTypedData(typed);
+}
