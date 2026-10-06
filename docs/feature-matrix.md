@@ -1,4 +1,4 @@
-# frens feature matrix (testnet; updated 2026-10-03)
+# frens feature matrix (testnet; updated 2026-10-06)
 
 Status: PASS = exercised through the real UI on the live deploy with the result read back from chain or the API;
 SCRIPT = proven on chain by a script, not yet through the UI; OPEN = not exercised yet.
@@ -21,5 +21,6 @@ SCRIPT = proven on chain by a script, not yet through the UI; OPEN = not exercis
 | 14 | Live room feed toast | a fren trades | PASS (earlier) | monadLogs toast within ~1 s |
 | 15 | Share card (og image) for link previews | paste a room link in X/Telegram | PASS | Twitterbot gets room title + 200 PNG |
 | 16 | Phone layout | open on a phone | PASS (390px emulation) | chart from 179px, Accept 36px; real device OPEN |
-| 17 | Stop-loss calls | drag SL, Accept | OPEN (client built) | web/lib/perplapi.ts: trigger placed, read back, cancelled, fired on testnet (probe). Browser needs Perpl to whitelist frenstrade.vercel.app and register builder 23 on testnet |
+| 17 | Stop-loss calls | drag SL, Accept | PASS (wallet, testnet) | bo's SL at 83,024.0 on a test wallet's long: one PerplRegisterApiKey signature, forwarding tx 0x528d1996, trigger order 285972940521504 read back from Perpl (2026-10-06). Testnet goes through the same-origin relay /api/perpl/testnet; mainnet allows the frenstrade origin directly |
 | 18 | Browser-wallet signing (MetaMask/Brave) | any Accept/Copy with an extension wallet | PASS (injected EIP-1193 wallet) | real UI through window.ethereum: approve + createAccount + copy, accept 0xe73bcecf, replace 0x8b2268ec; an extension's own prompt OPEN |
+| 19 | Test funds for a new wallet | Copy with an empty wallet | PASS (wallet, testnet) | fresh wallet 0xCC56: faucet.monad.xyz link at 0 MON, 'Get 10,000 test aUSD' tx 0x25e49e05, deposit and copy sent, long 0.001 BTC read from chain (2026-10-06) |

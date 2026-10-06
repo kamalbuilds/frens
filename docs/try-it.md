@@ -23,8 +23,15 @@ trades.
 Pick a friend, drag the take-profit line to the price you would take, and click "Copy suggestion link". When your friend
 opens it, the chart draws your line as a ghost with your face and they choose Accept, Counter or Pass. Accept is one
 signature, from a browser wallet (MetaMask, Brave) or a passkey account made inside frens, and it becomes a resting
-take-profit on their own position. A friend who already has a take-profit resting sees "Replaces the TP resting at
+take-profit on their own position. Drag the stop-loss line instead and the call is a stop-loss: Accept enrolls a Perpl
+trading key with one signature and places a stop trigger on the friend's position. A friend who already has a take-profit resting sees "Replaces the TP resting at
 <price>" and the swap is still one signature. "Stake 2 aUSD" backs the call on chain: it pays the caller when Perpl's
 mark reaches the price and returns to the friend when it expires.
 
 Copy a friend's position in one tap with "Copy": frens opens your Perpl account the first time, then sends the order.
+
+## Testnet money is free
+
+On testnet a new wallet starts empty. frens shows the way in: with no MON it links faucet.monad.xyz with your address
+ready to copy; once you have gas, "Get 10,000 test aUSD" funds the wallet in one transaction, enough to open a Perpl
+account and copy, call and stake.
