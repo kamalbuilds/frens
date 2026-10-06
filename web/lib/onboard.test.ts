@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { decodeFunctionData, erc20Abi } from "viem";
-import { depositCalls, toAusdUnits } from "./onboard";
+import { TESTNET_AUSD_FAUCET, depositCalls, faucetCall, toAusdUnits } from "./onboard";
 import { NETWORKS, exchangeAbi } from "./perpl";
 
 describe("depositCalls", () => {
@@ -22,5 +22,18 @@ describe("depositCalls", () => {
     expect(() => toAusdUnits(0)).toThrow();
     expect(() => toAusdUnits(-5)).toThrow();
     expect(toAusdUnits(12.5)).toBe(12_500_000n);
+  });
+});
+
+describe("faucetCall", () => {
+  it("asks Agora's testnet faucet to fund exactly the given address", () => {
+    const to = "0x93D456d73dDfC64fA8dCAb7e78a13Fd19ae1750a";
+    const call = faucetCall("testnet", to);
+    expect(call.to).toBe(TESTNET_AUSD_FAUCET);
+    expect(call.data.slice(0, 10)).toBe("0x544c7cf9");
+    expect(`0x${call.data.slice(-40)}`.toLowerCase()).toBe(to.toLowerCase());
+  });
+  it("refuses mainnet, where aUSD is real money", () => {
+    expect(() => faucetCall("mainnet", "0x93D456d73dDfC64fA8dCAb7e78a13Fd19ae1750a")).toThrow(/only on Monad testnet/);
   });
 });
