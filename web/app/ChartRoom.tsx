@@ -18,7 +18,7 @@ import {
 } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Address } from "viem";
-import { byPnl, candleChange, chipFor, formatPrice, formatUsd, placeAvatar, sideCounts, subtitleForMarket, visiblePriceRange, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
+import { byPnl, candleChange, chipFor, entryLinePoints, formatPrice, formatUsd, placeAvatar, sideCounts, subtitleForMarket, visiblePriceRange, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
 import { FACE_SIZE, clusterFaces, ringColorFor } from "@/lib/faces";
 import { shortMarketLabel } from "@/lib/mobile";
 import { clampTpSl, initialTpSl, nudgePrice, pnlAtPrice, priceFromY, validTpSl, type SuggestKind } from "@/lib/drag";
@@ -41,6 +41,7 @@ import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
 import { subscribeRoomFeed } from "@/lib/roomfeed";
 import { SuggestionBanner } from "./SuggestionBanner";
 import { PasskeyWallet } from "./PasskeyWallet";
+import { TestFunds } from "./TestFunds";
 import { RoomBuilder } from "./RoomBuilder";
 import { Face } from "./Face";
 import type { LocalAccount } from "viem";
@@ -357,11 +358,11 @@ export function ChartRoom({
   const ghostColour = incoming
     ? ghostAccepted !== null
       ? CHART.accent
-      : hexWithAlpha(CHART.up, 0.6)
+      : hexWithAlpha(incoming.kind === "sl" ? CHART.down : CHART.up, 0.6)
     : CHART.muted;
   const ghostLabel =
     incoming && ghostPrice !== null
-      ? ghostLabelText({ from: incoming.from, price: ghostPrice, pnl: ghostPnl, priceDecimals: decimals, nameFor: display })
+      ? ghostLabelText({ from: incoming.from, price: ghostPrice, pnl: ghostPnl, priceDecimals: decimals, nameFor: display, kind: incoming.kind })
       : "";
 
   // Markets per network. When the selection is not on this deployment (for
@@ -1162,12 +1163,13 @@ export function ChartRoom({
         price: suggestPrice,
         from: viewer.trim() as Address,
         createdAt: Date.now(),
+        ...(suggestKind === "sl" ? { kind: "sl" as const } : {}),
       });
     } catch {
       return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.account, selected?.side, suggestPrice, viewerOk, viewer, marketId]);
+  }, [selected?.account, selected?.side, suggestPrice, suggestKind, viewerOk, viewer, marketId]);
 
   // The default room has no hand-added traders, so extra is empty and the old
   // code encoded nothing. Fall back to the room's current accounts so the
@@ -1257,11 +1259,14 @@ export function ChartRoom({
     await (signer === "passkey" ? doCopyWithPasskey() : doCopy());
   }
 
+  const [walletAddr, setWalletAddr] = useState<Address | null>(null);
+
   async function doCopy() {
     setCopyResult({ kind: "sending" });
     try {
       const data = copyOrderData();
       const me = await connectWallet(net);
+      setWalletAddr(me);
       if (!(await hasPerplAccount(publicClient(net), net, me))) {
         await raiseDepositToFloor();
         setCopyResult({ kind: "needs-account", signer: "wallet" });
@@ -1351,10 +1356,7 @@ export function ChartRoom({
           crosshairMarkerVisible: false,
           autoscaleInfoProvider: () => null,
         });
-        l.setData([
-          { time: startTime as UTCTimestamp, value: f.entryPrice },
-          { time: data[data.length - 1].time as UTCTimestamp, value: f.entryPrice },
-        ]);
+        l.setData(entryLinePoints(startTime, data[data.length - 1].time, f.entryPrice).map((p) => ({ time: p.time as UTCTimestamp, value: p.value })));
         lines.current.set(f.account, l);
       }
     }
@@ -1899,7 +1901,7 @@ export function ChartRoom({
               data-drag-kind="ghost"
               disabled={ghostAccepted !== null}
               onKeyDown={onGhostKeyDown}
-              aria-label={`Suggested take-profit at ${formatPrice(ghostPrice, decimals)} from ${display(incoming.from)}. Drag to counter, arrow keys nudge by one tick. Escape resets.`}
+              aria-label={`Suggested ${incoming.kind === "sl" ? "stop-loss" : "take-profit"} at ${formatPrice(ghostPrice, decimals)} from ${display(incoming.from)}. Drag to counter, arrow keys nudge by one tick. Escape resets.`}
               className="marker-anim absolute left-2 z-10 block cursor-ns-resize rounded-full disabled:cursor-default"
               style={{ transform: `translateY(${ghostY - 14}px)`, top: 0, width: 28, height: 28, transition: reducedMotion ? "none" : undefined }}
             >
@@ -2040,6 +2042,11 @@ export function ChartRoom({
                       Deposit {deposit} aUSD and copy
                     </button>
                   </div>
+                  <TestFunds
+                    network={net}
+                    address={copyResult.signer === "passkey" ? (passkey?.address ?? null) : walletAddr}
+                    send={(to, data) => (copyResult.signer === "passkey" && passkey ? sendExecOrderWith(passkey, to, data, net) : sendExecOrder(to, data, net))}
+                  />
                 </div>
               )}
               {copyResult.kind === "error" && (

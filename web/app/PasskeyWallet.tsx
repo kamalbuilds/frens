@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { formatEther, formatUnits, type Address, type LocalAccount } from "viem";
 import { COLLATERAL_DECIMALS, NETWORKS, publicClient, type Network } from "@/lib/perpl";
 import { createPasskeyAccount, signInWithPasskey } from "@/lib/passkey";
+import { sendExecOrderWith } from "@/lib/wallet";
+import { TestFunds } from "./TestFunds";
 
 // Minimal ERC-20 read surface for the aUSD balance.
 const erc20BalanceAbi = [
@@ -265,8 +267,10 @@ export function PasskeyWallet({
       ) : (
         <p className="text-[12px] text-muted">Reading balances from {chainName}</p>
       )}
-      {balances && balances.mon === 0n && (
-        <p className="text-[12px] font-medium">Send a little MON to this address to pay gas.</p>
+      {account && network === "testnet" ? (
+        <TestFunds network={network} address={account.address} send={(to, data) => sendExecOrderWith(account, to, data, network)} />
+      ) : (
+        balances && balances.mon === 0n && <p className="text-[12px] font-medium">Send a little MON to this address to pay gas.</p>
       )}
     </div>
   );

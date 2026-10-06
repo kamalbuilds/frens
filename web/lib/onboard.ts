@@ -31,6 +31,18 @@ export async function hasPerplAccount(client: PublicClient, net: Network, addr: 
   }
 }
 
+// Testnet only: Agora's aUSD faucet sends 10,000 test aUSD to any address per call (requestFunds, selector
+// 0x544c7cf9). The caller pays gas, so a wallet needs a little MON first (faucet.monad.xyz).
+export const TESTNET_AUSD_FAUCET = "0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C" as Address;
+export const TESTNET_MON_FAUCET_URL = "https://faucet.monad.xyz";
+export const FAUCET_AUSD = 10_000;
+const faucetAbi = [{ type: "function", name: "requestFunds", stateMutability: "nonpayable", inputs: [{ name: "to", type: "address" }], outputs: [] }] as const;
+
+export function faucetCall(net: Network, to: Address): { to: Address; data: Hex } {
+  if (net !== "testnet") throw new Error("test aUSD exists only on Monad testnet");
+  return { to: TESTNET_AUSD_FAUCET, data: encodeFunctionData({ abi: faucetAbi, functionName: "requestFunds", args: [to] }) };
+}
+
 export async function ausdBalance(client: PublicClient, net: Network, addr: Address): Promise<bigint> {
   return client.readContract({ address: NETWORKS[net].collateral, abi: erc20Abi, functionName: "balanceOf", args: [addr] });
 }
