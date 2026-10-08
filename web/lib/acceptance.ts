@@ -13,6 +13,13 @@ import { formatPrice, formatUsd, shortName } from "./chart";
 
 export type SuggestionKind = "TP" | "SL";
 
+export function dispatchWalletAccept<T>(
+  kind: Suggestion["kind"],
+  handlers: { stopLoss: () => T; takeProfit: () => T },
+): T {
+  return kind === "sl" ? handlers.stopLoss() : handlers.takeProfit();
+}
+
 // Whether the suggested price rests on the take-profit side of the mark or
 // the stop-loss side. Longs profit above the mark, shorts below, so a long
 // suggestion above mark (or a short below mark) reads as a TP and anything

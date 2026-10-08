@@ -1,9 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
 import type { Address } from "viem";
 import type { Position } from "./readPosition";
 import { encodeSuggestion, type Suggestion } from "./suggest";
-import { acceptOwnerCheck, alreadyTaken, bannerText, evaluateSuggestion, suggestionKind } from "./acceptance";
+import { acceptOwnerCheck, alreadyTaken, bannerText, dispatchWalletAccept, evaluateSuggestion, suggestionKind } from "./acceptance";
 
 const OWNER = "0xf91b2eCb1cD59A36F3AED20B46943a75dB08795b" as Address;
 const FROM = "0x4981053aA266D74f9914a74Ad8ED79014846Ace9" as Address;
@@ -177,16 +176,23 @@ describe("acceptOwnerCheck", () => {
   });
 });
 
-describe("stop-loss wallet Accept dispatch", () => {
-  it("uses the injected wallet enrollment and forwarding path instead of the TP close signer", () => {
-    const source = readFileSync(new URL("../app/SuggestionBanner.tsx", import.meta.url), "utf8");
-    const walletAccept = source.match(/async function doAccept\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? "";
-    const stopLossAccept = source.match(/async function acceptStopLoss\(who: "wallet" \| "passkey"\) \{([\s\S]*?)\n  \}/)?.[1] ?? "";
+describe("dispatchWalletAccept", () => {
+  it("sends stop-loss Accept to the injected-wallet trigger-order flow", async () => {
+    const calls: string[] = [];
+    await dispatchWalletAccept("sl", {
+      stopLoss: async () => { calls.push("injected-wallet-stop-loss"); },
+      takeProfit: async () => { calls.push("exchange-close-order"); },
+    });
+    expect(calls).toEqual(["injected-wallet-stop-loss"]);
+  });
 
-    expect(walletAccept).toMatch(/if \(suggestion\.kind === "sl"\) return acceptStopLoss\("wallet"\);/);
-    expect(stopLossAccept).toContain("placeStopLossFor({");
-    expect(stopLossAccept).toContain("signTypedDataInjected(owner as Address");
-    expect(stopLossAccept).toContain("sendExecOrder(to, data, network)");
+  it("keeps take-profit Accept on the exchange close-order flow", async () => {
+    const calls: string[] = [];
+    await dispatchWalletAccept(undefined, {
+      stopLoss: async () => { calls.push("injected-wallet-stop-loss"); },
+      takeProfit: async () => { calls.push("exchange-close-order"); },
+    });
+    expect(calls).toEqual(["exchange-close-order"]);
   });
 });
 
