@@ -41,9 +41,9 @@ export async function GET(req: Request) {
       const body = { suggester, fromBlock: fromBlock.toString(), toBlock: latest.toString(), source: "hypersync" as const, ...record };
       cache.set(key, { at: Date.now(), body });
       return Response.json(body);
-    } catch (e) {
+    } catch {
       failedAt = Date.now();
-      return Response.json({ error: `HyperSync: ${String(e instanceof Error ? e.message : e)}` }, { status: 503 });
+      return Response.json({ error: "call history unavailable" }, { status: 503 });
     }
   }
   return Response.json({ error: "no call index configured" }, { status: 503 });

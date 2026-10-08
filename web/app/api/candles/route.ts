@@ -23,7 +23,7 @@ export async function GET(req: Request) {
       block: body.at?.b ?? null,
       candles: body.d.map((c) => scaleCandle(c, m.priceDecimals)),
     });
-  } catch (e) {
-    return Response.json({ error: String(e instanceof Error ? e.message : e) }, { status: 502 });
+  } catch {
+    return Response.json({ error: "candles unavailable" }, { status: 502 });
   }
 }
