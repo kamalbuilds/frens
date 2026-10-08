@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { Address } from "viem";
 import type { Position } from "./readPosition";
 import { encodeSuggestion, type Suggestion } from "./suggest";
@@ -173,6 +174,19 @@ describe("acceptOwnerCheck", () => {
     if (other.ok === false) expect(other.reason).toMatch(/Only .* can accept this/);
     const none = acceptOwnerCheck("", s);
     expect(none.ok).toBe(false);
+  });
+});
+
+describe("stop-loss wallet Accept dispatch", () => {
+  it("uses the injected wallet enrollment and forwarding path instead of the TP close signer", () => {
+    const source = readFileSync(new URL("../app/SuggestionBanner.tsx", import.meta.url), "utf8");
+    const walletAccept = source.match(/async function doAccept\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? "";
+    const stopLossAccept = source.match(/async function acceptStopLoss\(who: "wallet" \| "passkey"\) \{([\s\S]*?)\n  \}/)?.[1] ?? "";
+
+    expect(walletAccept).toMatch(/if \(suggestion\.kind === "sl"\) return acceptStopLoss\("wallet"\);/);
+    expect(stopLossAccept).toContain("placeStopLossFor({");
+    expect(stopLossAccept).toContain("signTypedDataInjected(owner as Address");
+    expect(stopLossAccept).toContain("sendExecOrder(to, data, network)");
   });
 });
 
