@@ -3,12 +3,12 @@ import { API_BASES } from "./network";
 import { readPerpMeta } from "./readPosition";
 import type { PublicClient } from "viem";
 
-/// One server client per network. Mainnet uses MONAD_RPC_URL when set
-/// (QuickNode, server only, never NEXT_PUBLIC); testnet uses the public
-/// testnet RPC. No module-level client: every caller names its network.
+/// One server client per network. Alchemy is preferred when configured, with
+/// the existing private/public RPC variables as fallbacks.
 export function clientFor(network: Network): PublicClient {
-  // Private endpoints (QuickNode), server only: MONAD_RPC_URL for mainnet, MONAD_TESTNET_RPC_URL for testnet.
-  const rpc = (network === "mainnet" ? process.env.MONAD_RPC_URL : process.env.MONAD_TESTNET_RPC_URL) || undefined;
+  const rpc = network === "mainnet"
+    ? process.env.ALCHEMY_MONAD_MAINNET_RPC || process.env.MONAD_RPC_URL
+    : process.env.ALCHEMY_MONAD_TESTNET_RPC || process.env.MONAD_TESTNET_RPC_URL;
   return publicClient(network, rpc);
 }
 
