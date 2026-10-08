@@ -100,6 +100,29 @@ export function latestPerAccount(openings: Opening[]): Opening[] {
   return [...best.values()];
 }
 
+/// Read recent pages first. Since the live resolver only considers the 40
+/// newest unique accounts, older pages cannot change its result once full.
+export async function scanRecentOpenings(
+  ranges: BlockRange[],
+  perpId: bigint,
+  fetchRange: (range: BlockRange) => Promise<Opening[]>,
+  maxCandidates: number = MAX_RESOLVE_CANDIDATES,
+): Promise<Opening[]> {
+  const selected = new Map<string, Opening>();
+  for (const range of [...ranges].reverse()) {
+    const page = (await fetchRange(range))
+      .filter((opening) => opening.perpId === perpId)
+      .sort((a, b) => cmpBlock(a.blockNumber, b.blockNumber));
+    for (const opening of page) {
+      const key = opening.accountId.toString();
+      if (!selected.has(key)) selected.set(key, opening);
+      if (selected.size >= maxCandidates) break;
+    }
+      if (selected.size >= maxCandidates) break;
+  }
+  return [...selected.values()].sort((a, b) => cmpBlock(a.blockNumber, b.blockNumber));
+}
+
 export type BlockRange = { fromBlock: bigint; toBlock: bigint };
 
 /// Split an inclusive block range into chunks of at most `size` blocks, so no
@@ -227,22 +250,15 @@ export async function getLiveTraders(
   const span = blocksForHours(hours);
   const from = latest > span ? latest - span : 0n;
   const ranges = chunkRanges(from, latest, logChunkBlocks(network));
-
-  const perChunk = await mapPool(ranges, logConcurrency(network), ({ fromBlock, toBlock }) =>
-    withRetry(() => client.getLogs({ address: exchange, events: OPENED_EVENTS, fromBlock, toBlock })),
-  );
   const want = BigInt(market);
-  const openings: Opening[] = [];
-  for (const log of perChunk.flat()) {
-    const args = log.args as { perpId?: unknown; accountId?: unknown } | undefined;
-    if (typeof args?.perpId !== "bigint" || typeof args?.accountId !== "bigint") continue;
-    if (args.perpId !== want) continue;
-    openings.push({ perpId: args.perpId, accountId: args.accountId, blockNumber: log.blockNumber });
-  }
-
-  const recent = latestPerAccount(openings)
-    .sort((a, b) => cmpBlock(a.blockNumber, b.blockNumber))
-    .slice(0, MAX_RESOLVE_CANDIDATES);
+  const recent = await scanRecentOpenings(ranges, want, async ({ fromBlock, toBlock }) => {
+    const logs = await withRetry(() => client.getLogs({ address: exchange, events: OPENED_EVENTS, fromBlock, toBlock }));
+    return logs.flatMap((log) => {
+      const args = log.args as { perpId?: unknown; accountId?: unknown } | undefined;
+      if (typeof args?.perpId !== "bigint" || typeof args?.accountId !== "bigint") return [];
+      return [{ perpId: args.perpId, accountId: args.accountId, blockNumber: log.blockNumber }];
+    });
+  });
   const cands = await mapPool(recent, LOG_CONCURRENCY, async (o): Promise<LiveCandidate | null> => {
     try {
       const info = (await withRetry(() =>
