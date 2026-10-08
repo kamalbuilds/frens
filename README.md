@@ -1,41 +1,26 @@
 # frens
 
-Your frens' Perpl perps on one live chart. Call their exit; they take it with one signature.
+Copy a fren's live Perpl position at your size. Set max slippage, approve the order in your wallet, and Perpl records which fren you copied.
 
 **Live:** https://frenstrade.vercel.app (Monad testnet by default, Testnet and Mainnet switch at the top right)
 
 **Demo room with a call waiting:** open the live site, pick a testnet market nobody traded in the last six
 hours, and follow "See a room where a fren's call is waiting", or use the first link in `demo/ROOMS.md`.
 
-## What it does
+## The friend-approved action
 
-- **Faces on the candles.** Every fren's real Perpl position appears as their face at the candle where they
-  entered, ringed green for long and red for short, with live PnL. Positions are read from Perpl's Exchange
-  contract on Monad, so they cannot be posted as a screenshot or faked.
-- **Calls.** Drag a take-profit onto a fren's position and send the link. They see your face riding the line
-  on their chart and tap Accept: one signature places a real resting close order on Perpl. When they already
-  hold a take-profit, the cancel and the new close go out in one `execOrders` batch.
-- **A call record nobody can fake.** The caller's address is written into the order's `orderDescId`. Room links
-  carry the accept receipts, and frens verifies each one against the chain: calls taken, and hits, where a hit
-  means Perpl's price reached the caller's TP after it was taken. Taken calls still on Perpl's book are drawn on
-  the chart and on the owner's card.
-- **Put money behind a call.** After taking a call, the owner can stake aUSD on it. The stake pays the caller only
-  if Perpl's own mark price reaches the call's TP before expiry, and returns to the owner otherwise. The contract
-  reads the TP, side and owner from the resting Perpl order itself, so a stake always matches the real order, and
-  anyone can trigger the payout once the price is there. Callers' earnings show next to their record in the room.
-- **One-tap copy.** Copy a fren's trade at your own size from your own wallet; the order carries the copied
-  fren in `orderDescId`, so copies are attributable on chain the same way calls are.
-- **No wallet needed to start.** Sign in with a passkey (Category Labs Mera: no extension, no seed phrase). A
-  wallet Perpl has never seen opens its Perpl account inside frens at Perpl's live minimum deposit, then copies.
-- **Rooms that spread.** Share a room to X or Telegram with a card showing the frens, their sides, PnL and calls
-  taken; phones get the native share sheet. Rooms update within a second from Monad's monadLogs push.
-- **Live on Perpl.** A read-only view of every trader who opened a position in the last six hours, mainnet or
-  testnet, to find people worth calling.
+- **Start from a real Perpl position.** Choose a fren from the chart. Positions and entry prices are decoded from Perpl's Exchange contract.
+- **Choose your own execution.** Copy the position with your size and maximum slippage. Your wallet signs the order; the fren's address is carried in `orderDescId`.
+- **Verify the result.** Perpl's order request and fill events record the copied fren, size and fill. The new position can be read back from the Exchange contract.
+- **Accept or pass on an exit call.** A fren can mark a take-profit on your position and send the room link. Accept places a resting Perpl close order; pass clears the suggestion. Replacing an existing take-profit can cancel and place in one `execOrders` batch.
+
+Call records, aUSD stakes, passkey onboarding, and shareable rooms are additional workflows around Perpl positions and orders.
 
 ## Proof on chain (Monad testnet, Perpl Exchange 0x1964C32f0bE608E7D29302AFF5E61268E72080cc)
 
 | What | Transaction |
 |---|---|
+| Browser-wallet copy from Ana's live 0.001 BTC long: recipient chose 0.0005 BTC and 50 bps max slippage; Perpl recorded Ana in `OrderRequestV2`, builder 23 in `TakerOrderFilledV2`, and the recipient position read back at 0.0015 BTC | [0x2754d959](https://testnet.monadexplorer.com/tx/0x2754d959068c9eb80cc593d3e1517eb6953a65970dd878001a3076905c0c70fd) |
 | A call taken and filled (a hit), caller read back from `orderDescId` | 0x7bff515503e590a5fb6831f9dd89051cd6f03448389808f798d2b121bd50eb5a |
 | A call that replaced a resting TP in one batch | 0xeb51040c5bc7cd08695750d237eed7d3cef3a80b0d18e976c19bbcdb5814d2e4 |
 | A passkey wallet created in the browser, Perpl account opened in frens, fren copied | 0x9801c9cb20fc3a901c59d24b0d2862ef333a6c45e7fb8ddb27f77cd4a826ef93 |
@@ -49,14 +34,12 @@ hours, and follow "See a room where a fren's call is waiting", or use the first 
 Every row is re-checkable: `bun run demo/check-hit.ts <tx>` decodes the caller and checks the hit against
 Perpl's candles; `bun run demo/adoption.ts testnet <hours>` counts orders carrying a frens `orderDescId`.
 
-## How it is built
+## Scope
 
 - `web/`: Next.js app. `lib/` holds the chain logic: `readPosition` (positions from `getPositionV2`),
   `suggest` (call payloads and close orders), `receipts` (call records from receipts), `callhit` (hits from
   candles), `resting` (live TPs), `copy`, `onboard` (Perpl account opening), `passkey` (Mera), `roomfeed`
   (monadLogs push), `marketws` (Perpl candle WebSocket).
-- Hosting: Vercel runs the Next.js app, including `/api/*` and link-preview routes. Server-side reads use
-  the configured Monad RPC. The Mac mini deployment remains available through `scripts/deploy-mini.sh`.
 - `contracts/`: `CallStake.sol`, with unit, fuzz and fork tests against Perpl's testnet Exchange (`forge test`).
 - `demo/`: scripts that seed and drive the testnet demo room with real transactions (keys in a gitignored file).
 - `spike/`: the original proofs, including the caller surviving on chain in `orderDescId`.

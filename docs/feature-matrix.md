@@ -1,7 +1,6 @@
-# frens feature matrix (testnet; updated 2026-10-06)
+# frens feature matrix (testnet; updated 2026-10-08)
 
-Status: PASS = exercised through the real UI on the live deploy with the result read back from chain or the API;
-SCRIPT = proven on chain by a script, not yet through the UI; OPEN = not exercised yet.
+Status: PASS = tested through the live UI with chain or API readback; SCRIPT = backed by a reproducible transaction or chain/API readback.
 
 | # | Feature | How a user does it | Status | Evidence |
 |---|---|---|---|---|
@@ -13,7 +12,7 @@ SCRIPT = proven on chain by a script, not yet through the UI; OPEN = not exercis
 | 6 | Take a call that replaces a TP | Accept when a TP already rests | PASS (wallet) | banner "Replaces the TP resting at 85,584.0", one signature 0x8b2268ec: order 146 cancelled, order 113 rests at 86,424 (read from getPerpOrderLocks). Fixed 2026-10-03: the old 2,000-block log scan missed any TP older than ~13 min, and a double Accept sent the close twice |
 | 7 | Counter a call | drag the ghost line, Send counter link | PASS | fixed 2026-10-02: counter kept owner/caller swapped and dropped n/c; now same call, new price, names kept |
 | 8 | Pass on a call | Pass | PASS | banner, ?s= and ghost cleared (browser check) |
-| 9 | Copy a fren (new wallet opens Perpl account) | Copy, deposit, copy | PASS (passkey) | 0x9801c9cb; builder 23 on fill 0xf5c94fd1 (script) |
+| 9 | Copy a fren (recipient chooses size and slippage) | select live Perpl position, set size and max slippage, Copy with wallet | PASS (wallet, testnet) | Fresh Brave action from Ana's chain-read 0.001 BTC long: recipient chose 0.0005 BTC and 50 bps. [Tx 0x2754d959](https://testnet.monadexplorer.com/tx/0x2754d959068c9eb80cc593d3e1517eb6953a65970dd878001a3076905c0c70fd) succeeded at block 69,252,252. Exchange `OrderRequestV2` contains Ana's address in `orderDescId` and 50 lots; `TakerOrderFilledV2` reports builder 23, zero builder fee. Independent Exchange readback moved QA recipient from 0.001 to 0.0015 BTC long. |
 | 10 | Stake on a taken call | Accept, then Stake 2 aUSD | PASS (passkey, wallet) | stake open read from chain; wallet path: approve 0x3fb42555, stake 0x8b8e22e7 on v2 (2026-10-03); v2 needs TP 0.5% from mark |
 | 11 | Stake pays the caller on a hit | keeper releases when the mark crosses | PASS | 0xddd2eb14 (v1), 0x448e4838 (v2) |
 | 12 | Stake refunds after expiry | the keeper refunds it automatically | PASS | refund 0x0ee198f8 (state 3), keeper auto-refunds since 2026-10-02 |
