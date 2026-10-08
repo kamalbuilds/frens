@@ -35,12 +35,17 @@ export const LIVE_MIN_HOURS = 1;
 export const LIVE_MAX_HOURS = 24;
 export const LIVE_CACHE_MS = 60_000;
 export const LOG_CHUNK_BLOCKS = 1000;
+export const TESTNET_LOG_CHUNK_BLOCKS = 100;
 export const LOG_CONCURRENCY = 4;
 /// Monad targets 0.3 s blocks: about 12,000 blocks per hour.
 export const BLOCKS_PER_HOUR = 12_000;
 /// Bound the accountId -> position fan-out: resolve the most recent openings
 /// first and stop once the trader list is full.
 const MAX_RESOLVE_CANDIDATES = 40;
+
+export function logChunkBlocks(network: Network): number {
+  return network === "testnet" ? TESTNET_LOG_CHUNK_BLOCKS : LOG_CHUNK_BLOCKS;
+}
 
 export type LiveTrader = {
   account: string;
@@ -216,7 +221,7 @@ export async function getLiveTraders(
   const latest = await withRetry(() => client.getBlockNumber());
   const span = blocksForHours(hours);
   const from = latest > span ? latest - span : 0n;
-  const ranges = chunkRanges(from, latest);
+  const ranges = chunkRanges(from, latest, logChunkBlocks(network));
 
   const perChunk = await mapPool(ranges, LOG_CONCURRENCY, ({ fromBlock, toBlock }) =>
     withRetry(() => client.getLogs({ address: exchange, events: OPENED_EVENTS, fromBlock, toBlock })),
