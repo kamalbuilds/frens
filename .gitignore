@@ -13,3 +13,4 @@ demo/.keeper-cursor
 video/asm-*/
 video/vo/out*/
 video/*.wav
+.DS_Store

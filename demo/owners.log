@@ -1,3 +1,5 @@
 0x304bDe430670f60E96f874d3BaD0fCc3Cb5c9BA7 passkey replace-test 2026-10-02T22:42:58
 0x93D456d73dDfC64fA8dCAb7e78a13Fd19ae1750a local test-wallet (browser-wallet path QA) 2026-10-03T01:20:31
 0x42034F18cFd286881E59e561ca526bD39264DEBa passkey passkey-rerun-live 2026-10-03T09:44:39 key not persisted (virtual authenticator)
+0x3b4bAe1Cd08Ed0e261d02389aC64ee7d08B342d4 local qa-wallet (browser wallet + stop-loss QA, key ~/.config/frens/qa-wallet.key) 2026-10-03T09:51:49 1791021109
+0xCC56230d99F96B72952F25e75E1aAd23aE72B809 local test-wallet (testnet faucet onboarding QA) 2026-10-06T13:18:16
