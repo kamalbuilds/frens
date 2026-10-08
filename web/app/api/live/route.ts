@@ -2,8 +2,8 @@ import { getLiveTraders } from "@/lib/live";
 import { parseNetParam } from "@/lib/network";
 import { markets } from "@/lib/server";
 
-// Cold mainnet reads measure 5-20 s; anything past this is a stuck RPC, not a slow one.
-export const maxDuration = 60;
+// Testnet's 100-block log cap makes a cold 24-hour scan exceed 60 seconds.
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   const u = new URL(req.url);
