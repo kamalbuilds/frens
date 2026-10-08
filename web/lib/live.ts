@@ -38,18 +38,38 @@ export const LOG_CHUNK_BLOCKS = 1000;
 export const TESTNET_LOG_CHUNK_BLOCKS = 100;
 export const LOG_CONCURRENCY = 4;
 export const TESTNET_LOG_CONCURRENCY = 1;
+/// Alchemy Free caps eth_getLogs at ~10 blocks (100 blocks returns HTTP 400
+/// / JSON-RPC -32600), so the configured Alchemy testnet RPC pages in
+/// 10-block ranges with bounded concurrency 10. Public testnet stays at 100
+/// blocks serial.
+export const ALCHEMY_TESTNET_LOG_CHUNK_BLOCKS = 10;
+export const ALCHEMY_TESTNET_LOG_CONCURRENCY = 10;
 /// Monad targets 0.3 s blocks: about 12,000 blocks per hour.
 export const BLOCKS_PER_HOUR = 12_000;
 /// Bound the accountId -> position fan-out: resolve the most recent openings
 /// first and stop once the trader list is full.
 const MAX_RESOLVE_CANDIDATES = 40;
 
+/// True when the Alchemy Monad testnet RPC is configured. A non-empty
+/// trimmed value selects the 10-block / concurrency-10 path; anything else
+/// keeps the public 100-block serial behavior.
+export function isAlchemyTestnetRpc(): boolean {
+  const v = process.env.ALCHEMY_MONAD_TESTNET_RPC;
+  return typeof v === "string" && v.trim().length > 0;
+}
+
 export function logChunkBlocks(network: Network): number {
-  return network === "testnet" ? TESTNET_LOG_CHUNK_BLOCKS : LOG_CHUNK_BLOCKS;
+  if (network === "testnet") {
+    return isAlchemyTestnetRpc() ? ALCHEMY_TESTNET_LOG_CHUNK_BLOCKS : TESTNET_LOG_CHUNK_BLOCKS;
+  }
+  return LOG_CHUNK_BLOCKS;
 }
 
 export function logConcurrency(network: Network): number {
-  return network === "testnet" ? TESTNET_LOG_CONCURRENCY : LOG_CONCURRENCY;
+  if (network === "testnet") {
+    return isAlchemyTestnetRpc() ? ALCHEMY_TESTNET_LOG_CONCURRENCY : TESTNET_LOG_CONCURRENCY;
+  }
+  return LOG_CONCURRENCY;
 }
 
 export type LiveTrader = {
@@ -102,23 +122,34 @@ export function latestPerAccount(openings: Opening[]): Opening[] {
 
 /// Read recent pages first. Since the live resolver only considers the 40
 /// newest unique accounts, older pages cannot change its result once full.
+/// Ranges arrive oldest-first; batches are fetched newest-first with bounded
+/// concurrency, but each batch is processed in newest-first order so an
+/// out-of-order completion never lets an older page evict a newer opening.
 export async function scanRecentOpenings(
   ranges: BlockRange[],
   perpId: bigint,
   fetchRange: (range: BlockRange) => Promise<Opening[]>,
   maxCandidates: number = MAX_RESOLVE_CANDIDATES,
+  concurrency: number = 1,
 ): Promise<Opening[]> {
+  const ordered = [...ranges].reverse();
+  const parallel = Number.isInteger(concurrency) && concurrency > 0 ? concurrency : 1;
   const selected = new Map<string, Opening>();
-  for (const range of [...ranges].reverse()) {
-    const page = (await fetchRange(range))
-      .filter((opening) => opening.perpId === perpId)
-      .sort((a, b) => cmpBlock(a.blockNumber, b.blockNumber));
-    for (const opening of page) {
-      const key = opening.accountId.toString();
-      if (!selected.has(key)) selected.set(key, opening);
+  for (let i = 0; i < ordered.length; i += parallel) {
+    const batch = ordered.slice(i, i + parallel);
+    const pages = await Promise.all(batch.map((range) => fetchRange(range)));
+    for (let b = 0; b < batch.length; b++) {
+      const page = (pages[b] ?? [])
+        .filter((opening) => opening.perpId === perpId)
+        .sort((a, b2) => cmpBlock(a.blockNumber, b2.blockNumber));
+      for (const opening of page) {
+        const key = opening.accountId.toString();
+        if (!selected.has(key)) selected.set(key, opening);
+        if (selected.size >= maxCandidates) break;
+      }
       if (selected.size >= maxCandidates) break;
     }
-      if (selected.size >= maxCandidates) break;
+    if (selected.size >= maxCandidates) break;
   }
   return [...selected.values()].sort((a, b) => cmpBlock(a.blockNumber, b.blockNumber));
 }
@@ -258,7 +289,7 @@ export async function getLiveTraders(
       if (typeof args?.perpId !== "bigint" || typeof args?.accountId !== "bigint") return [];
       return [{ perpId: args.perpId, accountId: args.accountId, blockNumber: log.blockNumber }];
     });
-  });
+  }, undefined, logConcurrency(network));
   const cands = await mapPool(recent, LOG_CONCURRENCY, async (o): Promise<LiveCandidate | null> => {
     try {
       const info = (await withRetry(() =>
