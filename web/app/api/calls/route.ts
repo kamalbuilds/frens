@@ -51,8 +51,8 @@ export async function GET(req: Request) {
         if (v) fresh.set(h.toLowerCase(), v);
       }
     }
-  } catch (e) {
-    return Response.json({ error: String(e instanceof Error ? e.message : e) }, { status: 502 });
+  } catch {
+    return Response.json({ error: "calls unavailable" }, { status: 502 });
   }
 
   // Verified calls only, in link order. "price" is the pricePNS scaled

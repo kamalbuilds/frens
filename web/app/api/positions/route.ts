@@ -38,7 +38,7 @@ export async function GET(req: Request) {
       }),
     );
     return Response.json({ block: block.toString(), checked: accounts.length, friends: read.filter(Boolean) });
-  } catch (e) {
-    return Response.json({ error: String(e instanceof Error ? e.message : e) }, { status: 502 });
+  } catch {
+    return Response.json({ error: "positions unavailable" }, { status: 502 });
   }
 }
