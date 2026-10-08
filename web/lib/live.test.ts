@@ -148,17 +148,29 @@ describe("chunkRanges", () => {
 
 describe("logChunkBlocks", () => {
   it("uses the testnet provider's 100-block limit", () => {
-    expect(logChunkBlocks("testnet")).toBe(100);
-    expect(TESTNET_LOG_CHUNK_BLOCKS).toBe(100);
-    expect(logChunkBlocks("mainnet")).toBe(LOG_CHUNK_BLOCKS);
+    const prev = process.env.ALCHEMY_MONAD_TESTNET_RPC;
+    delete process.env.ALCHEMY_MONAD_TESTNET_RPC;
+    try {
+      expect(logChunkBlocks("testnet")).toBe(100);
+      expect(TESTNET_LOG_CHUNK_BLOCKS).toBe(100);
+      expect(logChunkBlocks("mainnet")).toBe(LOG_CHUNK_BLOCKS);
+    } finally {
+      if (prev !== undefined) process.env.ALCHEMY_MONAD_TESTNET_RPC = prev;
+    }
   });
 });
 
 describe("logConcurrency", () => {
   it("serializes public testnet log reads under its 25 req/s limit", () => {
-    expect(logConcurrency("testnet")).toBe(TESTNET_LOG_CONCURRENCY);
-    expect(TESTNET_LOG_CONCURRENCY).toBe(1);
-    expect(logConcurrency("mainnet")).toBe(LOG_CONCURRENCY);
+    const prev = process.env.ALCHEMY_MONAD_TESTNET_RPC;
+    delete process.env.ALCHEMY_MONAD_TESTNET_RPC;
+    try {
+      expect(logConcurrency("testnet")).toBe(TESTNET_LOG_CONCURRENCY);
+      expect(TESTNET_LOG_CONCURRENCY).toBe(1);
+      expect(logConcurrency("mainnet")).toBe(LOG_CONCURRENCY);
+    } finally {
+      if (prev !== undefined) process.env.ALCHEMY_MONAD_TESTNET_RPC = prev;
+    }
   });
 });
 
