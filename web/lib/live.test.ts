@@ -6,7 +6,9 @@ import {
   LIVE_MAX_TRADERS,
   LIVE_MIN_HOURS,
   LOG_CHUNK_BLOCKS,
+  LOG_CONCURRENCY,
   TESTNET_LOG_CHUNK_BLOCKS,
+  TESTNET_LOG_CONCURRENCY,
   assembleLiveTraders,
   blocksForHours,
   chunkRanges,
@@ -14,6 +16,7 @@ import {
   filterOpeningsByPerp,
   latestPerAccount,
   logChunkBlocks,
+  logConcurrency,
   type LiveCandidate,
   type Opening,
 } from "./live";
@@ -111,6 +114,14 @@ describe("logChunkBlocks", () => {
     expect(logChunkBlocks("testnet")).toBe(100);
     expect(TESTNET_LOG_CHUNK_BLOCKS).toBe(100);
     expect(logChunkBlocks("mainnet")).toBe(LOG_CHUNK_BLOCKS);
+  });
+});
+
+describe("logConcurrency", () => {
+  it("serializes testnet log reads under its public RPC limit", () => {
+    expect(logConcurrency("testnet")).toBe(TESTNET_LOG_CONCURRENCY);
+    expect(TESTNET_LOG_CONCURRENCY).toBe(1);
+    expect(logConcurrency("mainnet")).toBe(LOG_CONCURRENCY);
   });
 });
 

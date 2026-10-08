@@ -37,6 +37,7 @@ export const LIVE_CACHE_MS = 60_000;
 export const LOG_CHUNK_BLOCKS = 1000;
 export const TESTNET_LOG_CHUNK_BLOCKS = 100;
 export const LOG_CONCURRENCY = 4;
+export const TESTNET_LOG_CONCURRENCY = 1;
 /// Monad targets 0.3 s blocks: about 12,000 blocks per hour.
 export const BLOCKS_PER_HOUR = 12_000;
 /// Bound the accountId -> position fan-out: resolve the most recent openings
@@ -45,6 +46,10 @@ const MAX_RESOLVE_CANDIDATES = 40;
 
 export function logChunkBlocks(network: Network): number {
   return network === "testnet" ? TESTNET_LOG_CHUNK_BLOCKS : LOG_CHUNK_BLOCKS;
+}
+
+export function logConcurrency(network: Network): number {
+  return network === "testnet" ? TESTNET_LOG_CONCURRENCY : LOG_CONCURRENCY;
 }
 
 export type LiveTrader = {
@@ -173,7 +178,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts: number = 4): Promise
     } catch (e) {
       last = e;
       const msg = String(e instanceof Error ? `${e.message} ${String((e as { cause?: unknown }).cause ?? "")}` : e);
-      const limited = /429|too many requests|rate limit|rate_limit/i.test(msg);
+      const limited = /429|too many requests|rate limit|rate_limit|requests limited/i.test(msg);
       if (!limited || i === attempts - 1) throw e;
       await sleep(500 * 2 ** i);
     }
@@ -223,7 +228,7 @@ export async function getLiveTraders(
   const from = latest > span ? latest - span : 0n;
   const ranges = chunkRanges(from, latest, logChunkBlocks(network));
 
-  const perChunk = await mapPool(ranges, LOG_CONCURRENCY, ({ fromBlock, toBlock }) =>
+  const perChunk = await mapPool(ranges, logConcurrency(network), ({ fromBlock, toBlock }) =>
     withRetry(() => client.getLogs({ address: exchange, events: OPENED_EVENTS, fromBlock, toBlock })),
   );
   const want = BigInt(market);
