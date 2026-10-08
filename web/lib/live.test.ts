@@ -17,6 +17,7 @@ import {
   latestPerAccount,
   logChunkBlocks,
   logConcurrency,
+  scanRecentOpenings,
   type LiveCandidate,
   type Opening,
 } from "./live";
@@ -86,6 +87,42 @@ describe("latestPerAccount", () => {
     expect(rows).toHaveLength(2);
     expect(rows.find((o) => o.accountId === 7n)?.blockNumber).toBe(30n);
     expect(rows.find((o) => o.accountId === 8n)?.blockNumber).toBe(20n);
+  });
+});
+
+describe("scanRecentOpenings", () => {
+  const ranges = [
+    { fromBlock: 0n, toBlock: 99n },
+    { fromBlock: 100n, toBlock: 199n },
+    { fromBlock: 200n, toBlock: 299n },
+  ];
+
+  it("reads newest pages first and stops at the resolver candidate cap", async () => {
+    const calls: bigint[] = [];
+    const out = await scanRecentOpenings(ranges, 1n, async (range) => {
+      calls.push(range.toBlock);
+      if (range.toBlock === 299n) return [opening(1n, 7n, 290n), opening(2n, 8n, 285n)];
+      if (range.toBlock === 199n) return [opening(1n, 9n, 190n), opening(1n, 7n, 180n)];
+      return [opening(1n, 10n, 90n)];
+    }, 2);
+
+    expect(calls).toEqual([299n, 199n]);
+    expect(out).toEqual([opening(1n, 7n, 290n), opening(1n, 9n, 190n)]);
+  });
+
+  it("scans the full requested range when fewer unique candidates exist", async () => {
+    const calls: bigint[] = [];
+    const out = await scanRecentOpenings(ranges, 1n, async (range) => {
+      calls.push(range.toBlock);
+      return range.toBlock === 299n
+        ? [opening(1n, 7n, 290n), opening(1n, 7n, 280n)]
+        : range.toBlock === 199n
+          ? [opening(1n, 7n, 180n)]
+          : [opening(1n, 8n, 90n)];
+    }, 3);
+
+    expect(calls).toEqual([299n, 199n, 99n]);
+    expect(out).toEqual([opening(1n, 7n, 290n), opening(1n, 8n, 90n)]);
   });
 });
 
