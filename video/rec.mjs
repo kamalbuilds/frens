@@ -100,6 +100,7 @@ try {
     await send("WebAuthn.enable", { enableUI: false });
     await send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true, hasPrf: true } });
   }
+  if (process.env.PRELOAD) await send("Page.addScriptToEvaluateOnNewDocument", { source: process.env.PRELOAD });
   if (!process.env.NOCURSOR) await send("Page.addScriptToEvaluateOnNewDocument", { source: CURSOR });
   await send("Page.navigate", { url });
   await sleep(Number(process.env.LOAD_MS ?? 9000));
