@@ -5,12 +5,15 @@ import {
   LIVE_MAX_HOURS,
   LIVE_MAX_TRADERS,
   LIVE_MIN_HOURS,
+  LOG_CHUNK_BLOCKS,
+  TESTNET_LOG_CHUNK_BLOCKS,
   assembleLiveTraders,
   blocksForHours,
   chunkRanges,
   clampHours,
   filterOpeningsByPerp,
   latestPerAccount,
+  logChunkBlocks,
   type LiveCandidate,
   type Opening,
 } from "./live";
@@ -100,6 +103,14 @@ describe("chunkRanges", () => {
   });
   it("returns no ranges when the tip moved backwards", () => {
     expect(chunkRanges(10n, 5n)).toEqual([]);
+  });
+});
+
+describe("logChunkBlocks", () => {
+  it("uses the testnet provider's 100-block limit", () => {
+    expect(logChunkBlocks("testnet")).toBe(100);
+    expect(TESTNET_LOG_CHUNK_BLOCKS).toBe(100);
+    expect(logChunkBlocks("mainnet")).toBe(LOG_CHUNK_BLOCKS);
   });
 });
 
