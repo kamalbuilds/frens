@@ -55,9 +55,8 @@ Perpl's candles; `bun run demo/adoption.ts testnet <hours>` counts orders carryi
   `suggest` (call payloads and close orders), `receipts` (call records from receipts), `callhit` (hits from
   candles), `resting` (live TPs), `copy`, `onboard` (Perpl account opening), `passkey` (Mera), `roomfeed`
   (monadLogs push), `marketws` (Perpl candle WebSocket).
-- Hosting: the site is a static export with no serverless functions; `/api/*` and link-preview requests are
-  served by a Next.js server that reads Monad through a private RPC (`scripts/build-static.sh`,
-  `scripts/deploy-mini.sh`).
+- Hosting: Vercel runs the Next.js app, including `/api/*` and link-preview routes. Server-side reads use
+  the configured Monad RPC. The Mac mini deployment remains available through `scripts/deploy-mini.sh`.
 - `contracts/`: `CallStake.sol`, with unit, fuzz and fork tests against Perpl's testnet Exchange (`forge test`).
 - `demo/`: scripts that seed and drive the testnet demo room with real transactions (keys in a gitignored file).
 - `spike/`: the original proofs, including the caller surviving on chain in `orderDescId`.
