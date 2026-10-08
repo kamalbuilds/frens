@@ -118,9 +118,10 @@ describe("logChunkBlocks", () => {
 });
 
 describe("logConcurrency", () => {
-  it("serializes testnet log reads under its public RPC limit", () => {
+  it("caps public testnet reads at eight concurrent 100-block pages", () => {
+    expect(logChunkBlocks("testnet")).toBe(100);
     expect(logConcurrency("testnet")).toBe(TESTNET_LOG_CONCURRENCY);
-    expect(TESTNET_LOG_CONCURRENCY).toBe(1);
+    expect(TESTNET_LOG_CONCURRENCY).toBe(8);
     expect(logConcurrency("mainnet")).toBe(LOG_CONCURRENCY);
   });
 });

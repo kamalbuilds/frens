@@ -37,7 +37,7 @@ export const LIVE_CACHE_MS = 60_000;
 export const LOG_CHUNK_BLOCKS = 1000;
 export const TESTNET_LOG_CHUNK_BLOCKS = 100;
 export const LOG_CONCURRENCY = 4;
-export const TESTNET_LOG_CONCURRENCY = 1;
+export const TESTNET_LOG_CONCURRENCY = 8;
 /// Monad targets 0.3 s blocks: about 12,000 blocks per hour.
 export const BLOCKS_PER_HOUR = 12_000;
 /// Bound the accountId -> position fan-out: resolve the most recent openings
