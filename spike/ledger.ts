@@ -32,6 +32,7 @@ import {
   type PublicClient,
 } from "viem";
 import { NETWORKS, exchangeAbi, publicClient } from "../src/perpl";
+import officialAbi from "./exchange-official.abi.json";
 import { readPerpMeta } from "../src/readPosition";
 
 // Monad's node rejects eth_getLogs over 100 blocks, so the range is walked in pages of that size.
@@ -251,7 +252,10 @@ export function attributeTakerFills(logs: readonly TxLog[]): (TakerAttribution |
 const isOneOf = <T extends readonly string[]>(name: string, group: T): name is T[number] => (group as readonly string[]).includes(name);
 
 function eventAbi(name: string): AbiEvent {
-  const found = (exchangeAbi as readonly AbiEvent[]).find((e) => e.type === "event" && e.name === name);
+  // The trimmed src/exchange.abi.json carries only the V1 fills, while the deployed Exchange
+  // emits the V2 forms. The official ABI checked in beside this spike has both, so look up
+  // event signatures there; on-chain reads below keep using exchangeAbi.
+  const found = (officialAbi as unknown as readonly AbiEvent[]).find((e) => e.type === "event" && e.name === name);
   if (!found) throw new Error(`Exchange ABI has no event ${name}`);
   return found;
 }
