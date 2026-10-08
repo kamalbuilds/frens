@@ -30,7 +30,7 @@ const STAKE_HOURS = 48;
 import { connect, sendExecOrder, sendExecOrderWith, signTypedDataInjected } from "@/lib/wallet";
 import { placeStopLossFor, type StopLossPlaced } from "@/lib/stoploss";
 import type { TypedDataSigner } from "@/lib/perplapi";
-import { acceptOwnerCheck, alreadyTaken, evaluateSuggestion, replacementNotice } from "@/lib/acceptance";
+import { acceptOwnerCheck, alreadyTaken, dispatchWalletAccept, evaluateSuggestion, replacementNotice } from "@/lib/acceptance";
 import { PasskeyWallet } from "./PasskeyWallet";
 import type { LocalAccount } from "viem";
 
@@ -383,7 +383,14 @@ export function SuggestionBanner({
 
   async function doAccept() {
     if (!suggestion || !ownerFriend) return;
-    if (suggestion.kind === "sl") return acceptStopLoss("wallet");
+    return dispatchWalletAccept(suggestion.kind, {
+      stopLoss: () => acceptStopLoss("wallet"),
+      takeProfit: acceptTakeProfit,
+    });
+  }
+
+  async function acceptTakeProfit() {
+    if (!suggestion || !ownerFriend) return;
     setAccept({ kind: "sending" });
     try {
       const connected = await connect(network);
