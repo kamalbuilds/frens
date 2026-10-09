@@ -23,6 +23,7 @@ import { buildCounterSuggestion } from "@/lib/ghost";
 import type { Position } from "@/lib/readPosition";
 import { NETWORKS, publicClient, type Network } from "@/lib/perpl";
 import { explorerTxUrl } from "@/lib/network";
+import { acceptTxExplorerHref } from "@/lib/acceptReceipt";
 import { CALL_STAKE, stakeCalls } from "@/lib/callstake";
 import { verifyCallReceipts } from "@/lib/receipts";
 
@@ -31,6 +32,8 @@ import { connect, sendExecOrder, sendExecOrderWith, signTypedDataInjected } from
 import { placeStopLossFor, type StopLossPlaced } from "@/lib/stoploss";
 import type { TypedDataSigner } from "@/lib/perplapi";
 import { acceptOwnerCheck, alreadyTaken, dispatchWalletAccept, evaluateSuggestion, replacementNotice } from "@/lib/acceptance";
+import { acceptSignerCheck, resolveAcceptExecTarget } from "@/lib/acceptExec";
+import { readPosition } from "@/lib/readPosition";
 import { PasskeyWallet } from "./PasskeyWallet";
 import type { LocalAccount } from "viem";
 
@@ -103,6 +106,7 @@ export function SuggestionBanner({
   acceptRequest,
   chartActions,
   passRequest,
+  suggestionNonce,
 }: {
   friends: Friend[];
   roomReady: boolean;
@@ -121,6 +125,7 @@ export function SuggestionBanner({
   /// The chart is drawing this call with its own Accept and Pass: the banner drops its duplicate buttons.
   chartActions?: boolean;
   passRequest?: number;
+  suggestionNonce?: number;
 }) {
   const [raw, setRaw] = useState<string | null>(null);
   const [seen, setSeen] = useState(false);
@@ -138,6 +143,12 @@ export function SuggestionBanner({
     setRaw(readRawParam());
     setSeen(true);
   }, []);
+
+  useEffect(() => {
+    if (suggestionNonce === undefined) return;
+    setRaw(readRawParam());
+    setDismissed(false);
+  }, [suggestionNonce]);
 
   const nameFor = useMemo(() => nameForAddress(names), [names]);
 
@@ -247,20 +258,26 @@ export function SuggestionBanner({
   // ([CANCEL..., close] via execOrders); without it the cancels go first and
   // the banner says so. The send callback is the only wallet-specific part.
   const accepting = useRef(false);
-  async function acceptWith(broadcast: (data: Hex) => Promise<string>) {
+  async function acceptWith(
+    broadcast: (data: Hex) => Promise<string>,
+    ctx: { execTo: Address; positionAccount: Address },
+  ) {
     if (!suggestion || !ownerFriend) return;
     // A second Accept while the first is in flight would send the same close twice; the second then reverts on the
     // locked lots and its error replaces the first one's success.
     if (accepting.current) return;
     accepting.current = true;
     try {
-      await acceptOnce(broadcast);
+      await acceptOnce(broadcast, ctx);
     } finally {
       accepting.current = false;
     }
   }
 
-  async function acceptOnce(broadcast: (data: Hex) => Promise<string>) {
+  async function acceptOnce(
+    broadcast: (data: Hex) => Promise<string>,
+    ctx: { execTo: Address; positionAccount: Address },
+  ) {
     if (!suggestion || !ownerFriend) return;
     // Accepted means mined and successful, not broadcast: a reverted close must not read as taken.
     const send = async (data: Hex) => {
@@ -271,10 +288,23 @@ export function SuggestionBanner({
     };
     setAccept({ kind: "sending" });
     setTwoSigs(false);
-    const close = buildCloseOrder();
+    let fullSizeLots = sizeToLots(ownerFriend.size, lotDecimals);
+    if (ctx.positionAccount.toLowerCase() !== suggestion.owner.toLowerCase()) {
+      const live = await readPosition(ctx.positionAccount, marketId, { network, client: publicClient(network) });
+      if (!live) throw new Error("The delegated account has no open position on this market right now.");
+      fullSizeLots = sizeToLots(live.size, lotDecimals);
+    }
+    if (fullSizeLots <= 0n) {
+      throw new Error("The owner position is under one whole lot, so there is nothing to close.");
+    }
+    const close = toCloseOrder(
+      { ...suggestion, sizeLots: undefined },
+      { priceDecimals: BigInt(priceDecimals), lotDecimals: BigInt(lotDecimals) },
+      { fullSizeLots },
+    );
     let restingNow: RestingClose[] = [];
     try {
-      restingNow = (await findRestingCloses(network, publicClient(network), suggestion.owner, marketId)).filter(matchingSide);
+      restingNow = (await findRestingCloses(network, publicClient(network), ctx.positionAccount, marketId)).filter(matchingSide);
     } catch {
       restingNow = [];
     }
@@ -394,13 +424,23 @@ export function SuggestionBanner({
     setAccept({ kind: "sending" });
     try {
       const connected = await connect(network);
-      const gate = acceptOwnerCheck(connected, suggestion, nameFor);
+      const client = publicClient(network);
+      const target = await resolveAcceptExecTarget(network, client, connected, suggestion);
+      if (!target.ok) {
+        setAccept({ kind: "error", message: target.reason });
+        return;
+      }
+      const gate = acceptSignerCheck(connected, suggestion, { viaOperator: target.mode === "operator" }, nameFor);
       if (!gate.ok) {
         setAccept({ kind: "error", message: gate.reason });
         return;
       }
       acceptedWith.current = "wallet";
-      await acceptWith((data) => sendExecOrder(NETWORKS[network].exchange, data, network));
+      const execTo = target.execTo;
+      await acceptWith((data) => sendExecOrder(execTo, data, network), {
+        execTo: target.execTo,
+        positionAccount: target.positionAccount,
+      });
     } catch (e) {
       setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
     }
@@ -421,7 +461,11 @@ export function SuggestionBanner({
       }
       const key = passkey;
       acceptedWith.current = "passkey";
-      await acceptWith((data) => sendExecOrderWith(key, NETWORKS[network].exchange, data, network));
+      const execTo = NETWORKS[network].exchange;
+      await acceptWith((data) => sendExecOrderWith(key, execTo, data, network), {
+        execTo,
+        positionAccount: suggestion.owner,
+      });
     } catch (e) {
       setAccept({ kind: "error", message: e instanceof Error ? e.message : String(e) });
     }
@@ -635,13 +679,18 @@ export function SuggestionBanner({
             ) : null}
           </p>
         )}
-        {accept.kind === "ok" && !stopLoss && (
-          <p className="num order-6 w-full shrink-0 break-all text-[12px] text-gain sm:order-none sm:w-auto sm:mt-2">
+        {accept.kind === "ok" && !stopLoss && acceptTxExplorerHref(network, accept.hash) && (
+          <p data-accept-tx className="num order-6 w-full shrink-0 break-all text-[12px] text-gain sm:order-none sm:w-auto sm:mt-2">
             Accepted · your TP is resting on Perpl ·{" "}
-            <a className="underline" href={explorerTxUrl(network, accept.hash)} target="_blank" rel="noreferrer">
+            <a className="underline" href={acceptTxExplorerHref(network, accept.hash)!} target="_blank" rel="noreferrer">
               View on the {network === "mainnet" ? "MonadVision" : "testnet"} explorer
             </a>
             {twoSigs ? ` · ${TWO_SIGNATURE_NOTICE}` : ""}
+          </p>
+        )}
+        {accept.kind === "ok" && !stopLoss && !acceptTxExplorerHref(network, accept.hash) && (
+          <p data-accept-pending className="num order-6 w-full shrink-0 text-[12px] text-muted sm:order-none sm:w-auto sm:mt-2">
+            Accepted · waiting for an on-chain transaction id from your wallet
           </p>
         )}
         {accept.kind === "ok" && !stopLoss && CALL_STAKE[network] && (

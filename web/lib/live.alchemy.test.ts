@@ -8,6 +8,7 @@ import {
   TESTNET_LOG_CONCURRENCY,
   logChunkBlocks,
   logConcurrency,
+  liveLogRanges,
   scanRecentOpenings,
   type Opening,
 } from "./live";
@@ -57,6 +58,14 @@ describe("alchemy testnet chunk/concurrency selection", () => {
     expect(ALCHEMY_TESTNET_LOG_CONCURRENCY).toBe(10);
     expect(logChunkBlocks("testnet")).toBe(10);
     expect(logConcurrency("testnet")).toBe(10);
+    const ranges = liveLogRanges("testnet", 100n, 135n);
+    expect(ranges).toEqual([
+      { fromBlock: 100n, toBlock: 109n },
+      { fromBlock: 110n, toBlock: 119n },
+      { fromBlock: 120n, toBlock: 129n },
+      { fromBlock: 130n, toBlock: 135n },
+    ]);
+    expect(ranges.every(({ fromBlock, toBlock }) => toBlock - fromBlock + 1n <= 10n)).toBe(true);
   });
 
   it("leaves mainnet at 1000 blocks concurrency 4 either way", () => {
@@ -68,6 +77,16 @@ describe("alchemy testnet chunk/concurrency selection", () => {
     setAlchemy("https://example.invalid/alchemy");
     expect(logChunkBlocks("mainnet")).toBe(1000);
     expect(logConcurrency("mainnet")).toBe(4);
+  });
+
+  it("keeps actual public testnet ranges at 100 blocks when Alchemy is unset", () => {
+    setAlchemy(undefined);
+    const ranges = liveLogRanges("testnet", 100n, 350n);
+    expect(ranges).toEqual([
+      { fromBlock: 100n, toBlock: 199n },
+      { fromBlock: 200n, toBlock: 299n },
+      { fromBlock: 300n, toBlock: 350n },
+    ]);
   });
 });
 

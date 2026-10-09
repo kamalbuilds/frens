@@ -68,6 +68,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ room: st
     })),
     names,
     calls,
+    latestAcceptTx: calls[0]?.hash ?? null,
     live,
   });
 

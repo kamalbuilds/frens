@@ -48,6 +48,16 @@ describe("buildCardData rows", () => {
     expect(rows.find((r) => r.account === B)?.calls).toBe(0);
   });
 
+  it("carries the latest accept tx hash for the share card", () => {
+    const tx = "0x8489b2c28bf9d9861dfbb3429e5dde3257054b99aab100c64fd59ec2e2bc089a";
+    const card = buildCardData({
+      accounts: [A, B],
+      positions: [pos(A, 1), pos(B, 2)],
+      latestAcceptTx: tx,
+    });
+    expect(card.acceptTx).toBe(tx);
+  });
+
   it("keeps side, symbol and mark on each row", () => {
     const { rows } = buildCardData({ accounts: [A], positions: [{ ...pos(A, -1, "short", "ETH Perp"), markPrice: 0.0204 }] });
     expect(rows[0]).toMatchObject({ side: "short", symbol: "ETH Perp", markPrice: 0.0204 });
