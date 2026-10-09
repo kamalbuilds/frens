@@ -1,13 +1,14 @@
 {
-  "as": "perps trading chart for Perpl traders and their friends, printed trading log that is alive",
+  "as": "perps trading chart for Perpl traders, workbench dark",
   "dials": "6/4/8",
   "type": "Space Grotesk",
-  "surface": "#F3EFE6",
-  "accent": "#2F5BEA",
+  "surface": "off-black",
+  "accent": "lime",
   "radius": "6",
   "showpiece": "none",
-  "direction": "design-taste",
-  "review": "frontend-design-guidelines",
+  "direction": "design-taste-frontend",
+  "review": "anti-ai-slop-frontend",
+  "research": "skipped: extend existing chartroom DESIGN.md and DemoShell reuses ChartRoom chrome",
   "cwd": "/Users/kamal/Desktop/metropolis/products/chartroom/web",
-  "ts": "2026-09-24T08:35:47Z"
+  "ts": "2026-10-09T07:38:53Z"
 }

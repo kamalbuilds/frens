@@ -47,6 +47,8 @@ export type CardData = {
   open: number;
   /// False when positions could not be read at all.
   live: boolean;
+  /// Verified accept tx from ?c=, null when no receipts.
+  acceptTx: string | null;
 };
 
 /// Accepted calls per suggester, keyed by lowercased caller. Receipts only:
@@ -70,6 +72,8 @@ export type CardInput = {
   names?: NamesByAddress;
   /// Verified call receipts from ?c=, counted per suggester.
   calls?: readonly { caller: string }[];
+  /// Latest verified accept transaction from ?c= (first hash), for the share card.
+  latestAcceptTx?: string | null;
   live?: boolean;
 };
 
@@ -115,6 +119,7 @@ export function buildCardData(input: CardInput): CardData {
     traders: input.accounts.length,
     open: input.positions.length,
     live: input.live ?? true,
+    acceptTx: input.latestAcceptTx ?? null,
   };
 }
 

@@ -39,6 +39,7 @@ import { ROOM_POST, telegramShareUrl, xPostUrl } from "@/lib/share";
 import { connect as connectWallet, sendExecOrder, sendExecOrderWith } from "@/lib/wallet";
 import { connect as connectMarketWs, mergeCandle } from "@/lib/marketws";
 import { subscribeRoomFeed } from "@/lib/roomfeed";
+import { normalizeRoomAccounts, roomPositionsKey, roomPositionsUrl, shouldFetchRoomPositions } from "@/lib/roomPositions";
 import { SuggestionBanner } from "./SuggestionBanner";
 import { PasskeyWallet } from "./PasskeyWallet";
 import { TestFunds } from "./TestFunds";
@@ -220,6 +221,11 @@ export function ChartRoom({
   viewerAddress,
   initialView,
   initialNet,
+  demoSurface,
+  suggestionNonce,
+  onDemoStep,
+  onDemoCallAccepted,
+  onDemoSuggestionDelivered,
 }: {
   initialAccounts?: string[];
   /// Nicknames from the room link (?n=), same order as initialAccounts.
@@ -234,6 +240,11 @@ export function ChartRoom({
   /// read server side from searchParams so the first paint is already on the
   /// right deployment.
   initialNet?: Network;
+  demoSurface?: boolean;
+  suggestionNonce?: number;
+  onDemoStep?: (step: number) => void;
+  onDemoCallAccepted?: (hash: string) => void;
+  onDemoSuggestionDelivered?: () => void;
 }) {
   const [net, setNet] = useState<Network>(initialNet ?? "testnet");
   const [markets, setMarkets] = useState<Load<Market[]>>({ state: "loading" });
@@ -244,7 +255,7 @@ export function ChartRoom({
   const [room, setRoom] = useState<Load<{ friends: Friend[]; block: string; checked: number }>>({ state: "loading" });
   const [view, setView] = useState<"live" | "frens">(initialView ?? "live");
   const [live, setLive] = useState<Load<{ traders: Friend[]; block: string; hours: number }>>({ state: "loading" });
-  const [extra, setExtra] = useState<string[]>(initialAccounts ?? []);
+  const [extra, setExtra] = useState<string[]>(() => normalizeRoomAccounts(initialAccounts ?? []));
   const [nameByAddr, setNameByAddr] = useState<Map<string, string>>(
     () => namesForAddresses(initialAccounts ?? [], initialNames ?? []),
   );
@@ -309,6 +320,9 @@ export function ChartRoom({
     if (view === "live") return byPnl(live.state === "ready" ? live.data.traders : []);
     return byPnl(room.state === "ready" ? room.data.friends : []);
   }, [room, live, view]);
+  useEffect(() => {
+    if (demoSurface && room.state === "ready" && friends.length >= 2) onDemoStep?.(1);
+  }, [demoSurface, room.state, friends.length, onDemoStep]);
   const ring = (f: Pick<Friend, "side">) => ringColorFor(f.side);
   const lastClose = candles.state === "ready" && candles.data.length ? candles.data[candles.data.length - 1].close : null;
   const counts = useMemo(() => sideCounts(friends), [friends]);
@@ -378,7 +392,7 @@ export function ChartRoom({
           return;
         }
         setMarkets({ state: "ready", data: body.markets });
-        setMarketId((cur) => (body.markets.some((m: Market) => m.id === cur) ? cur : (body.markets[0]?.id ?? cur)));
+        setMarketId((cur) => (body.markets.some((m: Market) => m.id === cur) ? cur : (body.markets[0]?.id ?? DEFAULT_MARKET[net])));
       })
       .catch((e) => setMarkets({ state: "error", message: String(e) }));
   }, [net]);
@@ -443,6 +457,7 @@ export function ChartRoom({
   // and refreshes positions. Members read through a ref so room changes do
   // not reconnect the socket.
   useEffect(() => {
+    if (view === "frens" && room.state !== "ready") return;
     return subscribeRoomFeed({
       net,
       members: () => friendsRef.current.map((f) => f.account),
@@ -456,7 +471,7 @@ export function ChartRoom({
         setFeedTick((t) => t + 1);
       },
     });
-  }, [net, livePriceDecimals]);
+  }, [net, livePriceDecimals, view, room.state]);
 
   // Toast lifetime: 6 s on screen, then gone.
   useEffect(() => {
@@ -468,21 +483,34 @@ export function ChartRoom({
   // Positions per market, room and network: the saved My frens view.
   // feedTick refreshes it when the room feed sees member activity.
   useEffect(() => {
-    if (view !== "frens" || !marketKnown) return;
-    // A live-feed refresh (same room, market and network) keeps the list on screen until the new one lands;
-    // only a different room blanks it. A failed background refresh keeps the last good list too.
-    const key = `${marketId}|${extra.join(",")}|${net}`;
+    if (!shouldFetchRoomPositions(view, marketId)) return;
+    const key = roomPositionsKey(marketId, extra, net);
     const background = roomKey.current === key;
     roomKey.current = key;
     if (!background) setRoom({ state: "loading" });
-    const q = extra.length ? `&accounts=${extra.join(",")}` : "";
-    fetch(`/api/positions?market=${marketId}${q}&net=${net}`)
+    let live = true;
+    const timer = setTimeout(() => {
+      if (!live) return;
+      setRoom((prev) => (background && prev.state === "ready" ? prev : { state: "error", message: "Reading positions timed out after 45s" }));
+    }, 45_000);
+    fetch(roomPositionsUrl(marketId, extra, net))
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
-      .then(({ ok, body }) =>
-        setRoom((prev) => (ok ? { state: "ready", data: body } : background && prev.state === "ready" ? prev : { state: "error", message: body.error })),
-      )
-      .catch((e) => setRoom((prev) => (background && prev.state === "ready" ? prev : { state: "error", message: String(e) })));
-  }, [marketId, extra, view, net, marketKnown, feedTick]);
+      .then(({ ok, body }) => {
+        if (!live) return;
+        setRoom((prev) => (ok ? { state: "ready", data: body } : background && prev.state === "ready" ? prev : { state: "error", message: body.error }));
+      })
+      .catch((e) => {
+        if (!live) return;
+        setRoom((prev) =>
+          background && prev.state === "ready" ? prev : { state: "error", message: e instanceof Error ? e.message : String(e) },
+        );
+      })
+      .finally(() => clearTimeout(timer));
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [marketId, extra, view, net, feedTick]);
 
   // Recent Perpl openers per market and network: the default Live on Perpl view, so faces
   // land on the candles at their entry time. feedTick refreshes it on room feed events.
@@ -577,7 +605,11 @@ export function ChartRoom({
   function handleAcceptedChange(info: { orderId: string; hash: string } | null) {
     acceptedCall.current = info && incoming ? callKey(incoming) : null;
     setGhostAccepted(info);
-    if (info?.hash) appendCallHash(info.hash);
+    if (info?.hash) {
+      appendCallHash(info.hash);
+      onDemoCallAccepted?.(info.hash);
+      onDemoStep?.(5);
+    }
   }
 
   // The chart itself, created once.
@@ -1186,6 +1218,17 @@ export function ChartRoom({
   async function copySuggestLink() {
     if (!suggestPayload || typeof window === "undefined") return;
     try {
+      if (demoSurface) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("s", suggestPayload);
+        url.searchParams.set("net", net);
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        onDemoSuggestionDelivered?.();
+        onDemoStep?.(3);
+        setCopiedSuggest(true);
+        setTimeout(() => setCopiedSuggest(false), 2000);
+        return;
+      }
       const url = roomCodeForSuggest
         ? `${window.location.origin}/r/${roomCodeForSuggest}?s=${suggestPayload}&net=${net}`
         : `${window.location.origin}/?s=${suggestPayload}&net=${net}`;
@@ -1662,9 +1705,10 @@ export function ChartRoom({
               acceptRequest={acceptReq}
               chartActions={ghostY !== null && ghostAccepted === null}
               passRequest={passReq}
+              suggestionNonce={suggestionNonce}
             />
           </div>
-          {hasInitialRoom && roomCode && !hintDismissed && !incoming && (
+          {hasInitialRoom && roomCode && !hintDismissed && !incoming && !demoSurface && (
             <div className="order-3 mt-2 flex items-center gap-2 rounded-[10px] border border-edge bg-panel px-3 py-2 sm:order-none sm:mb-3 sm:mt-0 sm:flex-wrap sm:gap-3 sm:px-4 sm:py-3">
               <p className="min-w-0 flex-1 truncate text-[13px] sm:min-w-[200px]">
                 Send this link to your frens. When one of them drags a TP onto your position, you&apos;ll see it here.
@@ -2275,7 +2319,7 @@ export function ChartRoom({
                     title="Copy a link with this suggestion"
                     className="rounded-[6px] border border-edge px-3 py-2 text-[13px] font-medium hover:bg-raised active:scale-[0.97]"
                   >
-                    {copiedSuggest ? "Copied" : "Copy suggestion link"}
+                    {copiedSuggest ? (demoSurface ? "Sent" : "Copied") : demoSurface ? "Send to cy" : "Copy suggestion link"}
                   </button>
                 ) : (
                   <div className="flex flex-col gap-2">

@@ -76,7 +76,12 @@ export function Card({ card, chainName }: { card: CardData; chainName: string })
           paddingTop: 14,
         }}
       >
-        <span style={{ fontSize: 19, color: MUTED }}>Trade perps with your frens · frenstrade.vercel.app</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 820 }}>
+          <span style={{ fontSize: 19, color: MUTED }}>Trade perps with your frens · frenstrade.vercel.app</span>
+          {card.acceptTx && (
+            <span style={{ fontSize: 15, color: MUTED, fontFamily: "monospace" }}>Accept tx {card.acceptTx}</span>
+          )}
+        </div>
         <span style={{ fontSize: 15, color: MUTED }}>{chainName} · read-only</span>
       </div>
     </div>

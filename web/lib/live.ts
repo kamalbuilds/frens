@@ -171,6 +171,10 @@ export function chunkRanges(from: bigint, to: bigint, size: number = LOG_CHUNK_B
   return out;
 }
 
+export function liveLogRanges(network: Network, from: bigint, to: bigint): BlockRange[] {
+  return chunkRanges(from, to, logChunkBlocks(network));
+}
+
 export type LiveCandidatePosition = {
   side: "long" | "short";
   size: number;
@@ -280,7 +284,7 @@ export async function getLiveTraders(
   const latest = await withRetry(() => client.getBlockNumber());
   const span = blocksForHours(hours);
   const from = latest > span ? latest - span : 0n;
-  const ranges = chunkRanges(from, latest, logChunkBlocks(network));
+  const ranges = liveLogRanges(network, from, latest);
   const want = BigInt(market);
   const recent = await scanRecentOpenings(ranges, want, async ({ fromBlock, toBlock }) => {
     const logs = await withRetry(() => client.getLogs({ address: exchange, events: OPENED_EVENTS, fromBlock, toBlock }));
