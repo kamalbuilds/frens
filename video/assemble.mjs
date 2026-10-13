@@ -14,7 +14,7 @@ fs.mkdirSync(work, { recursive: true });
 const run = (args) => execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...args], { stdio: ["ignore", "inherit", "inherit"] });
 const probe = (f) => Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f], { encoding: "utf8" }));
 const norm = `scale=${W}:${H}:flags=lanczos,setsar=1,fps=${FPS},format=yuv420p`;
-const enc = ["-c:v", "libx264", "-crf", "16", "-preset", "medium", "-pix_fmt", "yuv420p", "-an"];
+const enc = ["-c:v", "libx264", "-crf", "16", "-preset", process.env.X264_PRESET ?? "medium", "-pix_fmt", "yuv420p", "-an"];
 const warns = [];
 
 const beatFiles = [];

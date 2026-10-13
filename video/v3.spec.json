@@ -1,0 +1,408 @@
+{
+  "out": "frens-demo-v3.mp4",
+  "audio": "vo/out-v3-narration.wav",
+  "work": "asm-demo-v3",
+  "beats": [
+    {
+      "name": "telegram problem",
+      "t0": 0,
+      "t1": 19.043625,
+      "pieces": [
+        {
+          "src": "work/v3/P-problem.mp4",
+          "ss": 0,
+          "se": 19.043625,
+          "speed": 1,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap0.png",
+          "a": 0.24999999999999997,
+          "b": 3.698125
+        },
+        {
+          "png": "work/v3/caps/cap1.png",
+          "a": 3.648125,
+          "b": 6.9425
+        },
+        {
+          "png": "work/v3/caps/cap2.png",
+          "a": 6.8925,
+          "b": 9.816666999999999
+        },
+        {
+          "png": "work/v3/caps/cap3.png",
+          "a": 10.166667,
+          "b": 13.277667
+        },
+        {
+          "png": "work/v3/caps/cap4.png",
+          "a": 13.177667,
+          "b": 18.793625000000002
+        }
+      ]
+    },
+    {
+      "name": "the room",
+      "t0": 19.043625,
+      "t1": 23.623417,
+      "pieces": [
+        {
+          "src": "work/v3/A-room.mp4",
+          "ss": 0.5,
+          "se": 5.08,
+          "speed": 1,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap5.png",
+          "a": 19.243624999999998,
+          "b": 23.473417
+        }
+      ]
+    },
+    {
+      "name": "faces and pnl",
+      "t0": 23.623417,
+      "t1": 31.776709,
+      "pieces": [
+        {
+          "src": "work/v3/A-room.mp4",
+          "ss": 6.0,
+          "se": 14.16,
+          "speed": 1,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap6.png",
+          "a": 23.823417,
+          "b": 28.841688
+        },
+        {
+          "png": "work/v3/caps/cap7.png",
+          "a": 28.891688,
+          "b": 31.926709000000002
+        }
+      ]
+    },
+    {
+      "name": "bo drags tp",
+      "t0": 31.776709,
+      "t1": 38.165563,
+      "pieces": [
+        {
+          "src": "work/v3/B-call.mp4",
+          "ss": 2.2,
+          "se": 9.0,
+          "speed": 1.064,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap8.png",
+          "a": 31.976709,
+          "b": 38.115563
+        }
+      ]
+    },
+    {
+      "name": "sl then send",
+      "t0": 38.165563,
+      "t1": 44.841167000000006,
+      "pieces": [
+        {
+          "src": "work/v3/B-call.mp4",
+          "ss": 10.9,
+          "se": 15.8,
+          "speed": 1.3,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        },
+        {
+          "src": "work/v3/B-call.mp4",
+          "ss": 17.4,
+          "se": 21.8,
+          "speed": 1.5,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap9.png",
+          "a": 38.165563,
+          "b": 44.791167
+        }
+      ]
+    },
+    {
+      "name": "ana accepts",
+      "t0": 44.841167000000006,
+      "t1": 54.761772,
+      "pieces": [
+        {
+          "src": "work/v3/C-accept.mp4",
+          "ss": 0.9,
+          "se": 10.8,
+          "speed": 1,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap10.png",
+          "a": 45.041167,
+          "b": 47.889584
+        },
+        {
+          "png": "work/v3/caps/cap11.png",
+          "a": 47.839584,
+          "b": 54.611772
+        }
+      ]
+    },
+    {
+      "name": "receipt accept",
+      "t0": 54.761772,
+      "t1": 60.292626,
+      "pieces": [
+        {
+          "src": "work/v3/yz-accept.mp4",
+          "ss": 0,
+          "se": 5.54,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap12.png",
+          "a": 54.961771999999996,
+          "b": 60.2
+        }
+      ]
+    },
+    {
+      "name": "cy copies",
+      "t0": 60.292626,
+      "t1": 66.7,
+      "pieces": [
+        {
+          "src": "work/v3/D-copy.mp4",
+          "ss": 1.2,
+          "se": 5.6,
+          "speed": 1.6,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        },
+        {
+          "src": "work/v3/D-copy.mp4",
+          "ss": 8.6,
+          "se": 14.4,
+          "speed": 1.6,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap13.png",
+          "a": 60.3,
+          "b": 69.122084
+        }
+      ]
+    },
+    {
+      "name": "receipt copy",
+      "t0": 66.7,
+      "t1": 69.672084,
+      "pieces": [
+        {
+          "src": "work/v3/yz-copy.mp4",
+          "ss": 0,
+          "se": 2.97,
+          "speed": 1
+        }
+      ]
+    },
+    {
+      "name": "ana stakes",
+      "t0": 69.672084,
+      "t1": 81.600938,
+      "pieces": [
+        {
+          "src": "work/v3/C-accept.mp4",
+          "ss": 12.5,
+          "se": 24.4,
+          "speed": 1,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap14.png",
+          "a": 69.872084,
+          "b": 74.33018799999999
+        },
+        {
+          "png": "work/v3/caps/cap15.png",
+          "a": 74.28018800000001,
+          "b": 81.650938
+        }
+      ]
+    },
+    {
+      "name": "receipt stake",
+      "t0": 81.600938,
+      "t1": 87.4,
+      "pieces": [
+        {
+          "src": "work/v3/yz-stake.mp4",
+          "ss": 0,
+          "se": 5.8,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap16.png",
+          "a": 81.800938,
+          "b": 89.7
+        }
+      ]
+    },
+    {
+      "name": "bo line",
+      "t0": 87.4,
+      "t1": 91.11898000000001,
+      "pieces": [
+        {
+          "src": "work/v3/G-end.mp4",
+          "ss": 8.5,
+          "se": 12.22,
+          "speed": 1,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ]
+    },
+    {
+      "name": "call record",
+      "t0": 91.11898000000001,
+      "t1": 97.409355,
+      "pieces": [
+        {
+          "src": "work/v3/G-end.mp4",
+          "ss": 1.6,
+          "se": 7.0,
+          "speed": 0.86,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap17.png",
+          "a": 91.31898000000001,
+          "b": 97.45935499999999
+        }
+      ]
+    },
+    {
+      "name": "end",
+      "t0": 97.409355,
+      "t1": 107.056,
+      "pieces": [
+        {
+          "src": "work/v3/G-end.mp4",
+          "ss": 7.0,
+          "se": 14.6,
+          "speed": 0.788,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.05,
+            "fx": 0.5,
+            "fy": 0.45
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v3/caps/cap18.png",
+          "a": 97.60935500000001,
+          "b": 103.52031299999999
+        },
+        {
+          "png": "work/v3/caps/cap19.png",
+          "a": 103.470313,
+          "b": 106.806021
+        },
+        {
+          "png": "work/v3/caps/cap20.png",
+          "a": 97.709355,
+          "b": 106.9
+        }
+      ]
+    }
+  ]
+}
