@@ -1001,6 +1001,8 @@ export function ChartRoom({
     const clear = (e: PointerEvent) => {
       const target = e.target as Node | null;
       if (target && wrap.current?.contains(target)) return;
+      // The Suggest panel acts on the selected fren: a press there must not clear it before the click lands.
+      if (target instanceof Element && target.closest("[data-keeps-fren]")) return;
       setActive(null);
     };
     document.addEventListener("pointerdown", clear);
@@ -1031,6 +1033,7 @@ export function ChartRoom({
       if (!incoming || ghostPrice === null || ghostAccepted) return;
       dragging.current = "ghost";
       c.applyOptions({ handleScroll: false, handleScale: false });
+      c.priceScale("right").applyOptions({ autoScale: false });
       (e.currentTarget as HTMLElement).style.touchAction = "none";
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
       e.preventDefault();
@@ -1042,6 +1045,7 @@ export function ChartRoom({
       setFocusKind(gripKind);
       setSuggestKind(gripKind);
       c.applyOptions({ handleScroll: false, handleScale: false });
+      c.priceScale("right").applyOptions({ autoScale: false });
       (e.currentTarget as HTMLElement).style.touchAction = "none";
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
       e.preventDefault();
@@ -1053,6 +1057,7 @@ export function ChartRoom({
     if (ghost) {
       dragging.current = ghost;
       c.applyOptions({ handleScroll: false, handleScale: false });
+      c.priceScale("right").applyOptions({ autoScale: false });
       (e.currentTarget as HTMLElement).style.touchAction = "none";
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
       e.preventDefault();
@@ -1065,6 +1070,7 @@ export function ChartRoom({
     setFocusKind(kind);
     setSuggestKind(kind);
     c.applyOptions({ handleScroll: false, handleScale: false });
+      c.priceScale("right").applyOptions({ autoScale: false });
     (e.currentTarget as HTMLElement).style.touchAction = "none";
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     e.preventDefault();
@@ -1110,6 +1116,8 @@ export function ChartRoom({
     setHoverLine(null);
     setHoverGhost(false);
     chart.current?.applyOptions({ handleScroll: true, handleScale: true });
+    // The axis stays frozen during a drag (the fit includes the dragged line, which would feed back); refit on release.
+    chart.current?.priceScale("right").applyOptions({ autoScale: true });
     (e.currentTarget as HTMLElement).style.touchAction = "";
   }
 
@@ -2254,7 +2262,7 @@ export function ChartRoom({
               );
             })}
           </ol>
-          <section aria-label="Suggest TP or SL" className="flex flex-col gap-2 border-t border-edge pt-4">
+          <section aria-label="Suggest TP or SL" data-keeps-fren className="flex flex-col gap-2 border-t border-edge pt-4">
             <h3 className="font-[family-name:var(--font-display)] text-[16px] font-bold">Suggest TP or SL</h3>
             {!selected && (
               <p className="text-[13px] text-muted">Select a trader to drag TP and SL lines for them.</p>
