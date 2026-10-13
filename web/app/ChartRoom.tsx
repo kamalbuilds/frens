@@ -1497,6 +1497,8 @@ export function ChartRoom({
   function addTrader(e: React.FormEvent) {
     e.preventDefault();
     const a = draft.trim();
+    // An empty field is not a mistake to report: Add stays disabled until there is something to check.
+    if (!a) return;
     if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return setDraftError("That is not a Monad address.");
     const clean = sanitizeName(draftName);
     if (draftName.trim() !== "" && !clean) return setDraftError("That name cannot be used. Keep it under 24 characters, no commas.");
@@ -2433,7 +2435,7 @@ export function ChartRoom({
                 aria-label="Nickname for this fren"
                 className="min-w-0 flex-1 rounded-[6px] border border-edge bg-panel px-2.5 py-2 text-[12px]"
               />
-              <button className="rounded-[6px] bg-accent px-3 text-[13px] font-medium text-page active:scale-[0.97]">Add</button>
+              <button disabled={draft.trim() === ""} className="rounded-[6px] bg-accent px-3 text-[13px] font-medium text-page active:scale-[0.97] disabled:opacity-40">Add</button>
               <button
                 type="button"
                 onClick={copyRoomLink}
