@@ -1,0 +1,23 @@
+! This is one room on Perpl.
+ana, bo, cy and dee. Four wallets, one B T C chart, on Monad.
+
+Each face is that wallet's position. PnL is live off the exchange.
+
+bo calls her exit. He drags a take-profit onto her candle and sends it.
+His face rides the line. Her size stays hers. He only names the level.
+
+ana takes it. One signature, and the close rests on Perpl, with bo's address inside the order. [+2600]
+
+The room reads that back from the chain. His record moves when her order does.
+
+cy joins the same trade at his own size. The order leaves his wallet, with ana's name in it. [+2400]
+
+dee is short, the other side of the same chart. cy calls his exit. dee takes it.
+One signature, and cy is the caller inside that order too. [+2600]
+
+ana stakes on cy's call. It pays him only if Perpl's mark hits his level, and comes back to her if it doesn't.
+The level is read off the order. [+2400]
+
+Share the room. The card carries all four, with sides and live PnL. The next person opens this same chart.
+
+! frens. Your people. Your Perpl trades. One room.

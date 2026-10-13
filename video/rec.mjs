@@ -134,7 +134,7 @@ try {
     if (s.dragSel || s.dragAt) {
       const r = s.dragAt ? JSON.stringify({ x: s.dragAt[0], y: s.dragAt[1] }) : await rectOf(`document.querySelector(${JSON.stringify(s.dragSel)})`);
       if (!r) { if (!s.soft) throw new Error("no grip: " + s.dragSel); } else {
-        const p = JSON.parse(r); await send("Page.bringToFront"); await applyMetrics(); await glide(p.x, p.y, 800); await sleep(250);
+        const p = JSON.parse(r); if (s.dragX) p.x = s.dragX; if (s.dragDx) p.x += s.dragDx; await send("Page.bringToFront"); await applyMetrics(); await glide(p.x, p.y, 800); await sleep(250);
         await mouse("mousePressed", p.x, p.y); await sleep(120);
         const n = Math.round((s.ms ?? 1400) / 20), y1 = p.y + (s.dy ?? -60), x1 = p.x + (s.dx ?? 0);
         for (let k = 1; k <= n; k++) { const t = k / n, e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: p.x + (x1 - p.x) * e, y: p.y + (y1 - p.y) * e, button: "left", buttons: 1 }); await sleep(16); }
@@ -158,7 +158,7 @@ try {
     if (s.hoverSel) { const r = await rectOf(`document.querySelector(${JSON.stringify(s.hoverSel)})`); if (r) { const p = JSON.parse(r); await glide(p.x, p.y); log.push({ hoverSel: s.hoverSel }); } else if (!s.soft) throw new Error("no el: " + s.hoverSel); }
     if (s.move) await glide(s.move[0], s.move[1], s.ms ?? 700);
     if (s.type) { const t = sub(s.type); if (s.slow) { for (const ch of t) { await send("Input.insertText", { text: ch }); await sleep(110); } } else await send("Input.insertText", { text: t }); }
-    if (s.key) { await send("Input.dispatchKeyEvent", { type: "keyDown", key: s.key, code: s.key }); await send("Input.dispatchKeyEvent", { type: "keyUp", key: s.key, code: s.key }); }
+    if (s.key) { const enter = s.key === "Enter" ? { windowsVirtualKeyCode: 13, text: "\r" } : {}; await send("Input.dispatchKeyEvent", { type: "keyDown", key: s.key, code: s.key, ...enter }); await send("Input.dispatchKeyEvent", { type: "keyUp", key: s.key, code: s.key, ...enter }); }
     if (s.scroll) { await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: mx, y: my, deltaX: 0, deltaY: s.scroll }); }
     if (s.shot) { const r = await send("Page.captureScreenshot", { format: "png" }); fs.writeFileSync(`${out}/${s.shot}.png`, Buffer.from(r.result.data, "base64")); log.push({ shot: s.shot }); }
     console.error("STEP " + JSON.stringify(log[log.length - 1] ?? s).slice(0, 160) + " VP=" + (await ev("[innerWidth,devicePixelRatio,visualViewport.scale,document.documentElement.scrollWidth].join()")));

@@ -1,0 +1,359 @@
+{
+  "out": "frens-demo-v2.mp4",
+  "audio": "vo/out-demo-v2/narration-n19.wav",
+  "work": "asm-demo-v2",
+  "beats": [
+    {
+      "name": "room",
+      "t0": 0,
+      "t1": 9.4,
+      "pieces": [
+        {
+          "src": "work/v2/A-room.mp4",
+          "ss": 0,
+          "se": 9.4,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap0.png",
+          "a": 0.4,
+          "b": 2.8
+        },
+        {
+          "png": "work/v2/caps/cap1.png",
+          "a": 3.0,
+          "b": 8.9
+        }
+      ]
+    },
+    {
+      "name": "tap ana",
+      "t0": 9.4,
+      "t1": 14.99,
+      "pieces": [
+        {
+          "src": "work/v2/A-room.mp4",
+          "ss": 9.4,
+          "se": 15,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap2.png",
+          "a": 9.3,
+          "b": 14.4
+        }
+      ]
+    },
+    {
+      "name": "bo drags and sends",
+      "t0": 14.99,
+      "t1": 19.85,
+      "pieces": [
+        {
+          "src": "work/v2/B-call.mp4",
+          "ss": 2.0,
+          "se": 8.0,
+          "speed": 1.7
+        },
+        {
+          "src": "work/v2/B-call.mp4",
+          "ss": 12.3,
+          "se": 14.0,
+          "speed": 1.2
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap3.png",
+          "a": 14.9,
+          "b": 19.6
+        }
+      ]
+    },
+    {
+      "name": "ghost line with bo",
+      "t0": 19.85,
+      "t1": 25.74,
+      "pieces": [
+        {
+          "src": "work/v2/C-accept.mp4",
+          "ss": 0.8,
+          "se": 4.3,
+          "speed": 0.65,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.08,
+            "fx": 0.5,
+            "fy": 0.5
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap4.png",
+          "a": 19.8,
+          "b": 25.2
+        }
+      ]
+    },
+    {
+      "name": "ana accepts",
+      "t0": 25.74,
+      "t1": 31.3,
+      "pieces": [
+        {
+          "src": "work/v2/C-accept.mp4",
+          "ss": 4.5,
+          "se": 10.1,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap5.png",
+          "a": 25.7,
+          "b": 33.0
+        }
+      ]
+    },
+    {
+      "name": "receipt accept ana",
+      "t0": 31.3,
+      "t1": 34.99,
+      "pieces": [
+        {
+          "src": "work/v2/xz-accept-ana.mp4",
+          "ss": 0,
+          "se": 3.69,
+          "speed": 1
+        }
+      ]
+    },
+    {
+      "name": "room reads back",
+      "t0": 34.99,
+      "t1": 40.93,
+      "pieces": [
+        {
+          "src": "work/v2/C-accept.mp4",
+          "ss": 10.1,
+          "se": 12.9,
+          "speed": 1
+        },
+        {
+          "src": "work/v2/C2-chain.mp4",
+          "ss": 2.5,
+          "se": 5.6,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap6.png",
+          "a": 34.9,
+          "b": 40.4
+        }
+      ]
+    },
+    {
+      "name": "cy copies",
+      "t0": 40.93,
+      "t1": 43.33,
+      "pieces": [
+        {
+          "src": "work/v2/D-copy.mp4",
+          "ss": 3.8,
+          "se": 8.0,
+          "speed": 1.75
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap7.png",
+          "a": 40.9,
+          "b": 47.4
+        }
+      ]
+    },
+    {
+      "name": "cy signs",
+      "t0": 43.33,
+      "t1": 45.93,
+      "pieces": [
+        {
+          "src": "work/v2/D-copy.mp4",
+          "ss": 10.4,
+          "se": 14.2,
+          "speed": 1.46
+        }
+      ]
+    },
+    {
+      "name": "receipt copy cy",
+      "t0": 45.93,
+      "t1": 49.33,
+      "pieces": [
+        {
+          "src": "work/v2/xz-copy-cy.mp4",
+          "ss": 0,
+          "se": 3.4,
+          "speed": 1
+        }
+      ]
+    },
+    {
+      "name": "cy calls dee exit",
+      "t0": 49.33,
+      "t1": 54.33,
+      "pieces": [
+        {
+          "src": "work/v2/E-call.mp4",
+          "ss": 4.8,
+          "se": 9.8,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap8.png",
+          "a": 49.3,
+          "b": 55.6
+        }
+      ]
+    },
+    {
+      "name": "dee accepts",
+      "t0": 54.33,
+      "t1": 59.03,
+      "pieces": [
+        {
+          "src": "work/v2/F-accept.mp4",
+          "ss": 6.0,
+          "se": 10.7,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap9.png",
+          "a": 55.8,
+          "b": 60.2
+        }
+      ]
+    },
+    {
+      "name": "receipt accept dee",
+      "t0": 59.03,
+      "t1": 62.39,
+      "pieces": [
+        {
+          "src": "work/v2/xz-accept-dee.mp4",
+          "ss": 0,
+          "se": 3.36,
+          "speed": 1
+        }
+      ]
+    },
+    {
+      "name": "paid stake receipt",
+      "t0": 62.39,
+      "t1": 68.6,
+      "pieces": [
+        {
+          "src": "work/v2/xz-stake.mp4",
+          "ss": 0,
+          "se": 6.21,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap10.png",
+          "a": 62.4,
+          "b": 70.2
+        }
+      ]
+    },
+    {
+      "name": "call record",
+      "t0": 68.6,
+      "t1": 74.9,
+      "pieces": [
+        {
+          "src": "work/v2/G-end.mp4",
+          "ss": 1.0,
+          "se": 7.3,
+          "speed": 1,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.06,
+            "fx": 0.5,
+            "fy": 0.5
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap11.png",
+          "a": 70.4,
+          "b": 74.8
+        }
+      ]
+    },
+    {
+      "name": "share card",
+      "t0": 74.9,
+      "t1": 82.27,
+      "pieces": [
+        {
+          "src": "work/v2/beat9-og.mp4",
+          "ss": 0,
+          "se": 7.37,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap12.png",
+          "a": 74.9,
+          "b": 82.0
+        }
+      ]
+    },
+    {
+      "name": "end on the chart",
+      "t0": 82.27,
+      "t1": 88.0,
+      "pieces": [
+        {
+          "src": "work/v2/G-end.mp4",
+          "ss": 2.0,
+          "se": 7.73,
+          "speed": 1,
+          "zoom": {
+            "from": 1.0,
+            "to": 1.07,
+            "fx": 0.5,
+            "fy": 0.5
+          }
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v2/caps/cap13.png",
+          "a": 82.3,
+          "b": 87.6
+        },
+        {
+          "png": "work/v2/caps/cap14.png",
+          "a": 82.3,
+          "b": 88.0
+        }
+      ]
+    }
+  ]
+}
