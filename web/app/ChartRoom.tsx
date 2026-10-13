@@ -2232,7 +2232,7 @@ export function ChartRoom({
                 (c) => c.resting && c.price !== null && c.market === marketId && c.owner.toLowerCase() === f.account.toLowerCase(),
               );
               return (
-                <li key={f.account} className="min-w-[210px] lg:min-w-0">
+                <li key={f.account} className="relative min-w-[210px] lg:min-w-0">
                   <button
                     onClick={() => setActive(on ? null : f.account)}
                     aria-pressed={on}
@@ -2256,8 +2256,22 @@ export function ChartRoom({
                         </span>
                       )}
                     </span>
-                    <span className="ml-auto" style={{ color: chip.inProfit ? CHART.up : CHART.down }}>{chip.pnl}</span>
+                    <span className="ml-auto pr-5" style={{ color: chip.inProfit ? CHART.up : CHART.down }}>{chip.pnl}</span>
                   </button>
+                  {view === "frens" && extra.includes(f.account.toLowerCase()) && (
+                    <button
+                      type="button"
+                      aria-label={`Remove ${display(f.account)} from the room`}
+                      title={`Remove ${display(f.account)} from the room`}
+                      onClick={() => {
+                        setExtra((x) => x.filter((a) => a !== f.account.toLowerCase()));
+                        if (on) setActive(null);
+                      }}
+                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full text-[14px] text-muted hover:bg-raised hover:text-ink"
+                    >
+                      ×
+                    </button>
+                  )}
                 </li>
               );
             })}
