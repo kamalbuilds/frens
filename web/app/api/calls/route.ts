@@ -129,7 +129,12 @@ export async function GET(req: Request) {
     for (const addr of CALL_STAKE_READ[net] ?? []) {
       try {
         const v = stakeView((await client.readContract({ address: addr, abi: callStakeAbi, functionName: "stakes", args: [stakeId(c.orderDescId)] })) as unknown[]);
-        if (v.state !== "none") return v;
+        if (v.state === "none") continue;
+        // Only v3 has bonds(); an older contract reverts the read, which leaves the bond at 0.
+        const bond = await client
+          .readContract({ address: addr, abi: callStakeAbi, functionName: "bonds", args: [stakeId(c.orderDescId)] })
+          .then((b) => Number(b as bigint) / 1e6, () => 0);
+        return { ...v, bond, contract: addr };
       } catch {
         continue;
       }

@@ -17,7 +17,8 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Address } from "viem";
+import type { Address, Hex } from "viem";
+import { CALL_STAKE, bondCalls } from "@/lib/callstake";
 import { byPnl, candleChange, chipFor, entryLinePoints, formatPrice, formatUsd, placeAvatar, sideCounts, subtitleForMarket, visiblePriceRange, volumeColorFor, type Candle, type Friend } from "@/lib/chart";
 import { FACE_SIZE, clusterFaces, ringColorFor } from "@/lib/faces";
 import { shortMarketLabel } from "@/lib/mobile";
@@ -214,6 +215,9 @@ function TimeframeTabs({
   );
 }
 
+
+/// What a caller puts behind their own call (CallStake v3 bond), in aUSD.
+const BOND_AUSD = 2;
 export function ChartRoom({
   initialAccounts,
   initialNames,
@@ -334,7 +338,7 @@ export function ChartRoom({
   // Trustless call receipts from the room link (?c=): each hash verified
   // against its own transaction receipt, no log scanning.
   const [callHashes, setCallHashes] = useState<string[]>(() => initialCalls ?? []);
-  const [receiptCalls, setReceiptCalls] = useState<(PricedCall & { hit?: boolean; resting?: boolean; stake?: { state: string; amount: number } | null })[]>([]);
+  const [receiptCalls, setReceiptCalls] = useState<(PricedCall & { hit?: boolean; resting?: boolean; stake?: { state: string; amount: number; bond?: number; contract?: string } | null })[]>([]);
   const recFor = (addr: string) => {
     const hyper = callRecords[`${net}:${addr.toLowerCase()}`] ?? null;
     if (hyper) return hyper;
@@ -565,6 +569,34 @@ export function ChartRoom({
   // receipt by /api/calls. Powers the same "<n> calls taken" line where the
   // HyperSync path above has nothing.
   const callsKey = useMemo(() => callHashes.join(","), [callHashes]);
+  // Bumped after a bond lands so the record re-reads the stake and shows it.
+  const [callsTick, setCallsTick] = useState(0);
+  const [bonding, setBonding] = useState<string | null>(null);
+  const [bondError, setBondError] = useState("");
+
+  // The caller backs their own open call (CallStake v3): the bond comes back with the stake on a hit and goes to the
+  // position owner when the call misses. Only the caller's own wallet can bond; the contract enforces it too.
+  async function bondCall(c: { caller: string; orderDescId: string; stake?: { contract?: string } | null }) {
+    const contract = c.stake?.contract;
+    if (!contract) return;
+    setBonding(c.orderDescId);
+    setBondError("");
+    try {
+      const viaPasskey = passkey !== null && passkey.address.toLowerCase() === c.caller.toLowerCase();
+      const me = viaPasskey ? passkey.address : await connectWallet(net);
+      if (me.toLowerCase() !== c.caller.toLowerCase()) throw new Error(`Only ${display(c.caller)} can bond this call. Connect the wallet that made it.`);
+      for (const tx of bondCalls(contract as Address, c.orderDescId, BOND_AUSD, net)) {
+        const hash = (viaPasskey ? await sendExecOrderWith(passkey, tx.to, tx.data, net) : await sendExecOrder(tx.to, tx.data, net)) as Hex;
+        const r = await publicClient(net).waitForTransactionReceipt({ hash, timeout: 60_000 });
+        if (r.status !== "success") throw new Error(`The bond reverted (tx ${hash.slice(0, 10)}…).`);
+      }
+      setCallsTick((t) => t + 1);
+    } catch (e) {
+      setBondError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBonding(null);
+    }
+  }
   useEffect(() => {
     if (!callsKey) {
       setReceiptCalls([]);
@@ -575,7 +607,7 @@ export function ChartRoom({
       .then(async (r) => ({ ok: r.ok, body: await r.json() }))
       .then(({ ok, body }) => {
         if (cancelled || !ok || !Array.isArray(body.calls)) return;
-        setReceiptCalls(body.calls as (PricedCall & { hit?: boolean; resting?: boolean; stake?: { state: string; amount: number } | null })[]);
+        setReceiptCalls(body.calls as (PricedCall & { hit?: boolean; resting?: boolean; stake?: { state: string; amount: number; bond?: number; contract?: string } | null })[]);
       })
       .catch(() => {
         // A missing record hides the line; the card still shows the position.
@@ -583,7 +615,7 @@ export function ChartRoom({
     return () => {
       cancelled = true;
     };
-  }, [callsKey, net]);
+  }, [callsKey, net, callsTick]);
 
   // Append an accepted-call hash to the room's ?c= list: state owns the
   // record, the URL follows so the link stays shareable, capped at 50.
@@ -2258,6 +2290,25 @@ export function ChartRoom({
                     </span>
                     <span className="ml-auto pr-5" style={{ color: chip.inProfit ? CHART.up : CHART.down }}>{chip.pnl}</span>
                   </button>
+                  {restingCall?.stake?.state === "open" && restingCall.stake.contract?.toLowerCase() === CALL_STAKE[net]?.toLowerCase() && (
+                    <div data-bond className="mt-1 px-2.5 text-[11px]">
+                      {(restingCall.stake.bond ?? 0) > 0 ? (
+                        <span className="text-muted">
+                          {display(restingCall.caller)} bonded {restingCall.stake.bond} aUSD: back to them on a hit, to {display(f.account)} on a miss
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void bondCall(restingCall)}
+                          disabled={bonding !== null}
+                          className="rounded-[6px] border border-edge px-2 py-1 font-medium hover:bg-raised disabled:opacity-40"
+                        >
+                          {bonding === restingCall.orderDescId ? "Bonding…" : `${display(restingCall.caller)}: bond ${BOND_AUSD} aUSD on this call`}
+                        </button>
+                      )}
+                      {bondError && bonding === null && <span className="mt-1 block text-loss">{bondError}</span>}
+                    </div>
+                  )}
                   {view === "frens" && extra.includes(f.account.toLowerCase()) && (
                     <button
                       type="button"

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { decodeFunctionData, erc20Abi } from "viem";
-import { CALL_STAKE, CALL_STAKE_READ, callStakeAbi, stakeCalls, stakeId, stakeView } from "./callstake";
+import { bondCalls, CALL_STAKE, CALL_STAKE_READ, callStakeAbi, stakeCalls, stakeId, stakeView } from "./callstake";
 import { NETWORKS } from "./perpl";
 
 const CY = "0x4eb664F1E9b7c812dDFBC4118326FE3e23b7DceD" as const;
@@ -23,11 +23,20 @@ describe("callstake", () => {
     expect(() => stakeCalls("mainnet", { orderDescId: DESC, caller: CY, market: 1, orderId: "1" }, 2, 1)).toThrow();
     expect(() => stakeCalls("testnet", { orderDescId: DESC, caller: CY, market: 16, orderId: "1" }, 0, 1)).toThrow();
   });
-  it("writes to v2 and reads v2 then v1, so v1 stakes keep showing", () => {
+  it("writes to v3 and reads v3, v2 then v1, so older stakes keep showing", () => {
     expect(CALL_STAKE_READ.testnet![0]).toBe(CALL_STAKE.testnet!);
-    expect(CALL_STAKE_READ.testnet!.length).toBe(2);
+    expect(CALL_STAKE_READ.testnet!.length).toBe(3);
   });
   it("reads the stakes tuple", () => {
-    expect(stakeView(["0x0", CY, 2_000_000n, 1_800_000_000n, 16, false, 2, 861170n])).toEqual({ state: "paid", amount: 2, caller: CY, expiry: 1_800_000_000 });
+    expect(stakeView(["0x0", CY, 2_000_000n, 1_800_000_000n, 16, false, 2, 861170n])).toEqual({ state: "paid", amount: 2, caller: CY, expiry: 1_800_000_000, bond: 0 });
+  });
+  it("bonds: approves exactly the bond to that contract, then bond(id, amount); refuses zero", () => {
+    const [approve, bond] = bondCalls(CALL_STAKE.testnet!, DESC, 3, "testnet");
+    expect(decodeFunctionData({ abi: erc20Abi, data: approve!.data }).args).toEqual([CALL_STAKE.testnet!, 3_000_000n]);
+    expect(bond!.to).toBe(CALL_STAKE.testnet!);
+    const d = decodeFunctionData({ abi: callStakeAbi, data: bond!.data });
+    expect(d.functionName).toBe("bond");
+    expect(d.args).toEqual([stakeId(DESC), 3_000_000n]);
+    expect(() => bondCalls(CALL_STAKE.testnet!, DESC, 0, "testnet")).toThrow();
   });
 });
