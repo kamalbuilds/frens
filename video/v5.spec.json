@@ -1,0 +1,450 @@
+{
+  "out": "frens-demo-v5.mp4",
+  "audio": "vo/out-v6-narration.wav",
+  "size": [
+    1920,
+    1080
+  ],
+  "work": "asm-demo-v5",
+  "beats": [
+    {
+      "name": "opening chart",
+      "t0": 0,
+      "t1": 14.2,
+      "pieces": [
+        {
+          "src": "work/v5/G3-chart.mp4",
+          "ss": 0.5,
+          "se": 14.7,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c0.png",
+          "a": 0.3,
+          "b": 2.149104
+        },
+        {
+          "png": "work/v5/caps/c1.png",
+          "a": 2.1491040000000003,
+          "b": 7.339125
+        },
+        {
+          "png": "work/v5/caps/c2.png",
+          "a": 7.339125,
+          "b": 9.650583
+        },
+        {
+          "png": "work/v5/caps/c3.png",
+          "a": 9.650583,
+          "b": 14.158854
+        },
+        {
+          "png": "work/v5/caps/c100.png",
+          "a": 0.3,
+          "b": 2.3
+        }
+      ]
+    },
+    {
+      "name": "group chat",
+      "t0": 14.2,
+      "t1": 24.15,
+      "pieces": [
+        {
+          "src": "work/v5/P6-problem.mp4",
+          "ss": 0,
+          "se": 9.95,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c4.png",
+          "a": 14.458853999999999,
+          "b": 17.792875
+        },
+        {
+          "png": "work/v5/caps/c5.png",
+          "a": 17.792875,
+          "b": 20.416895999999998
+        },
+        {
+          "png": "work/v5/caps/c6.png",
+          "a": 20.416895999999998,
+          "b": 24.101563
+        }
+      ]
+    },
+    {
+      "name": "this is ana",
+      "t0": 24.15,
+      "t1": 33.43,
+      "pieces": [
+        {
+          "src": "work/v4/A3-ana.mp4",
+          "ss": 3.0,
+          "se": 12.28,
+          "speed": 1,
+          "vf": "crop=1829:1029:120:340"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c7.png",
+          "a": 24.401563,
+          "b": 26.302542
+        },
+        {
+          "png": "work/v5/caps/c8.png",
+          "a": 26.302542,
+          "b": 33.575792
+        }
+      ]
+    },
+    {
+      "name": "bo drags to 84068",
+      "t0": 33.43,
+      "t1": 46.54,
+      "pieces": [
+        {
+          "src": "work/v5/B-drag.mp4",
+          "ss": 1.2,
+          "se": 4.7,
+          "speed": 0.89,
+          "vf": "crop=1560:878:260:360"
+        },
+        {
+          "src": "work/v5/B-drag.mp4",
+          "ss": 4.6,
+          "se": 9.8,
+          "speed": 0.89,
+          "vf": "crop=1560:878:260:360"
+        },
+        {
+          "src": "work/v5/B-drag.mp4",
+          "ss": 16.7,
+          "se": 19.8,
+          "speed": 0.89,
+          "vf": "crop=1560:878:260:360"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c9.png",
+          "a": 33.675792,
+          "b": 39.279042000000004
+        },
+        {
+          "png": "work/v5/caps/c10.png",
+          "a": 39.279042000000004,
+          "b": 46.291000000000004
+        }
+      ]
+    },
+    {
+      "name": "ana accepts",
+      "t0": 46.54,
+      "t1": 53.9,
+      "pieces": [
+        {
+          "src": "work/v5/C-accept.mp4",
+          "ss": 2.4,
+          "se": 9.76,
+          "speed": 1,
+          "vf": "crop=1560:878:260:510"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c11.png",
+          "a": 46.791000000000004,
+          "b": 50.510313000000004
+        },
+        {
+          "png": "work/v5/caps/c12.png",
+          "a": 50.510313000000004,
+          "b": 54.529251
+        }
+      ]
+    },
+    {
+      "name": "receipt accept",
+      "t0": 53.9,
+      "t1": 57.35,
+      "pieces": [
+        {
+          "src": "work/v4/X5-accept.mp4",
+          "ss": 0.4,
+          "se": 3.85,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c30.png",
+          "a": 53.95,
+          "b": 57.3
+        }
+      ]
+    },
+    {
+      "name": "ana puts in two dollars",
+      "t0": 57.35,
+      "t1": 61.2,
+      "pieces": [
+        {
+          "src": "work/v5/C-accept.mp4",
+          "ss": 13.2,
+          "se": 17.05,
+          "speed": 1,
+          "vf": "crop=1560:878:260:340"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c13.png",
+          "a": 57.029251,
+          "b": 61.261126000000004
+        }
+      ]
+    },
+    {
+      "name": "bo puts in two dollars",
+      "t0": 61.2,
+      "t1": 64.77,
+      "pieces": [
+        {
+          "src": "work/v5/D-bond.mp4",
+          "ss": 5.3,
+          "se": 8.87,
+          "speed": 1,
+          "vf": "crop=1200:675:1180:480"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c14.png",
+          "a": 61.261126000000004,
+          "b": 64.72181400000001
+        }
+      ]
+    },
+    {
+      "name": "deadline mechanism",
+      "t0": 64.77,
+      "t1": 75.0,
+      "pieces": [
+        {
+          "src": "work/v5/M6-mech.mp4",
+          "ss": 0,
+          "se": 10.23,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c15.png",
+          "a": 65.021814,
+          "b": 67.421627
+        },
+        {
+          "png": "work/v5/caps/c16.png",
+          "a": 67.421627,
+          "b": 72.428002
+        },
+        {
+          "png": "work/v5/caps/c17.png",
+          "a": 72.428002,
+          "b": 74.952898
+        }
+      ]
+    },
+    {
+      "name": "PLACEHOLDER hit receipt",
+      "t0": 75.0,
+      "t1": 82.6,
+      "pieces": [
+        {
+          "src": "work/v5/X-slot.mp4",
+          "ss": 0,
+          "se": 7.6,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c18.png",
+          "a": 75.252898,
+          "b": 82.5
+        },
+        {
+          "png": "work/v5/caps/c33.png",
+          "a": 75.2,
+          "b": 82.5
+        }
+      ]
+    },
+    {
+      "name": "earlier pick",
+      "t0": 82.6,
+      "t1": 87.9,
+      "pieces": [
+        {
+          "src": "work/v5/G3-chart.mp4",
+          "ss": 15.0,
+          "se": 20.3,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c19.png",
+          "a": 82.85644,
+          "b": 87.948065
+        },
+        {
+          "png": "work/v5/caps/c102.png",
+          "a": 82.7,
+          "b": 84.7
+        }
+      ]
+    },
+    {
+      "name": "receipt miss",
+      "t0": 87.9,
+      "t1": 93.6,
+      "pieces": [
+        {
+          "src": "work/v4/X-miss.mp4",
+          "ss": 0.4,
+          "se": 6.1,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c20.png",
+          "a": 87.948065,
+          "b": 93.5
+        },
+        {
+          "png": "work/v5/caps/c35.png",
+          "a": 88.0,
+          "b": 93.5
+        }
+      ]
+    },
+    {
+      "name": "PLACEHOLDER record",
+      "t0": 93.6,
+      "t1": 100.5,
+      "pieces": [
+        {
+          "src": "work/v5/X-slot.mp4",
+          "ss": 0,
+          "se": 6.9,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c21.png",
+          "a": 93.94371100000001,
+          "b": 100.4
+        },
+        {
+          "png": "work/v5/caps/c101.png",
+          "a": 93.8,
+          "b": 100.4
+        }
+      ]
+    },
+    {
+      "name": "rooms",
+      "t0": 100.5,
+      "t1": 109.33,
+      "pieces": [
+        {
+          "src": "work/v5/A-room.mp4",
+          "ss": 7.7,
+          "se": 16.4,
+          "speed": 2.08,
+          "vf": "crop=1600:900:960:540"
+        },
+        {
+          "src": "work/v5/A-room.mp4",
+          "ss": 17.9,
+          "se": 23.6,
+          "speed": 2.08,
+          "vf": "crop=1600:900:960:540"
+        },
+        {
+          "src": "work/v5/A-room.mp4",
+          "ss": 25.4,
+          "se": 29.4,
+          "speed": 2.08,
+          "vf": "crop=1600:900:960:540"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c22.png",
+          "a": 100.75444,
+          "b": 103.663628
+        },
+        {
+          "png": "work/v5/caps/c23.png",
+          "a": 103.663628,
+          "b": 108.877607
+        },
+        {
+          "png": "work/v5/caps/c37.png",
+          "a": 107.4,
+          "b": 109.2
+        }
+      ]
+    },
+    {
+      "name": "final chart",
+      "t0": 109.33,
+      "t1": 120.216,
+      "pieces": [
+        {
+          "src": "work/v5/G3-chart.mp4",
+          "ss": 25.0,
+          "se": 36.0,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v5/caps/c24.png",
+          "a": 109.577607,
+          "b": 111.938045
+        },
+        {
+          "png": "work/v5/caps/c25.png",
+          "a": 111.938045,
+          "b": 114.175545
+        },
+        {
+          "png": "work/v5/caps/c26.png",
+          "a": 114.175545,
+          "b": 118.21779500000001
+        },
+        {
+          "png": "work/v5/caps/c27.png",
+          "a": 118.21779500000001,
+          "b": 120.066899
+        },
+        {
+          "png": "work/v5/caps/c28.png",
+          "a": 109.4,
+          "b": 120.0
+        }
+      ]
+    }
+  ]
+}

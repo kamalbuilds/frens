@@ -1,0 +1,376 @@
+{
+  "out": "frens-pitch-v3.mp4",
+  "audio": "vo/out-pitch3.wav",
+  "size": [
+    1920,
+    1080
+  ],
+  "work": "asm-pitch3",
+  "beats": [
+    {
+      "name": "problem",
+      "t0": 0,
+      "t1": 8.087271,
+      "pieces": [
+        {
+          "src": "work/pitch3/PP6-problem.mp4",
+          "ss": 0,
+          "se": 8.087271,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c0.png",
+          "a": 0.3,
+          "b": 4.359458
+        },
+        {
+          "png": "work/pitch3/caps/c1.png",
+          "a": 4.359458,
+          "b": 8.337271
+        },
+        {
+          "png": "work/pitch3/caps/c200.png",
+          "a": 0.3,
+          "b": 2.8
+        }
+      ]
+    },
+    {
+      "name": "chart",
+      "t0": 8.087271,
+      "t1": 14.012395999999999,
+      "pieces": [
+        {
+          "src": "work/v5/G3-chart.mp4",
+          "ss": 0.5,
+          "se": 6.4251249999999995,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c4.png",
+          "a": 8.337271,
+          "b": 14.262395999999999
+        }
+      ]
+    },
+    {
+      "name": "bo drags",
+      "t0": 14.012395999999999,
+      "t1": 17.273896,
+      "pieces": [
+        {
+          "src": "work/v5/B-drag.mp4",
+          "ss": 4.6,
+          "se": 9.818400000000002,
+          "speed": 1.6,
+          "vf": "crop=1560:878:260:360"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c5.png",
+          "a": 14.262395999999999,
+          "b": 17.523896
+        }
+      ]
+    },
+    {
+      "name": "ana accepts",
+      "t0": 17.273896,
+      "t1": 23.736271000000002,
+      "pieces": [
+        {
+          "src": "work/v5/C-accept.mp4",
+          "ss": 2.4,
+          "se": 8.862375000000002,
+          "speed": 1,
+          "vf": "crop=1560:878:260:510"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c6.png",
+          "a": 17.523896,
+          "b": 26.286271
+        }
+      ]
+    },
+    {
+      "name": "receipt accept",
+      "t0": 23.736271000000002,
+      "t1": 26.636271,
+      "pieces": [
+        {
+          "src": "work/v4/X5-accept.mp4",
+          "ss": 0.4,
+          "se": 3.2999999999999985,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c20.png",
+          "a": 23.836271000000004,
+          "b": 26.536271
+        }
+      ]
+    },
+    {
+      "name": "old way tips cost nothing",
+      "t0": 26.636271,
+      "t1": 30.742396,
+      "pieces": [
+        {
+          "src": "work/pitch3/PP6-problem.mp4",
+          "ss": 9.0,
+          "se": 13.106124999999999,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c3.png",
+          "a": 26.886271,
+          "b": 30.992396
+        }
+      ]
+    },
+    {
+      "name": "ana puts in two dollars",
+      "t0": 30.742396,
+      "t1": 34.924271000000005,
+      "pieces": [
+        {
+          "src": "work/v5/C-accept.mp4",
+          "ss": 13.2,
+          "se": 17.381875000000004,
+          "speed": 1,
+          "vf": "crop=1560:878:260:340"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c7.png",
+          "a": 30.992396,
+          "b": 35.174271000000005
+        }
+      ]
+    },
+    {
+      "name": "bo puts in two dollars",
+      "t0": 34.924271000000005,
+      "t1": 38.186604,
+      "pieces": [
+        {
+          "src": "work/v5/D-bond.mp4",
+          "ss": 5.3,
+          "se": 8.562332999999999,
+          "speed": 1,
+          "vf": "crop=1200:675:1180:480"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c8.png",
+          "a": 35.174271000000005,
+          "b": 38.436604
+        }
+      ]
+    },
+    {
+      "name": "deadline on screen",
+      "t0": 38.186604,
+      "t1": 45.905167000000006,
+      "pieces": [
+        {
+          "src": "work/v5/C-accept.mp4",
+          "ss": 18.3,
+          "se": 25.246706700000004,
+          "speed": 0.9,
+          "vf": "crop=1560:878:260:340"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c9.png",
+          "a": 38.436604,
+          "b": 43.255542000000005
+        },
+        {
+          "png": "work/pitch3/caps/c10.png",
+          "a": 43.255542000000005,
+          "b": 46.155167000000006
+        }
+      ]
+    },
+    {
+      "name": "receipt miss",
+      "t0": 45.905167000000006,
+      "t1": 48.905167000000006,
+      "pieces": [
+        {
+          "src": "work/v4/X-miss.mp4",
+          "ss": 0.6,
+          "se": 3.6,
+          "speed": 1,
+          "vf": "crop=1200:675:200:230"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c23.png",
+          "a": 46.00516700000001,
+          "b": 48.805167000000004
+        }
+      ]
+    },
+    {
+      "name": "explainer card",
+      "t0": 48.905167000000006,
+      "t1": 50.005167,
+      "pieces": [
+        {
+          "src": "work/v5/M6-mech.mp4",
+          "ss": 10.0,
+          "se": 10.5,
+          "speed": 1
+        }
+      ],
+      "caps": []
+    },
+    {
+      "name": "PLACEHOLDER record",
+      "t0": 50.005167,
+      "t1": 58.253063000000004,
+      "pieces": [
+        {
+          "src": "work/pitch3/X-slot.mp4",
+          "ss": 0,
+          "se": 8.247896000000004,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c11.png",
+          "a": 50.255167,
+          "b": 56.16423
+        },
+        {
+          "png": "work/pitch3/caps/c12.png",
+          "a": 56.16423,
+          "b": 58.503063000000004
+        },
+        {
+          "png": "work/pitch3/caps/c201.png",
+          "a": 50.205167,
+          "b": 58.053063
+        }
+      ]
+    },
+    {
+      "name": "kamal",
+      "t0": 58.253063000000004,
+      "t1": 66.598938,
+      "pieces": [
+        {
+          "src": "work/v5/G3-chart.mp4",
+          "ss": 8.0,
+          "se": 16.345875,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c13.png",
+          "a": 58.503063000000004,
+          "b": 60.15073
+        },
+        {
+          "png": "work/pitch3/caps/c14.png",
+          "a": 60.15073,
+          "b": 66.74893800000001
+        },
+        {
+          "png": "work/pitch3/caps/c25.png",
+          "a": 58.45306300000001,
+          "b": 66.398938
+        }
+      ]
+    },
+    {
+      "name": "tweet",
+      "t0": 66.598938,
+      "t1": 71.010626,
+      "pieces": [
+        {
+          "src": "work/pitch2/TW2-card.mp4",
+          "ss": 0,
+          "se": 4.411687999999998,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c15.png",
+          "a": 66.848938,
+          "b": 70.16062600000001
+        }
+      ]
+    },
+    {
+      "name": "telegram",
+      "t0": 71.010626,
+      "t1": 76.168251,
+      "pieces": [
+        {
+          "src": "work/pitch2/TG-count.mp4",
+          "ss": 0,
+          "se": 5.157624999999996,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c16.png",
+          "a": 71.260626,
+          "b": 75.918251
+        }
+      ]
+    },
+    {
+      "name": "final chart",
+      "t0": 76.168251,
+      "t1": 83.56,
+      "pieces": [
+        {
+          "src": "work/v5/G3-chart.mp4",
+          "ss": 25.0,
+          "se": 32.391749000000004,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/pitch3/caps/c17.png",
+          "a": 76.418251,
+          "b": 78.117355
+        },
+        {
+          "png": "work/pitch3/caps/c18.png",
+          "a": 78.117355,
+          "b": 83.40998
+        },
+        {
+          "png": "work/pitch3/caps/c19.png",
+          "a": 76.26825099999999,
+          "b": 83.16
+        }
+      ]
+    }
+  ]
+}

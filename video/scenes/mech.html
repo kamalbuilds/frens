@@ -48,16 +48,16 @@ svg.plot{position:absolute;inset:0;width:1000px;height:690px}
 <div class="final" id="fin">A wrong pick costs the friend.</div>
 <script src="faces.js"></script><script src="engine.js"></script>
 <script>
-const F = window.FACES, LEVEL = 85420, P0 = 83380, PMAX = 85800, PMIN = 83200;
+const F = window.FACES, LEVEL = 84068, P0 = 83450, PMAX = 84340, PMIN = 83240;
 const X0 = 96, X1 = 940, YT = 70, YB = 600;
 const py = (p) => YB - (p - PMIN) / (PMAX - PMIN) * (YB - YT);
 const yL = py(LEVEL);
 const grid = $("#grid");
-[83500, 84000, 84500, 85000, 85500].forEach((p) => {
+[83500, 83750, 84000, 84250].forEach((p) => {
   grid.insertAdjacentHTML("beforeend", `<line x1="${X0}" x2="${X1}" y1="${py(p)}" y2="${py(p)}" stroke="#26263A" stroke-width="1" opacity=".7"/><text class="ax" x="${X1 + 10}" y="${py(p) + 5}">${p.toLocaleString("en-US")}</text>`);
 });
 $("#call").setAttribute("y1", yL); $("#call").setAttribute("y2", yL);
-$("#lvl").textContent = "bo's pick · 85,420"; $("#lvl").style.top = (yL - 44) + "px";
+$("#lvl").textContent = "bo's pick · 84,068"; $("#lvl").style.top = (yL - 44) + "px";
 $("#cf").innerHTML = F.bo; $("#cf").style.left = (X0 - 8) + "px"; $("#cf").style.top = (yL - 23) + "px";
 $("#c1").innerHTML = F.ana + '<div class="amt">$2</div>'; $("#c2").innerHTML = F.bo + '<div class="amt">$2</div>';
 $("#l1").textContent = "ana's two dollars"; $("#l2").textContent = "bo's two dollars";
@@ -65,7 +65,7 @@ $("#nb").innerHTML = F.bo + "<span>bo</span>"; $("#na").innerHTML = F.ana + "<sp
 $("#tb").textContent = "THE FRIEND"; $("#ta").textContent = "THE TRADER";
 const noise = (u) => 38 * Math.sin(u * 23) + 26 * Math.sin(u * 51 + 1.3) + 14 * Math.sin(u * 97);
 function priceAt(u, hit) {
-  const base = hit ? P0 + (LEVEL + 40 - P0) * Math.pow(u, 1.7) : P0 + (84860 - P0) * Math.pow(Math.min(1, u * 1.15), 1.2) - Math.max(0, u - 0.8) * 900;
+  const base = hit ? P0 + (LEVEL + 40 - P0) * Math.pow(u, 1.7) : P0 + (83910 - P0) * Math.pow(Math.min(1, u * 1.15), 1.2) - Math.max(0, u - 0.8) * 260;
   return base + noise(u) * (1 - Math.abs(u - 0.5) * 0.4) * (hit && u > 0.97 ? 0.1 : 1);
 }
 function trail(u, hit) {

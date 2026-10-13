@@ -68,6 +68,7 @@ if (FADE > 0) {
 const total = probe(video);
 
 // captions: transparent PNGs faded in and out over their window
+const CAPFADE = Number(process.env.CAPFADE ?? 0.3);
 const caps = spec.beats.flatMap((b) => (b.caps ?? []).map((c) => ({ ...c, png: path.resolve(path.dirname(process.argv[2]), c.png) })));
 let final = video;
 if (caps.length) {
@@ -75,7 +76,7 @@ if (caps.length) {
   caps.forEach((c) => args.push("-loop", "1", "-framerate", String(FPS), "-t", String((c.b - c.a) + 0.2), "-itsoffset", String(c.a), "-i", c.png));
   let chain = "", prev = "0:v";
   caps.forEach((c, i) => {
-    chain += `[${i + 1}:v]format=rgba,fade=t=in:st=${c.a}:d=0.3:alpha=1,fade=t=out:st=${c.b - 0.3}:d=0.3:alpha=1[c${i}];[${prev}][c${i}]overlay=0:0:format=auto:eof_action=pass:enable='between(t,${c.a},${c.b})'[v${i}];`;
+    chain += `[${i + 1}:v]format=rgba,fade=t=in:st=${c.a}:d=${CAPFADE}:alpha=1,fade=t=out:st=${c.b - CAPFADE}:d=${CAPFADE}:alpha=1[c${i}];[${prev}][c${i}]overlay=0:0:format=auto:eof_action=pass:enable='between(t,${c.a},${c.b})'[v${i}];`;
     prev = `v${i}`;
   });
   final = path.join(work, "video-caps.mp4");

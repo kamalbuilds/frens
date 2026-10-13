@@ -1,0 +1,81 @@
+{
+  "voice_profile": "b7af9f2a",
+  "segments": [
+    {
+      "id": "00",
+      "text": "Anna has a bitcoin trade open on Perpl, a trading app."
+    },
+    {
+      "id": "01",
+      "text": "Her friend Bo texts: sell at eighty-four thousand."
+    },
+    {
+      "id": "02",
+      "text": "She has to type it in herself, or forgets."
+    },
+    {
+      "id": "03",
+      "text": "And the tips Bo sends cost him nothing when they are wrong."
+    },
+    {
+      "id": "04",
+      "text": "frens puts your friends' picks on your chart, with their money behind them."
+    },
+    {
+      "id": "05",
+      "text": "Beau drags his price onto Anna's trade."
+    },
+    {
+      "id": "06",
+      "text": "Anna taps accept once, and it becomes a real sell order on Perpl, with Beau's name on it."
+    },
+    {
+      "id": "07",
+      "text": "Anna puts in two dollars, Beau's reward if he's right."
+    },
+    {
+      "id": "08",
+      "text": "Bo puts in two dollars behind his pick."
+    },
+    {
+      "id": "09",
+      "text": "If bitcoin gets there before the deadline, Bo takes all four."
+    },
+    {
+      "id": "10",
+      "text": "If not, Anna gets all four back."
+    },
+    {
+      "id": "11",
+      "text": "Every pick Bo makes is scored in public: how many came true, and what he earned."
+    },
+    {
+      "id": "12",
+      "text": "Nobody can fake it."
+    },
+    {
+      "id": "13",
+      "text": "I'm Kamal."
+    },
+    {
+      "id": "14",
+      "text": "I built frens on Perpl, the busiest trading app on Monad, the blockchain it runs on."
+    },
+    {
+      "id": "15",
+      "text": "Traders are already asking for this."
+    },
+    {
+      "id": "16",
+      "text": "Perpl's Telegram alone has over nine thousand members."
+    },
+    {
+      "id": "17",
+      "text": "frens."
+    },
+    {
+      "id": "18",
+      "text": "Your friends' picks, on your chart, with their money behind them."
+    }
+  ]
+}
