@@ -40,7 +40,8 @@ contract CallStakeTest is Test {
     address owner = address(0xA11CE);
     address caller = address(0xCA11);
     address stranger = address(0xBAD);
-    bytes32 id = bytes32(uint256(0x1234));
+    // A real call id is the orderDescId: caller in the top 160 bits, a timestamp below.
+    bytes32 id = bytes32((uint256(uint160(address(0xCA11))) << 96) | 0x1234);
 
     function setUp() public {
         token = new Token();
@@ -52,6 +53,8 @@ contract CallStakeTest is Test {
         ex.setMark(840_000); // 1.19% below the TP, past the 0.5% minimum
         token.mint(owner, 1_000e6);
         vm.prank(owner);
+        token.approve(address(cs), type(uint256).max);
+        vm.prank(caller);
         token.approve(address(cs), type(uint256).max);
     }
 
@@ -175,5 +178,105 @@ contract CallStakeTest is Test {
         cs.release(id);
         assertEq(token.balanceOf(caller), crossed ? amount : 0);
         assertEq(token.balanceOf(address(cs)), crossed ? 0 : amount);
+    }
+
+    // ---------- caller bond (slashing) ----------
+
+    function test_stakeRejectsACallerTheIdDoesNotCarry() public {
+        vm.prank(owner);
+        vm.expectRevert(CallStake.WrongCaller.selector);
+        cs.stake(id, stranger, 5e6, 16, 138, uint64(block.timestamp + 1 days));
+    }
+
+    function test_onlyTheCallerBondsOnceWhileOpen() public {
+        token.mint(caller, 1_000e6);
+        vm.prank(caller);
+        vm.expectRevert(CallStake.NotOpen.selector);
+        cs.bond(id, 3e6);
+        _stake();
+        vm.prank(stranger);
+        vm.expectRevert(CallStake.NotTheCaller.selector);
+        cs.bond(id, 3e6);
+        vm.prank(caller);
+        vm.expectRevert(CallStake.ZeroAmount.selector);
+        cs.bond(id, 0);
+        vm.prank(caller);
+        cs.bond(id, 3e6);
+        assertEq(cs.bonds(id), 3e6);
+        vm.prank(caller);
+        vm.expectRevert(CallStake.AlreadyBonded.selector);
+        cs.bond(id, 1e6);
+    }
+
+    function test_noBondAfterExpiry() public {
+        token.mint(caller, 1_000e6);
+        _stake();
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(caller);
+        vm.expectRevert(CallStake.Expired.selector);
+        cs.bond(id, 3e6);
+    }
+
+    function test_hitPaysTheStakeAndReturnsTheBondToTheCaller() public {
+        token.mint(caller, 1_000e6);
+        _stake();
+        vm.prank(caller);
+        cs.bond(id, 3e6);
+        uint256 before = token.balanceOf(caller);
+        ex.setMark(850_000);
+        cs.release(id);
+        assertEq(token.balanceOf(caller), before + 5e6 + 3e6);
+        assertEq(token.balanceOf(address(cs)), 0);
+    }
+
+    function test_missSlashesTheBondToTheOwner() public {
+        token.mint(caller, 1_000e6);
+        uint256 ownerStart = token.balanceOf(owner);
+        uint256 callerStart = token.balanceOf(caller);
+        _stake();
+        vm.prank(caller);
+        cs.bond(id, 3e6);
+        vm.warp(block.timestamp + 1 days);
+        cs.refund(id);
+        assertEq(token.balanceOf(owner), ownerStart + 3e6, "owner gets the stake back plus the bond");
+        assertEq(token.balanceOf(caller), callerStart - 3e6, "caller loses the bond");
+        assertEq(token.balanceOf(address(cs)), 0);
+    }
+
+    function test_unbondedStakeSettlesAsBefore() public {
+        uint256 ownerStart = token.balanceOf(owner);
+        _stake();
+        vm.warp(block.timestamp + 1 days);
+        cs.refund(id);
+        assertEq(token.balanceOf(owner), ownerStart);
+    }
+
+    /// Whatever the bond, the mark and the timing, the contract ends empty and the two balances only move between
+    /// owner and caller: the caller gains stake+bond net of bond on a hit, the owner gains the bond on a miss.
+    function testFuzz_bondConserved(uint96 bondAmt, uint256 mark, bool expire) public {
+        token.mint(caller, 1_000e6);
+        bondAmt = uint96(bound(bondAmt, 1, 500e6));
+        mark = bound(mark, 1, 2_000_000);
+        uint256 o0 = token.balanceOf(owner);
+        uint256 c0 = token.balanceOf(caller);
+        _stake();
+        vm.prank(caller);
+        cs.bond(id, bondAmt);
+        ex.setMark(mark);
+        if (expire) {
+            vm.warp(block.timestamp + 1 days);
+            cs.refund(id);
+            assertEq(token.balanceOf(owner), o0 + bondAmt);
+            assertEq(token.balanceOf(caller), c0 - bondAmt);
+        } else if (mark >= 850_000) {
+            cs.release(id);
+            assertEq(token.balanceOf(owner), o0 - 5e6);
+            assertEq(token.balanceOf(caller), c0 + 5e6);
+        } else {
+            vm.expectRevert();
+            cs.release(id);
+            return;
+        }
+        assertEq(token.balanceOf(address(cs)), 0);
     }
 }

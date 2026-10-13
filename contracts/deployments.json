@@ -1,8 +1,8 @@
 {
  "testnet": {
-  "CallStake": "0xb83d69657eed4abd327b3539f24f07556c1a5a36",
-  "tx": "0xc3a16d6e3de6879ca2bd4dc00698aaff4b1f3058e0757b6c1c0dadda0a0bb98e",
-  "block": "67543344",
+  "CallStake": "0x31cd68210a05a4d921af7b4dee7a5ab99fb45390",
+  "tx": "0xb863603e90bb77341685de810603f8d837610eb3af4b05a433dc680e51d10fbb",
+  "block": "70689087",
   "exchange": "0x1964C32f0bE608E7D29302AFF5E61268E72080cc",
   "token": "0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC"
  },
@@ -11,6 +11,13 @@
    "CallStake": "0x0e8cbe0902067a49d98961a1440419aecaf0c5bc",
    "tx": "0xbb66d0dbcd0a760c5b5d017500b95baab4ebfa620f1d538b00d9b30e9a468325",
    "block": "67518203",
+   "exchange": "0x1964C32f0bE608E7D29302AFF5E61268E72080cc",
+   "token": "0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC"
+  },
+  {
+   "CallStake": "0xb83d69657eed4abd327b3539f24f07556c1a5a36",
+   "tx": "0xc3a16d6e3de6879ca2bd4dc00698aaff4b1f3058e0757b6c1c0dadda0a0bb98e",
+   "block": "67543344",
    "exchange": "0x1964C32f0bE608E7D29302AFF5E61268E72080cc",
    "token": "0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC"
   }

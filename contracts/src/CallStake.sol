@@ -79,8 +79,9 @@ interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
 }
 
-/// A position owner backs a friend's take-profit call with a stake. The stake pays the caller only if Perpl's own
-/// mark price reaches the call's TP, and returns to the owner at expiry otherwise. The TP, side and owner are read
+/// A position owner backs a friend's take-profit call with a stake, and the caller can back their own call with a bond.
+/// If Perpl's own mark price reaches the call's TP before expiry, the caller receives the stake and their bond back.
+/// Otherwise both go to the owner at expiry: the stake returns, and the caller's bond is slashed to the owner. The TP, side and owner are read
 /// from the resting Perpl order itself, so nobody can stake on a price the order does not carry.
 contract CallStake {
     uint8 internal constant CLOSE_LONG = 2;
@@ -110,16 +111,22 @@ contract CallStake {
     IPerplExchange public immutable exchange;
     IERC20 public immutable token;
     mapping(bytes32 => Stake) public stakes;
+    /// The caller's bond on a stake, kept apart from Stake so the stakes() tuple stays what readers already decode.
+    mapping(bytes32 => uint96) public bonds;
 
     event Staked(bytes32 indexed id, address indexed owner, address indexed caller, uint256 amount, uint256 perpId, uint256 orderId, uint256 tpPNS, bool closeLong, uint64 expiry);
     event Paid(bytes32 indexed id, address indexed caller, uint256 amount, uint256 markPNS);
     event Refunded(bytes32 indexed id, address indexed owner, uint256 amount);
+    event Bonded(bytes32 indexed id, address indexed caller, uint256 amount);
 
     error StakeExists();
     error NotOpen();
     error NotAClose();
     error NotYourOrder();
     error ZeroAmount();
+    error WrongCaller();
+    error NotTheCaller();
+    error AlreadyBonded();
     error TooCloseToMark(uint256 markPNS, uint256 tpPNS);
     error BadExpiry();
     error NotHit(uint256 markPNS, uint256 tpPNS);
@@ -137,6 +144,8 @@ contract CallStake {
     function stake(bytes32 id, address caller, uint96 amount, uint256 perpId, uint256 orderId, uint64 expiry) external {
         if (stakes[id].state != State.None) revert StakeExists();
         if (amount == 0) revert ZeroAmount();
+        // The call id carries its caller in the top 160 bits (orderDescId), so the owner cannot name someone else.
+        if (address(uint160(uint256(id) >> 96)) != caller) revert WrongCaller();
         if (expiry <= block.timestamp) revert BadExpiry();
         IPerplExchange.OrderV2 memory o = exchange.getOrderV2(perpId, orderId);
         if (o.orderType != CLOSE_LONG && o.orderType != CLOSE_SHORT) revert NotAClose();
@@ -150,6 +159,19 @@ contract CallStake {
         emit Staked(id, msg.sender, caller, amount, perpId, orderId, tp, o.orderType == CLOSE_LONG, expiry);
     }
 
+    /// The caller backs their own open call. Paid back with the stake on a hit; slashed to the owner at expiry.
+    function bond(bytes32 id, uint96 amount) external {
+        Stake storage s = stakes[id];
+        if (s.state != State.Open) revert NotOpen();
+        if (block.timestamp >= s.expiry) revert Expired();
+        if (msg.sender != s.caller) revert NotTheCaller();
+        if (amount == 0) revert ZeroAmount();
+        if (bonds[id] != 0) revert AlreadyBonded();
+        bonds[id] = amount;
+        if (!token.transferFrom(msg.sender, address(this), amount)) revert TransferFailed();
+        emit Bonded(id, msg.sender, amount);
+    }
+
     /// Anyone may release once Perpl's mark has reached the TP before expiry: at or above it for a long's TP, at or
     /// below for a short's. After expiry only refund is possible, so the two never race.
     function release(bytes32 id) external {
@@ -159,17 +181,19 @@ contract CallStake {
         uint256 mark = exchange.getPerpetualInfoV2(s.perpId).markPNS;
         if (s.closeLong ? mark < s.tpPNS : mark > s.tpPNS) revert NotHit(mark, s.tpPNS);
         s.state = State.Paid;
-        if (!token.transfer(s.caller, s.amount)) revert TransferFailed();
-        emit Paid(id, s.caller, s.amount, mark);
+        uint256 total = uint256(s.amount) + bonds[id];
+        if (!token.transfer(s.caller, total)) revert TransferFailed();
+        emit Paid(id, s.caller, total, mark);
     }
 
-    /// Anyone may return an unhit stake to its owner after expiry.
+    /// Anyone may settle an unhit stake after expiry: the owner gets the stake back plus the caller's bond.
     function refund(bytes32 id) external {
         Stake storage s = stakes[id];
         if (s.state != State.Open) revert NotOpen();
         if (block.timestamp < s.expiry) revert NotExpired();
         s.state = State.Refunded;
-        if (!token.transfer(s.owner, s.amount)) revert TransferFailed();
-        emit Refunded(id, s.owner, s.amount);
+        uint256 total = uint256(s.amount) + bonds[id];
+        if (!token.transfer(s.owner, total)) revert TransferFailed();
+        emit Refunded(id, s.owner, total);
     }
 }
