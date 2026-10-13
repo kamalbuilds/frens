@@ -1,0 +1,123 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- Hallmark · macrostructure: 05 Workbench · theme: Fren dark (video/DESIGN.md) -->
+<link rel="stylesheet" href="base.css">
+<style>
+html,body{background:var(--page)}
+.chart{position:absolute;left:60px;top:50px;width:1000px;height:690px;background:var(--panel);border:1px solid var(--edge);border-radius:10px;overflow:hidden}
+svg.plot{position:absolute;inset:0;width:1000px;height:690px}
+.ax{font:400 14px "PM";fill:var(--muted)}
+.chip{position:absolute;font:500 15px "PM";letter-spacing:.02em;border-radius:6px;padding:7px 12px;white-space:nowrap}
+#lvl{right:22px;border:1px solid var(--gain);color:var(--gain);background:rgba(43,214,123,.08)}
+#state{left:26px;top:22px;color:var(--muted);border:1px solid var(--edge);background:var(--raised)}
+.callface{position:absolute;width:46px;height:46px}
+.coin{position:absolute;width:104px;height:104px;margin:-52px 0 0 -52px;border-radius:50%;border:3px solid var(--ink);background:var(--raised);box-shadow:0 10px 30px rgba(0,0,0,.55);display:grid;place-items:center}
+.coin svg{width:60px;height:60px;border-radius:50%}
+.coin .amt{position:absolute;bottom:-13px;left:50%;transform:translateX(-50%);font:500 15px "PM";background:var(--page);color:var(--ink);border:1px solid var(--edge);border-radius:6px;padding:2px 9px;white-space:nowrap}
+.coin.bond{border:3px dashed var(--muted)}
+.clab{position:absolute;font:500 14px "PM";color:var(--muted);text-align:center;width:170px;margin-left:-85px}
+#stamp{position:absolute;font:700 26px "SG";letter-spacing:.14em;color:var(--loss);border:3px solid var(--loss);border-radius:6px;padding:4px 14px;opacity:0;background:rgba(10,10,15,.82)}
+.card{position:absolute;left:1110px;width:430px;height:326px;background:var(--panel);border:1px solid var(--edge);border-radius:10px}
+.card .nm{position:absolute;left:30px;top:26px;display:flex;align-items:center;gap:16px;font:700 30px "SG"}
+.card .nm svg{width:64px;height:64px;border-radius:50%}
+.card .bal{position:absolute;left:30px;top:130px;font:500 52px "PM";letter-spacing:-.02em}
+.card .sub{position:absolute;left:30px;top:222px;font:400 19px/1.4 "PS";color:var(--muted);width:370px}
+#cb{top:50px}#ca{top:414px}
+.tag{position:absolute;right:26px;top:32px;font:500 14px "PM";letter-spacing:.06em;color:var(--muted)}
+.final{position:absolute;left:60px;right:60px;bottom:30px;text-align:center;font:700 40px "SG";letter-spacing:-.02em;opacity:0}
+</style>
+<div class="chart">
+  <svg class="plot" id="plot" viewBox="0 0 1000 690">
+    <g id="grid"></g>
+    <path id="trail" d="" fill="none" stroke="#ECECF1" stroke-width="2.5" stroke-linejoin="round" opacity=".9"/>
+    <line id="call" x1="96" x2="940" y1="0" y2="0" stroke="#2BD67B" stroke-width="2" stroke-dasharray="9 7"/>
+    <circle id="head" r="7" fill="#ECECF1"/>
+    <rect id="clk0" x="96" y="652" width="844" height="8" rx="4" fill="#1B1B24"/>
+    <rect id="clk" x="96" y="652" width="0" height="8" rx="4" fill="#8B8B9E"/>
+    <text id="clkt" class="ax" x="96" y="640">expiry</text>
+  </svg>
+  <div class="chip" id="state">posted</div>
+  <div class="chip" id="lvl"></div>
+  <div class="callface" id="cf"></div>
+</div>
+<div class="coin" id="c1"></div><div class="clab" id="l1"></div>
+<div class="coin bond" id="c2"></div><div class="clab" id="l2"></div>
+<div id="stamp">MISSED</div>
+<div class="card" id="cb"><div class="nm" id="nb"></div><div class="tag" id="tb"></div><div class="bal" id="bb">0</div><div class="sub" id="sb"></div></div>
+<div class="card" id="ca"><div class="nm" id="na"></div><div class="tag" id="ta"></div><div class="bal" id="ba">0</div><div class="sub" id="sa"></div></div>
+<div class="final" id="fin">A wrong pick costs the friend.</div>
+<script src="faces.js"></script><script src="engine.js"></script>
+<script>
+const F = window.FACES, LEVEL = 85420, P0 = 83380, PMAX = 85800, PMIN = 83200;
+const X0 = 96, X1 = 940, YT = 70, YB = 600;
+const py = (p) => YB - (p - PMIN) / (PMAX - PMIN) * (YB - YT);
+const yL = py(LEVEL);
+const grid = $("#grid");
+[83500, 84000, 84500, 85000, 85500].forEach((p) => {
+  grid.insertAdjacentHTML("beforeend", `<line x1="${X0}" x2="${X1}" y1="${py(p)}" y2="${py(p)}" stroke="#26263A" stroke-width="1" opacity=".7"/><text class="ax" x="${X1 + 10}" y="${py(p) + 5}">${p.toLocaleString("en-US")}</text>`);
+});
+$("#call").setAttribute("y1", yL); $("#call").setAttribute("y2", yL);
+$("#lvl").textContent = "bo's pick · 85,420"; $("#lvl").style.top = (yL - 44) + "px";
+$("#cf").innerHTML = F.bo; $("#cf").style.left = (X0 - 8) + "px"; $("#cf").style.top = (yL - 23) + "px";
+$("#c1").innerHTML = F.ana + '<div class="amt">$2</div>'; $("#c2").innerHTML = F.bo + '<div class="amt">$2</div>';
+$("#l1").textContent = "ana's two dollars"; $("#l2").textContent = "bo's two dollars";
+$("#nb").innerHTML = F.bo + "<span>bo</span>"; $("#na").innerHTML = F.ana + "<span>ana</span>";
+$("#tb").textContent = "THE FRIEND"; $("#ta").textContent = "THE TRADER";
+const noise = (u) => 38 * Math.sin(u * 23) + 26 * Math.sin(u * 51 + 1.3) + 14 * Math.sin(u * 97);
+function priceAt(u, hit) {
+  const base = hit ? P0 + (LEVEL + 40 - P0) * Math.pow(u, 1.7) : P0 + (84860 - P0) * Math.pow(Math.min(1, u * 1.15), 1.2) - Math.max(0, u - 0.8) * 900;
+  return base + noise(u) * (1 - Math.abs(u - 0.5) * 0.4) * (hit && u > 0.97 ? 0.1 : 1);
+}
+function trail(u, hit) {
+  let d = "", n = Math.max(2, Math.floor(u * 90));
+  for (let i = 0; i <= n; i++) { const w = (i / n) * u; const x = X0 + w * (X1 - X0 - 30), y = py(priceAt(w, hit)); d += (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); }
+  return { d, x: X0 + u * (X1 - X0 - 30), y: py(priceAt(u, hit)) };
+}
+const cardB = { x: 1110 + 215, y: 50 + 215 }, cardA = { x: 1110 + 215, y: 414 + 215 };
+const home1 = { x: 60 + 500, y: yL + 50 - 84 }, home2 = { x: 60 + 680, y: yL + 50 - 84 };
+const mix = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+const bez = (a, b, k, lift) => { const m = mix(a, b, k); return { x: m.x, y: m.y - Math.sin(k * Math.PI) * lift }; };
+function put(el, lab, p, o, sc) { el.style.left = p.x + "px"; el.style.top = p.y + "px"; el.style.opacity = o; el.style.transform = `scale(${sc})`; if (lab) { lab.style.left = p.x + "px"; lab.style.top = (p.y - 88) + "px"; } }
+const set = (id, txt) => { const e = $(id); if (e.textContent !== txt) e.textContent = txt; };
+window.render = (t) => {
+  const appear = eo(seg(t, 0.1, 0.9));
+  $(".chart").style.opacity = appear; ["#cb", "#ca"].forEach((s) => ($(s).style.opacity = appear));
+  const rew = seg(t, 6.2, 6.75);
+  let u = 0, hit = true, clk = 0;
+  if (t < 6.2) u = eio(seg(t, 0.8, 3.6));
+  else if (t < 6.75) { u = 1 - eio(rew); hit = true; }
+  else { hit = false; u = eio(seg(t, 6.9, 9.6)); clk = u; }
+  const tr = trail(u, hit); $("#trail").setAttribute("d", u > 0.005 ? tr.d : "M0 0"); $("#head").setAttribute("cx", tr.x); $("#head").setAttribute("cy", tr.y);
+  $("#head").setAttribute("opacity", u > 0.005 ? 1 : 0);
+  $("#clk").setAttribute("width", (hit ? 0 : clk * 844).toFixed(1));
+  $("#clk").setAttribute("fill", clk > 0.995 ? "#FF6B57" : "#8B8B9E");
+  const dropK = eo(seg(t, 0.2, 0.9));
+  let p1 = { x: home1.x, y: home1.y - (1 - dropK) * 60 }, p2 = { x: home2.x, y: home2.y - (1 - dropK) * 60 };
+  let o = dropK, sc1 = 1, sc2 = 1, balB = 0, balA = 0;
+  const goB = eio(seg(t, 3.9, 5.2)), back = eio(seg(t, 6.2, 6.75)), goA = eio(seg(t, 9.8, 11.0));
+  const tB1 = cardB, tB2 = { x: cardB.x + 60, y: cardB.y + 20 };
+  if (t >= 3.9 && t < 6.2) { p1 = bez(home1, tB1, goB, 90); p2 = bez(home2, tB2, goB, 70); }
+  else if (t >= 6.2 && t < 9.8) { const k = 1 - back; p1 = bez(home1, tB1, k, 90); p2 = bez(home2, tB2, k, 70); }
+  else if (t >= 9.8) { p1 = bez(home1, { x: cardA.x - 50, y: cardA.y + 10 }, goA, 110); p2 = bez(home2, { x: cardA.x + 50, y: cardA.y + 10 }, goA, 90); }
+  if (t >= 5.2 && t < 6.2) sc1 = sc2 = 0.78;
+  if (t >= 11.0) sc1 = sc2 = 0.78;
+  put($("#c1"), $("#l1"), p1, o, sc1); put($("#c2"), $("#l2"), p2, o, sc2);
+  let lo = o * (1 - seg(t, 3.9, 4.3)); if (t >= 6.2 && t < 9.8) lo = o * seg(t, 6.5, 6.75); if (t >= 9.8) lo = 0; if (t < 3.9) lo = o;
+  $("#l1").style.opacity = lo; $("#l2").style.opacity = lo;
+  if (t >= 3.9 && t < 6.2) balB = 4 * goB; else if (t >= 6.2 && t < 9.8) balB = 4 * (1 - back);
+  if (t >= 9.8) balA = 4 * goA;
+  $("#bb").textContent = "$" + balB.toFixed(2); $("#ba").textContent = "$" + balA.toFixed(2);
+  $("#bb").style.color = balB > 0.01 ? "#2BD67B" : "#8B8B9E"; $("#ba").style.color = balA > 0.01 ? "#2BD67B" : "#8B8B9E";
+  $("#cb").style.borderColor = balB > 3.9 && t < 6.75 ? "#2BD67B" : "#26263A"; $("#ca").style.borderColor = balA > 3.9 ? "#2BD67B" : "#26263A";
+  set("#sb", t < 3.9 ? "Takes all four dollars if the price reaches his line." : (t < 6.75 ? "Price reached his line: all four dollars." : (t < 9.8 ? "Takes all four dollars if the price reaches his line." : "Lost his own two dollars.")));
+  set("#sa", t < 9.8 ? "Gets all four dollars if the price never gets there." : "All four dollars: her two plus his two.");
+  if (t < 0.8) set("#state", "bo's pick is on ana's trade"); else if (t < 6.2) set("#state", "bitcoin climbs toward bo's price"); else if (t < 6.75) set("#state", "rewind"); else if (t < 9.6) set("#state", "clock runs, bitcoin stalls below bo's price"); else set("#state", "deadline passed, bitcoin never got there");
+  const hitFlash = t >= 3.6 && t < 6.2 ? Math.max(0, 1 - (t - 3.6) / 1.0) : 0;
+  $("#call").setAttribute("stroke-width", 2 + 5 * hitFlash);
+  $("#lvl").style.background = `rgba(43,214,123,${0.08 + 0.35 * hitFlash})`;
+  const sp = eo(seg(t, 10.1, 10.45)); const st = $("#stamp");
+  st.style.opacity = sp; const ps = bez(home2, { x: cardA.x + 50, y: cardA.y + 10 }, goA, 90);
+  st.style.left = (ps.x - 78) + "px"; st.style.top = (ps.y - 82) + "px"; st.style.transform = `rotate(-9deg) scale(${1.4 - 0.4 * sp})`;
+  $("#fin").style.opacity = eo(seg(t, 11.1, 11.6)); $("#fin").style.transform = `translateY(${12 * (1 - eo(seg(t, 11.1, 11.6)))}px)`;
+};
+</script>

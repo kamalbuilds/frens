@@ -17,9 +17,12 @@ const norm = `scale=${W}:${H}:flags=lanczos,setsar=1,fps=${FPS},format=yuv420p`;
 const enc = ["-c:v", "libx264", "-crf", "16", "-preset", process.env.X264_PRESET ?? "medium", "-pix_fmt", "yuv420p", "-an"];
 const warns = [];
 
+const FADE = Number(process.env.XFADE ?? 0);
 const beatFiles = [];
+const beatLens = [];
 spec.beats.forEach((b, bi) => {
   const want = b.t1 - b.t0;
+  if (process.env.REUSE && fs.existsSync(path.join(work, `b${bi}.mp4`))) { beatFiles.push(path.join(work, `b${bi}.mp4`)); beatLens.push(want); return; }
   const pieceFiles = [];
   b.pieces.forEach((p, pi) => {
     const f = path.join(work, `b${bi}-p${pi}.mp4`);
@@ -42,14 +45,26 @@ spec.beats.forEach((b, bi) => {
   const out = path.join(work, `b${bi}.mp4`);
   if (have > want + 0.05) warns.push(`${b.name}: pieces run ${have.toFixed(2)}s but the beat is ${want.toFixed(2)}s (trimmed ${(have - want).toFixed(2)}s)`);
   if (have < want - 0.05) warns.push(`${b.name}: pieces run ${have.toFixed(2)}s, beat is ${want.toFixed(2)}s: last frame held ${(want - have).toFixed(2)}s`);
-  run(["-i", raw, "-vf", `tpad=stop_mode=clone:stop_duration=${Math.max(0, want - have + 0.1).toFixed(3)},trim=duration=${want.toFixed(3)},setpts=PTS-STARTPTS`, ...enc, out]);
+  run(["-i", raw, "-vf", `tpad=stop_mode=clone:stop_duration=${Math.max(0, want + FADE - have + 0.1).toFixed(3)},trim=duration=${(want + FADE).toFixed(3)},setpts=PTS-STARTPTS`, ...enc, out]);
   beatFiles.push(out);
+  beatLens.push(want);
 });
 
-const all = path.join(work, "all.txt");
-fs.writeFileSync(all, beatFiles.map((f) => `file '${f}'`).join("\n"));
 const video = path.join(work, "video.mp4");
-run(["-f", "concat", "-safe", "0", "-i", all, "-c", "copy", video]);
+if (FADE > 0) {
+  // short dissolves: every beat file carries FADE extra seconds, each seam overlaps them, so the timeline length is unchanged
+  let chain = "", prev = "0:v", acc = 0;
+  for (let i = 1; i < beatFiles.length; i++) {
+    acc += beatLens[i - 1];
+    chain += `[${prev}][${i}:v]xfade=transition=fade:duration=${FADE}:offset=${acc.toFixed(3)}[x${i}];`;
+    prev = `x${i}`;
+  }
+  run([...beatFiles.flatMap((f) => ["-i", f]), "-filter_complex", chain + `[${prev}]format=yuv420p[vout]`, "-map", "[vout]", ...enc, video]);
+} else {
+  const all = path.join(work, "all.txt");
+  fs.writeFileSync(all, beatFiles.map((f) => `file '${f}'`).join("\n"));
+  run(["-f", "concat", "-safe", "0", "-i", all, "-c", "copy", video]);
+}
 const total = probe(video);
 
 // captions: transparent PNGs faded in and out over their window
@@ -57,10 +72,10 @@ const caps = spec.beats.flatMap((b) => (b.caps ?? []).map((c) => ({ ...c, png: p
 let final = video;
 if (caps.length) {
   const args = ["-i", video];
-  caps.forEach((c) => args.push("-loop", "1", "-t", String(total), "-i", c.png));
+  caps.forEach((c) => args.push("-loop", "1", "-framerate", String(FPS), "-t", String((c.b - c.a) + 0.2), "-itsoffset", String(c.a), "-i", c.png));
   let chain = "", prev = "0:v";
   caps.forEach((c, i) => {
-    chain += `[${i + 1}:v]format=rgba,fade=t=in:st=${c.a}:d=0.3:alpha=1,fade=t=out:st=${c.b - 0.3}:d=0.3:alpha=1[c${i}];[${prev}][c${i}]overlay=0:0:format=auto:enable='between(t,${c.a},${c.b})'[v${i}];`;
+    chain += `[${i + 1}:v]format=rgba,fade=t=in:st=${c.a}:d=0.3:alpha=1,fade=t=out:st=${c.b - 0.3}:d=0.3:alpha=1[c${i}];[${prev}][c${i}]overlay=0:0:format=auto:eof_action=pass:enable='between(t,${c.a},${c.b})'[v${i}];`;
     prev = `v${i}`;
   });
   final = path.join(work, "video-caps.mp4");

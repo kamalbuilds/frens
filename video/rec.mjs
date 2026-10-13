@@ -86,7 +86,7 @@ async function stopRec() {
   const odd = frames.filter((x) => x.dw !== W || x.dh !== H || x.ps !== 1 || x.ot !== 0).length;
   fs.writeFileSync(`${dir}/marks.json`, JSON.stringify({ duration: +(end - t0).toFixed(2), frames: frames.length, oddFrames: odd, marks: m }, null, 1));
   if (odd) { const o = frames.find((x) => x.dw !== W || x.dh !== H || x.ps !== 1 || x.ot !== 0); console.error(`WARNING ${name}: ${odd} frames with a non-standard viewport, first at frame ${frames.indexOf(o)}: dw=${o.dw} dh=${o.dh} ps=${o.ps} ot=${o.ot}`); }
-  execSync(`cd ${dir} && ffmpeg -y -loglevel error -f concat -safe 0 -i frames.txt -vf "fps=30,scale=1920:1080:flags=lanczos,format=yuv420p" -c:v libx264 -crf 17 -preset medium ../${name}.mp4`);
+  execSync(`cd ${dir} && ffmpeg -y -loglevel error -f concat -safe 0 -i frames.txt -vf "fps=30,scale=${process.env.OUT_W ?? 1920}:${process.env.OUT_H ?? 1080}:flags=lanczos,format=yuv420p" -c:v libx264 -crf 17 -preset medium ../${name}.mp4`);
   console.error(`CLIP ${name}: ${frames.length} frames, ${(end - t0).toFixed(1)}s`);
 }
 

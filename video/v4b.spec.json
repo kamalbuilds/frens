@@ -1,0 +1,453 @@
+{
+  "out": "frens-demo-v4.mp4",
+  "audio": "vo/out-v5-narration.wav",
+  "size": [
+    1920,
+    1080
+  ],
+  "work": "asm-demo-v4b",
+  "beats": [
+    {
+      "name": "opening chart",
+      "t0": 0,
+      "t1": 14.2,
+      "pieces": [
+        {
+          "src": "work/v4/G2-chart.mp4",
+          "ss": 0.5,
+          "se": 14.7,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c0.png",
+          "a": 0.24999999999999997,
+          "b": 2.049104
+        },
+        {
+          "png": "work/v4/caps5/c1.png",
+          "a": 2.099104,
+          "b": 7.489125
+        },
+        {
+          "png": "work/v4/caps5/c2.png",
+          "a": 7.289125,
+          "b": 9.800583
+        },
+        {
+          "png": "work/v4/caps5/c3.png",
+          "a": 9.600583,
+          "b": 14.058854
+        },
+        {
+          "png": "work/v4/caps5/c29.png",
+          "a": 0.3,
+          "b": 2.2
+        }
+      ]
+    },
+    {
+      "name": "group chat",
+      "t0": 14.2,
+      "t1": 24.15,
+      "pieces": [
+        {
+          "src": "work/v4/P5-problem.mp4",
+          "ss": 0,
+          "se": 9.95,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c4.png",
+          "a": 14.408854,
+          "b": 17.892875
+        },
+        {
+          "png": "work/v4/caps5/c5.png",
+          "a": 17.742874999999998,
+          "b": 20.516875000000002
+        },
+        {
+          "png": "work/v4/caps5/c6.png",
+          "a": 20.366875,
+          "b": 24.001542
+        }
+      ]
+    },
+    {
+      "name": "this is ana",
+      "t0": 24.15,
+      "t1": 33.43,
+      "pieces": [
+        {
+          "src": "work/v4/A3-ana.mp4",
+          "ss": 3.0,
+          "se": 12.28,
+          "speed": 1,
+          "vf": "crop=1829:1029:120:340"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c7.png",
+          "a": 24.351542,
+          "b": 26.452521
+        },
+        {
+          "png": "work/v4/caps5/c8.png",
+          "a": 26.252520999999998,
+          "b": 33.475771
+        }
+      ]
+    },
+    {
+      "name": "bo drags a take-profit",
+      "t0": 33.43,
+      "t1": 46.54,
+      "pieces": [
+        {
+          "src": "work/v4/B-call.mp4",
+          "ss": 1.9,
+          "se": 9.6,
+          "speed": 0.984
+        },
+        {
+          "src": "work/v4/B-call.mp4",
+          "ss": 17.2,
+          "se": 22.4,
+          "speed": 0.984
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c9.png",
+          "a": 33.625771,
+          "b": 39.279021
+        },
+        {
+          "png": "work/v4/caps5/c10.png",
+          "a": 39.229020999999996,
+          "b": 46.190979
+        }
+      ]
+    },
+    {
+      "name": "ana accepts",
+      "t0": 46.54,
+      "t1": 53.9,
+      "pieces": [
+        {
+          "src": "work/v4/C-accept.mp4",
+          "ss": 0.9,
+          "se": 8.26,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c11.png",
+          "a": 46.740978999999996,
+          "b": 50.710292
+        },
+        {
+          "png": "work/v4/caps5/c12.png",
+          "a": 50.460291999999995,
+          "b": 56.9
+        }
+      ]
+    },
+    {
+      "name": "receipt accept",
+      "t0": 53.9,
+      "t1": 57.35,
+      "pieces": [
+        {
+          "src": "work/v4/X-accept.mp4",
+          "ss": 0.4,
+          "se": 3.85,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c30.png",
+          "a": 54.0,
+          "b": 57.3
+        }
+      ]
+    },
+    {
+      "name": "ana puts in two dollars",
+      "t0": 57.35,
+      "t1": 61.2,
+      "pieces": [
+        {
+          "src": "work/v4/C-accept.mp4",
+          "ss": 13.2,
+          "se": 17.05,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c13.png",
+          "a": 56.97923,
+          "b": 61.1
+        },
+        {
+          "png": "work/v4/caps5/c31.png",
+          "a": 57.5,
+          "b": 61.1
+        }
+      ]
+    },
+    {
+      "name": "bo puts in two dollars",
+      "t0": 61.2,
+      "t1": 64.77,
+      "pieces": [
+        {
+          "src": "work/v4/D-bond.mp4",
+          "ss": 5.3,
+          "se": 8.87,
+          "speed": 1,
+          "vf": "crop=1200:675:1180:480"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c14.png",
+          "a": 61.211104999999996,
+          "b": 64.621793
+        },
+        {
+          "png": "work/v4/caps5/c32.png",
+          "a": 61.3,
+          "b": 64.7
+        }
+      ]
+    },
+    {
+      "name": "deadline mechanism",
+      "t0": 64.77,
+      "t1": 75.0,
+      "pieces": [
+        {
+          "src": "work/v4/M5-mech.mp4",
+          "ss": 0,
+          "se": 10.23,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c15.png",
+          "a": 64.971793,
+          "b": 67.52160599999999
+        },
+        {
+          "png": "work/v4/caps5/c16.png",
+          "a": 67.371606,
+          "b": 72.577981
+        },
+        {
+          "png": "work/v4/caps5/c17.png",
+          "a": 72.377981,
+          "b": 74.85287699999999
+        }
+      ]
+    },
+    {
+      "name": "HIT RECEIPT PLACEHOLDER",
+      "t0": 75.0,
+      "t1": 82.6,
+      "pieces": [
+        {
+          "src": "work/v4/X-hit.mp4",
+          "ss": 0,
+          "se": 7.6,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c18.png",
+          "a": 75.202877,
+          "b": 82.4
+        },
+        {
+          "png": "work/v4/caps5/c33.png",
+          "a": 75.2,
+          "b": 82.5
+        }
+      ]
+    },
+    {
+      "name": "earlier call",
+      "t0": 82.6,
+      "t1": 87.9,
+      "pieces": [
+        {
+          "src": "work/v4/G2-chart.mp4",
+          "ss": 15.0,
+          "se": 20.3,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c19.png",
+          "a": 82.806419,
+          "b": 88.04804399999999
+        },
+        {
+          "png": "work/v4/caps5/c34.png",
+          "a": 82.7,
+          "b": 84.7
+        }
+      ]
+    },
+    {
+      "name": "receipt miss",
+      "t0": 87.9,
+      "t1": 93.6,
+      "pieces": [
+        {
+          "src": "work/v4/X-miss.mp4",
+          "ss": 0.4,
+          "se": 6.1,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c20.png",
+          "a": 87.898044,
+          "b": 93.4
+        },
+        {
+          "png": "work/v4/caps5/c35.png",
+          "a": 88.0,
+          "b": 93.5
+        }
+      ]
+    },
+    {
+      "name": "record",
+      "t0": 93.6,
+      "t1": 100.5,
+      "pieces": [
+        {
+          "src": "work/v4/G2-chart.mp4",
+          "ss": 21.0,
+          "se": 27.9,
+          "speed": 1,
+          "vf": "crop=1600:900:960:80"
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c21.png",
+          "a": 93.89369,
+          "b": 100.554419
+        },
+        {
+          "png": "work/v4/caps5/c36.png",
+          "a": 93.8,
+          "b": 100.3
+        }
+      ]
+    },
+    {
+      "name": "rooms",
+      "t0": 100.5,
+      "t1": 109.33,
+      "pieces": [
+        {
+          "src": "work/v4/A-room.mp4",
+          "ss": 7.7,
+          "se": 11.6,
+          "speed": 1.9
+        },
+        {
+          "src": "work/v4/A-room.mp4",
+          "ss": 13.9,
+          "se": 16.3,
+          "speed": 1.9
+        },
+        {
+          "src": "work/v4/A-room.mp4",
+          "ss": 17.7,
+          "se": 23.4,
+          "speed": 2.2
+        },
+        {
+          "src": "work/v4/A-room.mp4",
+          "ss": 24.4,
+          "se": 27.3,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c22.png",
+          "a": 100.704419,
+          "b": 103.81360699999999
+        },
+        {
+          "png": "work/v4/caps5/c23.png",
+          "a": 103.613607,
+          "b": 108.777586
+        },
+        {
+          "png": "work/v4/caps5/c37.png",
+          "a": 106.4,
+          "b": 109.2
+        }
+      ]
+    },
+    {
+      "name": "final chart",
+      "t0": 109.33,
+      "t1": 120.216,
+      "pieces": [
+        {
+          "src": "work/v4/G2-chart.mp4",
+          "ss": 25.0,
+          "se": 36.0,
+          "speed": 1
+        }
+      ],
+      "caps": [
+        {
+          "png": "work/v4/caps5/c24.png",
+          "a": 109.527586,
+          "b": 112.038024
+        },
+        {
+          "png": "work/v4/caps5/c25.png",
+          "a": 111.888024,
+          "b": 114.32552399999999
+        },
+        {
+          "png": "work/v4/caps5/c26.png",
+          "a": 114.125524,
+          "b": 118.317774
+        },
+        {
+          "png": "work/v4/caps5/c27.png",
+          "a": 118.16777400000001,
+          "b": 119.966878
+        },
+        {
+          "png": "work/v4/caps5/c28.png",
+          "a": 109.4,
+          "b": 120.0
+        }
+      ]
+    }
+  ]
+}
